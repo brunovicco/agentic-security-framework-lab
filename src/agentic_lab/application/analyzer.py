@@ -10,12 +10,13 @@ from agentic_lab.application.evidence import (
 
 
 class VulnerabilityAnalyzer(Protocol):
-    """Produce a structured analysis from vulnerability evidence."""
+    """Produce structured vulnerability analysis from evidence."""
 
     def analyze(
         self,
         vulnerability: VulnerabilityEvidence,
         assets: tuple[AssetInventoryItem, ...],
+        feedback: str | None = None,
     ) -> LLMAnalysisDraft:
         """Analyze vulnerability applicability across assets."""
         ...

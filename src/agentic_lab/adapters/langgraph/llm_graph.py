@@ -26,6 +26,8 @@ from agentic_lab.application.oracle import (
     assess_assets_deterministically,
 )
 
+_MAX_ANALYSIS_ATTEMPTS = 2
+
 
 class _InvokableGraph(Protocol):
     """Minimal local boundary for a compiled LangGraph workflow."""
@@ -41,7 +43,7 @@ class _InvokableGraph(Protocol):
 def collect_evidence_node(
     state: AnalysisGraphState,
 ) -> AnalysisGraphState:
-    """Adapt graph state to the deterministic evidence-collection node."""
+    """Adapt graph state to deterministic evidence collection."""
     cve_id = state.get("cve_id")
 
     if cve_id is None:
@@ -58,20 +60,25 @@ def analyze_with_llm(
     state: AnalysisGraphState,
     analyzer: VulnerabilityAnalyzer,
 ) -> AnalysisGraphState:
-    """Produce a structured vulnerability analysis through an LLM."""
+    """Produce or refine structured vulnerability analysis through an LLM."""
     vulnerability = state.get("vulnerability")
     assets = state.get("assets")
 
     if vulnerability is None or assets is None:
         raise RuntimeError("LLM analysis requires vulnerability and asset evidence")
 
+    previous_attempts = state.get("analysis_attempts", 0)
+    feedback = state.get("validation_feedback")
+
     draft = analyzer.analyze(
         vulnerability=vulnerability,
         assets=assets,
+        feedback=feedback if previous_attempts > 0 else None,
     )
 
     return {
         "llm_draft": draft,
+        "analysis_attempts": previous_attempts + 1,
     }
 
 
@@ -92,31 +99,52 @@ def validate_against_oracle(
     )
 
     expected = {assessment.asset_id: assessment.status for assessment in oracle}
-
     observed = {assessment.asset_id: assessment.status for assessment in draft.assets}
 
     if observed == expected:
         return {
             "validation_passed": True,
             "validation_reason": ("LLM applicability matches deterministic oracle."),
+            "validation_feedback": "",
         }
+
+    asset_ids = sorted(set(expected) | set(observed))
+    mismatched_assets = [
+        asset_id for asset_id in asset_ids if expected.get(asset_id) != observed.get(asset_id)
+    ]
+
+    mismatch_text = ", ".join(mismatched_assets)
 
     return {
         "validation_passed": False,
         "validation_reason": ("LLM applicability differs from deterministic oracle."),
+        "validation_feedback": (
+            f"Applicability mismatch for assets: {mismatch_text}. "
+            "Re-check product identity and compare installed versions "
+            "against the affected_before boundary using numeric "
+            "major.minor ordering. Use only the supplied evidence."
+        ),
     }
 
 
 def route_after_validation(
     state: AnalysisGraphState,
-) -> Literal["accepted", "rejected"]:
-    """Route according to deterministic validation outcome."""
+) -> Literal["accepted", "retry", "rejected"]:
+    """Accept, retry, or fall back according to deterministic validation."""
     validation_passed = state.get("validation_passed")
 
     if validation_passed is None:
         raise RuntimeError("Validation outcome is missing")
 
-    return "accepted" if validation_passed else "rejected"
+    if validation_passed:
+        return "accepted"
+
+    attempts = state.get("analysis_attempts", 0)
+
+    if attempts < _MAX_ANALYSIS_ATTEMPTS:
+        return "retry"
+
+    return "rejected"
 
 
 def use_llm_analysis(
@@ -139,7 +167,7 @@ def use_llm_analysis(
 def fallback_to_oracle(
     state: AnalysisGraphState,
 ) -> AnalysisGraphState:
-    """Replace invalid LLM applicability with deterministic results."""
+    """Replace repeatedly invalid LLM applicability with deterministic results."""
     vulnerability = state.get("vulnerability")
     assets = state.get("assets")
 
@@ -154,8 +182,8 @@ def fallback_to_oracle(
     return {
         "assessments": assessments,
         "recommendation": (
-            "LLM applicability was rejected; use deterministic "
-            "assessment and review the disagreement."
+            "LLM applicability remained invalid after retry; use "
+            "deterministic assessment and review the disagreement."
         ),
         "confidence": 1.0,
         "analysis_source": "oracle_fallback",
@@ -205,7 +233,7 @@ def finalize_llm_analysis(
 def build_llm_analysis_graph(
     analyzer: VulnerabilityAnalyzer,
 ) -> _InvokableGraph:
-    """Build the LLM-backed vulnerability-analysis workflow."""
+    """Build the evaluator-optimizer vulnerability-analysis workflow."""
 
     def llm_node(
         state: AnalysisGraphState,
@@ -244,6 +272,7 @@ def build_llm_analysis_graph(
         route_after_validation,
         {
             "accepted": "use_llm_analysis",
+            "retry": "analyze_with_llm",
             "rejected": "fallback_to_oracle",
         },
     )
@@ -266,7 +295,7 @@ def run_llm_analysis_graph(
     analyzer: VulnerabilityAnalyzer,
     cve_id: str,
 ) -> LLMAnalysisGraphOutput:
-    """Run the LLM-backed vulnerability-analysis graph."""
+    """Run the evaluator-optimizer vulnerability-analysis graph."""
     graph = build_llm_analysis_graph(analyzer)
 
     graph_input: AnalysisGraphInput = {

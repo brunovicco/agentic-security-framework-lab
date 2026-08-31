@@ -41,6 +41,7 @@ class LangChainVulnerabilityAnalyzer:
         self,
         vulnerability: VulnerabilityEvidence,
         assets: tuple[AssetInventoryItem, ...],
+        feedback: str | None = None,
     ) -> LLMAnalysisDraft:
         """Analyze vulnerability evidence against asset inventory."""
         evidence = {
@@ -48,16 +49,23 @@ class LangChainVulnerabilityAnalyzer:
             "assets": assets,
         }
 
-        response = self._model.invoke(
-            [
-                SystemMessage(content=_SYSTEM_PROMPT),
-                HumanMessage(
-                    content=(
-                        "Analyze the following vulnerability and inventory evidence:\n\n"
-                        f"{json.dumps(evidence, indent=2)}"
-                    )
-                ),
-            ]
+        user_content = (
+            "Analyze the following vulnerability and inventory evidence:\n\n"
+            f"{json.dumps(evidence, indent=2)}"
         )
 
-        return response
+        if feedback:
+            user_content += (
+                "\n\nThe deterministic evaluator rejected the previous "
+                "analysis and provided this feedback:\n\n"
+                f"{feedback}\n\n"
+                "Re-evaluate the original evidence and return a corrected "
+                "structured analysis."
+            )
+
+        return self._model.invoke(
+            [
+                SystemMessage(content=_SYSTEM_PROMPT),
+                HumanMessage(content=user_content),
+            ]
+        )

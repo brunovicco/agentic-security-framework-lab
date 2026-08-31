@@ -33,6 +33,7 @@ class LLMAnalysisGraphOutput(TypedDict):
     analysis_source: Literal["llm", "oracle_fallback"]
     validation_passed: bool
     validation_reason: str
+    analysis_attempts: int
 
 
 class AnalysisGraphState(TypedDict, total=False):
@@ -44,8 +45,12 @@ class AnalysisGraphState(TypedDict, total=False):
     policy: SecurityPolicy
 
     llm_draft: LLMAnalysisDraft
+    analysis_attempts: int
+
     validation_passed: bool
     validation_reason: str
+    validation_feedback: str
+
     analysis_source: Literal["llm", "oracle_fallback"]
 
     assessments: tuple[AssetAssessment, ...]
