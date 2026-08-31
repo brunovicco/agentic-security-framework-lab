@@ -149,14 +149,8 @@ def matches_expected(
     observed_assets: tuple[AssetAssessment, ...],
 ) -> bool:
     """Compare final asset statuses with external evaluation truth."""
-    expected = {
-        assessment.asset_id: assessment.status
-        for assessment in scenario.expected_assets
-    }
-    observed = {
-        assessment.asset_id: assessment.status
-        for assessment in observed_assets
-    }
+    expected = {assessment.asset_id: assessment.status for assessment in scenario.expected_assets}
+    observed = {assessment.asset_id: assessment.status for assessment in observed_assets}
     return observed == expected and len(observed_assets) == len(scenario.expected_assets)
 
 
@@ -171,14 +165,10 @@ def summarize_scenario(
     total = len(runs)
     expected_passes = sum(run.expected_match for run in runs)
     first_attempt_accepts = sum(
-        run.analysis_source == "llm" and run.analysis_attempts == 1
-        for run in runs
+        run.analysis_source == "llm" and run.analysis_attempts == 1 for run in runs
     )
     retried = sum(run.analysis_attempts > 1 for run in runs)
-    recovered = sum(
-        run.analysis_attempts > 1 and run.analysis_source == "llm"
-        for run in runs
-    )
+    recovered = sum(run.analysis_attempts > 1 and run.analysis_source == "llm" for run in runs)
     fallbacks = sum(run.analysis_source == "oracle_fallback" for run in runs)
     latencies = [run.latency_ms for run in runs]
     recovery_rate = recovered / retried if retried else 0.0
@@ -214,14 +204,10 @@ def summarize_overall(
     total = len(runs)
     expected_passes = sum(run.expected_match for run in runs)
     first_attempt_accepts = sum(
-        run.analysis_source == "llm" and run.analysis_attempts == 1
-        for run in runs
+        run.analysis_source == "llm" and run.analysis_attempts == 1 for run in runs
     )
     retried = sum(run.analysis_attempts > 1 for run in runs)
-    recovered = sum(
-        run.analysis_attempts > 1 and run.analysis_source == "llm"
-        for run in runs
-    )
+    recovered = sum(run.analysis_attempts > 1 and run.analysis_source == "llm" for run in runs)
     fallbacks = sum(run.analysis_source == "oracle_fallback" for run in runs)
     latencies = [run.latency_ms for run in runs]
     recovery_rate = recovered / retried if retried else 0.0
@@ -278,15 +264,9 @@ def render_markdown_report(
         f"- Scenarios: **{overall.scenarios}**",
         f"- Total runs: **{overall.total_runs}**",
         f"- Expected accuracy: **{overall.expected_accuracy:.1%}**",
-        (
-            "- First-attempt acceptance: "
-            f"**{overall.first_attempt_acceptance_rate:.1%}**"
-        ),
+        (f"- First-attempt acceptance: **{overall.first_attempt_acceptance_rate:.1%}**"),
         f"- Retry rate: **{overall.retry_rate:.1%}**",
-        (
-            "- Recovery rate: "
-            f"**{format_recovery_rate(overall.retry_rate, overall.recovery_rate)}**"
-        ),
+        (f"- Recovery rate: **{format_recovery_rate(overall.retry_rate, overall.recovery_rate)}**"),
         f"- Fallback rate: **{overall.fallback_rate:.1%}**",
         f"- Mean model calls: **{overall.mean_model_calls:.2f}**",
         f"- Mean latency: **{overall.mean_latency_ms:.2f} ms**",
@@ -417,9 +397,7 @@ def main() -> None:
         for iteration in range(1, repetitions + 1):
             stale_usage = runtime.consume_usage()
             if stale_usage.total_tokens or stale_usage.model_calls:
-                raise RuntimeError(
-                    "CrewAI usage telemetry was not clean before benchmark run"
-                )
+                raise RuntimeError("CrewAI usage telemetry was not clean before benchmark run")
 
             started_at = perf_counter()
             output = run_validated_analysis(
@@ -431,8 +409,7 @@ def main() -> None:
 
             if usage.model_calls < output.analysis_attempts or usage.total_tokens <= 0:
                 raise RuntimeError(
-                    "CrewAI did not expose complete token/request telemetry "
-                    "for benchmark execution"
+                    "CrewAI did not expose complete token/request telemetry for benchmark execution"
                 )
 
             run = ScenarioRun(
