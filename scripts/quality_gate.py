@@ -56,9 +56,14 @@ def configured_checks(root: Path) -> list[Check]:
     settings = load_settings(root)
     source_patterns = string_list(settings.get("source-roots"), ["src"])
     test_patterns = string_list(settings.get("test-roots"), ["tests"])
+    dependency_ignore_vulns = string_list(settings.get("dependency-ignore-vulns"), [])
     source_roots = expand_roots(root, source_patterns)
     test_roots = expand_roots(root, test_patterns)
     type_roots = [*source_roots, *test_roots]
+
+    dependency_command = ["pip-audit"]
+    for vulnerability_id in dependency_ignore_vulns:
+        dependency_command.extend(("--ignore-vuln", vulnerability_id))
 
     checks = [
         Check("lock", ("uv", "lock", "--check")),
@@ -81,7 +86,7 @@ def configured_checks(root: Path) -> list[Check]:
             ("bandit", "-c", "pyproject.toml", "-r", *source_roots) if source_roots else (),
         )
     )
-    checks.append(Check("dependencies", ("pip-audit",)))
+    checks.append(Check("dependencies", tuple(dependency_command)))
     return checks
 
 

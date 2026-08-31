@@ -1,9 +1,9 @@
 """CrewAI structured vulnerability-analysis adapter."""
 
 import json
-from typing import Protocol
+from typing import Protocol, cast
 
-from crewai import Agent, Crew, LLM, Process, Task
+from crewai import LLM, Agent, Crew, Process, Task
 
 from agentic_lab.application.contracts import LLMAnalysisDraft
 from agentic_lab.application.evidence import (
@@ -31,6 +31,26 @@ class CrewAIAnalysisRunner(Protocol):
     def run(self, task_description: str) -> LLMAnalysisDraft:
         """Run the CrewAI task and return validated structured output."""
         ...
+
+
+class _CrewKickoff(Protocol):
+    """Narrow typed boundary for CrewAI's partially typed kickoff method."""
+
+    def kickoff(self) -> object:
+        """Execute the crew synchronously."""
+        ...
+
+
+class _StructuredTaskOutput(Protocol):
+    """Minimum structured output surface required from a CrewAI task."""
+
+    pydantic: object | None
+
+
+class _OutputTask(Protocol):
+    """Minimum task surface required after CrewAI execution."""
+
+    output: _StructuredTaskOutput | None
 
 
 def normalize_crewai_model_name(model_name: str) -> str:
@@ -86,12 +106,13 @@ class CrewAIRuntime:
             verbose=False,
         )
 
-        output = crew.kickoff()
+        _ = cast(_CrewKickoff, crew).kickoff()
+        task_output = cast(_OutputTask, task).output
 
-        if output.pydantic is None:
+        if task_output is None or task_output.pydantic is None:
             raise RuntimeError("CrewAI did not return the required structured analysis")
 
-        return LLMAnalysisDraft.model_validate(output.pydantic)
+        return LLMAnalysisDraft.model_validate(task_output.pydantic)
 
 
 class CrewAIVulnerabilityAnalyzer:
