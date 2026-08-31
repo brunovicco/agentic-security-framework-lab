@@ -1,6 +1,6 @@
 """State schemas for LangGraph vulnerability-analysis workflows."""
 
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 from agentic_lab.application.contracts import (
     AnalysisResult,
@@ -8,6 +8,7 @@ from agentic_lab.application.contracts import (
     LLMAnalysisDraft,
 )
 from agentic_lab.application.evidence import (
+    AnalysisEvidenceBundle,
     AssetInventoryItem,
     SecurityPolicy,
     VulnerabilityEvidence,
@@ -15,9 +16,16 @@ from agentic_lab.application.evidence import (
 
 
 class AnalysisGraphInput(TypedDict):
-    """Public input accepted by the vulnerability-analysis graph."""
+    """Public input accepted by the deterministic analysis graph."""
 
     cve_id: str
+
+
+class LLMAnalysisGraphInput(TypedDict):
+    """Public input accepted by the validated LLM analysis graph."""
+
+    cve_id: str
+    evidence_bundle: NotRequired[AnalysisEvidenceBundle]
 
 
 class AnalysisGraphOutput(TypedDict):
@@ -40,6 +48,8 @@ class AnalysisGraphState(TypedDict, total=False):
     """Internal state shared by vulnerability-analysis graph nodes."""
 
     cve_id: str
+    evidence_bundle: AnalysisEvidenceBundle
+
     vulnerability: VulnerabilityEvidence
     assets: tuple[AssetInventoryItem, ...]
     policy: SecurityPolicy

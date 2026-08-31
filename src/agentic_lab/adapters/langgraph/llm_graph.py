@@ -15,6 +15,7 @@ from agentic_lab.adapters.langgraph.graph import (
 from agentic_lab.adapters.langgraph.state import (
     AnalysisGraphInput,
     AnalysisGraphState,
+    LLMAnalysisGraphInput,
     LLMAnalysisGraphOutput,
 )
 from agentic_lab.application.analyzer import VulnerabilityAnalyzer
@@ -22,6 +23,7 @@ from agentic_lab.application.contracts import (
     AnalysisResult,
     Severity,
 )
+from agentic_lab.application.evidence import AnalysisEvidenceBundle
 from agentic_lab.application.oracle import (
     assess_assets_deterministically,
 )
@@ -34,7 +36,7 @@ class _InvokableGraph(Protocol):
 
     def invoke(
         self,
-        input: AnalysisGraphInput,
+        input: LLMAnalysisGraphInput,
     ) -> LLMAnalysisGraphOutput:
         """Run the graph."""
         ...
@@ -48,6 +50,20 @@ def collect_evidence_node(
 
     if cve_id is None:
         raise RuntimeError("Evidence collection requires a CVE identifier")
+
+    evidence_bundle = state.get("evidence_bundle")
+
+    if evidence_bundle is not None:
+        evidence_cve_id = evidence_bundle["vulnerability"]["cve_id"]
+
+        if evidence_cve_id != cve_id:
+            raise RuntimeError("Injected evidence CVE identifier does not match graph input")
+
+        return {
+            "vulnerability": evidence_bundle["vulnerability"],
+            "assets": evidence_bundle["assets"],
+            "policy": evidence_bundle["policy"],
+        }
 
     graph_input: AnalysisGraphInput = {
         "cve_id": cve_id,
@@ -242,7 +258,7 @@ def build_llm_analysis_graph(
 
     builder = StateGraph(
         AnalysisGraphState,
-        input_schema=AnalysisGraphInput,
+        input_schema=LLMAnalysisGraphInput,
         output_schema=LLMAnalysisGraphOutput,
     )
 
@@ -298,8 +314,23 @@ def run_llm_analysis_graph(
     """Run the evaluator-optimizer vulnerability-analysis graph."""
     graph = build_llm_analysis_graph(analyzer)
 
-    graph_input: AnalysisGraphInput = {
+    graph_input: LLMAnalysisGraphInput = {
         "cve_id": cve_id,
+    }
+
+    return graph.invoke(graph_input)
+
+
+def run_llm_analysis_graph_with_evidence(
+    analyzer: VulnerabilityAnalyzer,
+    evidence_bundle: AnalysisEvidenceBundle,
+) -> LLMAnalysisGraphOutput:
+    """Run the graph using evidence supplied by the application."""
+    graph = build_llm_analysis_graph(analyzer)
+
+    graph_input: LLMAnalysisGraphInput = {
+        "cve_id": evidence_bundle["vulnerability"]["cve_id"],
+        "evidence_bundle": evidence_bundle,
     }
 
     return graph.invoke(graph_input)

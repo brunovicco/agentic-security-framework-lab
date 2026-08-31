@@ -33,3 +33,11 @@ class SecurityPolicy(TypedDict):
     human_review_environment: str
     human_review_network_exposure: str
     unknown_applicability_requires_review: bool
+
+
+class AnalysisEvidenceBundle(TypedDict):
+    """Group evidence required for one vulnerability-analysis execution."""
+
+    vulnerability: VulnerabilityEvidence
+    assets: tuple[AssetInventoryItem, ...]
+    policy: SecurityPolicy

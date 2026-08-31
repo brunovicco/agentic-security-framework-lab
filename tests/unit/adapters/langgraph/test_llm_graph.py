@@ -1,14 +1,23 @@
 """Tests for the evaluator-optimizer LangGraph workflow."""
 
+import pytest
+
 from agentic_lab.adapters.fixtures.demo import DEMO_CVE_ID
-from agentic_lab.adapters.langgraph.llm_graph import (
-    run_llm_analysis_graph,
+from agentic_lab.adapters.fixtures.evaluation import (
+    load_evaluation_scenarios,
 )
+from agentic_lab.adapters.langgraph.llm_graph import (
+    build_llm_analysis_graph,
+    run_llm_analysis_graph,
+    run_llm_analysis_graph_with_evidence,
+)
+from agentic_lab.adapters.langgraph.state import LLMAnalysisGraphInput
 from agentic_lab.application.contracts import (
     AssetAssessment,
     LLMAnalysisDraft,
 )
 from agentic_lab.application.evidence import (
+    AnalysisEvidenceBundle,
     AssetInventoryItem,
     VulnerabilityEvidence,
 )
@@ -167,3 +176,90 @@ def test_llm_graph_falls_back_after_retry_is_exhausted() -> None:
     assert result.recommendation.startswith("LLM applicability remained invalid after retry")
     assert result.confidence == 1.0
     assert result.requires_human_review
+
+
+def test_llm_graph_accepts_injected_evaluation_evidence() -> None:
+    """Run the same graph with a framework-neutral evaluation scenario."""
+    scenario = next(
+        scenario
+        for scenario in load_evaluation_scenarios()
+        if scenario.scenario_id == "product-mismatch"
+    )
+
+    evidence_bundle: AnalysisEvidenceBundle = {
+        "vulnerability": scenario.vulnerability,
+        "assets": scenario.assets,
+        "policy": scenario.policy,
+    }
+
+    analyzer = SequentialStubAnalyzer(
+        drafts=(
+            LLMAnalysisDraft(
+                assets=(
+                    AssetAssessment(
+                        asset_id="api-prod-03",
+                        status="not_applicable",
+                        rationale=(
+                            "OtherServer does not match the vulnerable ExampleServer product."
+                        ),
+                    ),
+                ),
+                recommendation=("No remediation is required for this asset."),
+                confidence=0.99,
+            ),
+        ),
+    )
+
+    output = run_llm_analysis_graph_with_evidence(
+        analyzer=analyzer,
+        evidence_bundle=evidence_bundle,
+    )
+
+    assert output["analysis_source"] == "llm"
+    assert output["validation_passed"]
+    assert output["analysis_attempts"] == 1
+
+    result = output["result"]
+
+    assert result.cve_id == "CVE-2026-9102"
+    assert len(result.assets) == 1
+    assert result.assets[0].asset_id == "api-prod-03"
+    assert result.assets[0].status == "not_applicable"
+
+
+def test_llm_graph_rejects_mismatched_injected_cve_id() -> None:
+    """Reject injected evidence when its CVE identity is inconsistent."""
+    scenario = next(
+        scenario
+        for scenario in load_evaluation_scenarios()
+        if scenario.scenario_id == "product-mismatch"
+    )
+
+    evidence_bundle: AnalysisEvidenceBundle = {
+        "vulnerability": scenario.vulnerability,
+        "assets": scenario.assets,
+        "policy": scenario.policy,
+    }
+
+    analyzer = SequentialStubAnalyzer(
+        drafts=(
+            LLMAnalysisDraft(
+                assets=(),
+                recommendation="Unused.",
+                confidence=0.0,
+            ),
+        ),
+    )
+
+    graph = build_llm_analysis_graph(analyzer)
+
+    mismatched_input: LLMAnalysisGraphInput = {
+        "cve_id": "CVE-2026-9999",
+        "evidence_bundle": evidence_bundle,
+    }
+
+    with pytest.raises(
+        RuntimeError,
+        match="Injected evidence CVE identifier does not match graph input",
+    ):
+        graph.invoke(mismatched_input)
