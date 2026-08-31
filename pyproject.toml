@@ -79,4 +79,4 @@ test-roots = ["tests"]
 
 [tool.engineering-harness.architecture]
 source-roots = ["src"]
-clean-architecture = false
+clean-architecture = true
