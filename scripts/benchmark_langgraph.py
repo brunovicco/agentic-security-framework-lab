@@ -43,6 +43,8 @@ class BenchmarkRun:
     latency_ms: float
     analysis_source: Literal["llm", "oracle_fallback"]
     validation_passed: bool
+    analysis_attempts: int
+    model_calls: int
     confidence: float
     input_tokens: int
     output_tokens: int
@@ -131,12 +133,16 @@ def main() -> None:
         usage = aggregate_usage(usage_callback.usage_metadata)
         result = output["result"]
 
+        analysis_attempts = output["analysis_attempts"]
+
         benchmark_run = BenchmarkRun(
             run=run_number,
             model=model_name,
             latency_ms=round(latency_ms, 2),
             analysis_source=output["analysis_source"],
             validation_passed=output["validation_passed"],
+            analysis_attempts=analysis_attempts,
+            model_calls=analysis_attempts,
             confidence=result.confidence,
             input_tokens=usage.input_tokens,
             output_tokens=usage.output_tokens,
@@ -147,23 +153,63 @@ def main() -> None:
 
         print(json.dumps(asdict(benchmark_run)))
 
+    total_runs = len(benchmark_runs)
+
     accepted = sum(run.analysis_source == "llm" for run in benchmark_runs)
-    fallbacks = len(benchmark_runs) - accepted
+    fallbacks = total_runs - accepted
+
+    first_attempt_accepts = sum(
+        run.analysis_source == "llm" and run.analysis_attempts == 1 for run in benchmark_runs
+    )
+
+    retried = sum(run.analysis_attempts > 1 for run in benchmark_runs)
+
+    recovered_after_retry = sum(
+        run.analysis_attempts > 1 and run.analysis_source == "llm" for run in benchmark_runs
+    )
+
+    fallback_after_retry = sum(
+        run.analysis_attempts > 1 and run.analysis_source == "oracle_fallback"
+        for run in benchmark_runs
+    )
 
     latencies = [run.latency_ms for run in benchmark_runs]
 
+    recovery_rate = recovered_after_retry / retried if retried else 0.0
+
     summary = {
         "framework": "langgraph",
+        "pattern": "evaluator_optimizer",
         "model": model_name,
-        "runs": len(benchmark_runs),
+        "runs": total_runs,
         "accepted": accepted,
         "fallbacks": fallbacks,
-        "acceptance_rate": accepted / len(benchmark_runs),
-        "fallback_rate": fallbacks / len(benchmark_runs),
-        "mean_latency_ms": round(mean(latencies), 2),
-        "p50_latency_ms": round(median(latencies), 2),
+        "acceptance_rate": accepted / total_runs,
+        "fallback_rate": fallbacks / total_runs,
+        "first_attempt_acceptance_rate": (first_attempt_accepts / total_runs),
+        "retried": retried,
+        "retry_rate": retried / total_runs,
+        "recovered_after_retry": recovered_after_retry,
+        "recovery_rate": recovery_rate,
+        "fallback_after_retry": fallback_after_retry,
+        "mean_model_calls": round(
+            mean(run.model_calls for run in benchmark_runs),
+            2,
+        ),
+        "total_model_calls": sum(run.model_calls for run in benchmark_runs),
+        "mean_latency_ms": round(
+            mean(latencies),
+            2,
+        ),
+        "p50_latency_ms": round(
+            median(latencies),
+            2,
+        ),
         "p95_latency_ms": round(
-            nearest_rank_percentile(latencies, 0.95),
+            nearest_rank_percentile(
+                latencies,
+                0.95,
+            ),
             2,
         ),
         "mean_confidence": round(
