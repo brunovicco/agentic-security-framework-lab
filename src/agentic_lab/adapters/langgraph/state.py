@@ -5,6 +5,7 @@ from typing import TypedDict
 from agentic_lab.application.contracts import (
     AnalysisResult,
     AssetAssessment,
+    LLMAnalysisDraft,
 )
 from agentic_lab.application.evidence import (
     AssetInventoryItem,
@@ -35,3 +36,8 @@ class AnalysisGraphState(TypedDict, total=False):
     assessments: tuple[AssetAssessment, ...]
     requires_human_review: bool
     result: AnalysisResult
+    llm_draft: LLMAnalysisDraft
+    validation_passed: bool
+    validation_reason: str
+    recommendation: str
+    confidence: float
