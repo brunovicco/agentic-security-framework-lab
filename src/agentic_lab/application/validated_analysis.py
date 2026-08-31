@@ -66,9 +66,7 @@ def validate_analysis_draft(
             feedback="",
         )
 
-    asset_ids = sorted(
-        set(expected) | set(observed) | set(expected_counts) | set(observed_counts)
-    )
+    asset_ids = sorted(set(expected) | set(observed) | set(expected_counts) | set(observed_counts))
     mismatched_assets = [
         asset_id
         for asset_id in asset_ids
@@ -101,10 +99,7 @@ def evaluate_human_review_policy(
     assets_by_id = {asset["asset_id"]: asset for asset in assets}
 
     for assessment in assessments:
-        if (
-            assessment.status == "unknown"
-            and policy["unknown_applicability_requires_review"]
-        ):
+        if assessment.status == "unknown" and policy["unknown_applicability_requires_review"]:
             return True
 
         if assessment.status != "affected":
@@ -113,9 +108,7 @@ def evaluate_human_review_policy(
         asset = assets_by_id.get(assessment.asset_id)
 
         if asset is None:
-            raise RuntimeError(
-                "Policy evaluation received an assessment for an unknown asset"
-            )
+            raise RuntimeError("Policy evaluation received an assessment for an unknown asset")
 
         if (
             vulnerability["severity"] == policy["human_review_severity"]
