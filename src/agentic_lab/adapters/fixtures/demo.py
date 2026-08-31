@@ -1,39 +1,12 @@
 """Deterministic vulnerability-analysis fixture."""
 
-from typing import Final, TypedDict
+from typing import Final
 
-
-class VulnerabilityEvidence(TypedDict):
-    """Structured vulnerability evidence returned by the demo source."""
-
-    cve_id: str
-    product: str
-    affected_before: str
-    severity: str
-    cvss_score: str
-    epss_score: str
-    kev_listed: bool
-
-
-class AssetInventoryItem(TypedDict):
-    """Structured asset inventory entry used by the demo workload."""
-
-    asset_id: str
-    product: str
-    version: str
-    environment: str
-    network_exposure: str
-
-
-class SecurityPolicy(TypedDict):
-    """Structured deterministic policy used by the demo workload."""
-
-    policy_id: str
-    human_review_severity: str
-    human_review_environment: str
-    human_review_network_exposure: str
-    unknown_applicability_requires_review: bool
-
+from agentic_lab.application.evidence import (
+    AssetInventoryItem,
+    SecurityPolicy,
+    VulnerabilityEvidence,
+)
 
 DEMO_CVE_ID: Final = "CVE-2026-9001"
 

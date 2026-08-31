@@ -2,16 +2,16 @@
 
 from typing import cast
 
-from agentic_lab.adapters.fixtures.demo import (
-    DEMO_CVE_ID,
-    AssetInventoryItem,
-    SecurityPolicy,
-    VulnerabilityEvidence,
-)
+from agentic_lab.adapters.fixtures.demo import DEMO_CVE_ID
 from agentic_lab.adapters.langchain.tools import (
     get_asset_inventory,
     get_security_policy,
     get_vulnerability_evidence,
+)
+from agentic_lab.application.evidence import (
+    AssetInventoryItem,
+    SecurityPolicy,
+    VulnerabilityEvidence,
 )
 
 

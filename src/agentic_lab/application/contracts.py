@@ -78,3 +78,16 @@ class AnalysisResult(BaseModel):
     def validate_cve_id(cls, value: str) -> str:
         """Require a canonical CVE identifier."""
         return _validate_cve_id(value)
+
+
+class LLMAnalysisDraft(BaseModel):
+    """Represent the reasoning output produced by an LLM."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    assets: tuple[AssetAssessment, ...]
+    recommendation: str = Field(min_length=1)
+    confidence: float = Field(ge=0.0, le=1.0)

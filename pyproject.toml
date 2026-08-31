@@ -5,7 +5,7 @@ description = "Python library generated from the Python engineering harness"
 readme = "README.md"
 requires-python = ">=3.13,<3.15"
 dependencies = [
-    "langchain>=1.3.18,<1.4",
+    "langchain[openai]>=1.3.18,<1.4",
     "langgraph>=1.2.11,<1.3",
     "pydantic>=2.13.5,<3",
 ]

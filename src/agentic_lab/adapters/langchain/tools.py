@@ -3,12 +3,14 @@
 from langchain.tools import tool
 
 from agentic_lab.adapters.fixtures.demo import (
-    AssetInventoryItem,
-    SecurityPolicy,
-    VulnerabilityEvidence,
     load_asset_inventory,
     load_security_policy,
     load_vulnerability_evidence,
+)
+from agentic_lab.application.evidence import (
+    AssetInventoryItem,
+    SecurityPolicy,
+    VulnerabilityEvidence,
 )
 
 

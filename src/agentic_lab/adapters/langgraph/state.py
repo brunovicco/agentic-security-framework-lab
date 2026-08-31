@@ -2,14 +2,14 @@
 
 from typing import TypedDict
 
-from agentic_lab.adapters.fixtures.demo import (
-    AssetInventoryItem,
-    SecurityPolicy,
-    VulnerabilityEvidence,
-)
 from agentic_lab.application.contracts import (
     AnalysisResult,
     AssetAssessment,
+)
+from agentic_lab.application.evidence import (
+    AssetInventoryItem,
+    SecurityPolicy,
+    VulnerabilityEvidence,
 )
 
 

@@ -6,11 +6,6 @@ from typing import cast
 
 from langgraph.graph import END, START, StateGraph
 
-from agentic_lab.adapters.fixtures.demo import (
-    AssetInventoryItem,
-    SecurityPolicy,
-    VulnerabilityEvidence,
-)
 from agentic_lab.adapters.langchain.tools import (
     get_asset_inventory,
     get_security_policy,
@@ -26,6 +21,11 @@ from agentic_lab.application.contracts import (
     ApplicabilityStatus,
     AssetAssessment,
     Severity,
+)
+from agentic_lab.application.evidence import (
+    AssetInventoryItem,
+    SecurityPolicy,
+    VulnerabilityEvidence,
 )
 from agentic_lab.domain.versioning import MajorMinorVersion
 from agentic_lab.domain.vulnerability import AffectedBeforeVersionRule
