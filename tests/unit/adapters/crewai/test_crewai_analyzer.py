@@ -1,6 +1,7 @@
 """Tests for the CrewAI vulnerability-analysis adapter."""
 
 from agentic_lab.adapters.crewai.analyzer import (
+    CrewAIUsage,
     CrewAIVulnerabilityAnalyzer,
     normalize_crewai_model_name,
 )
@@ -79,6 +80,28 @@ def test_normalize_crewai_model_name_rejects_incomplete_identifier() -> None:
         assert str(exc) == "Model identifier must contain both provider and model"
     else:
         raise AssertionError("Expected invalid model identifier to be rejected")
+
+
+def test_crewai_usage_adds_attempt_telemetry() -> None:
+    first = CrewAIUsage(
+        input_tokens=100,
+        output_tokens=25,
+        total_tokens=125,
+        model_calls=1,
+    )
+    second = CrewAIUsage(
+        input_tokens=120,
+        output_tokens=30,
+        total_tokens=150,
+        model_calls=2,
+    )
+
+    assert first.plus(second) == CrewAIUsage(
+        input_tokens=220,
+        output_tokens=55,
+        total_tokens=275,
+        model_calls=3,
+    )
 
 
 def test_crewai_analyzer_frames_evidence_as_untrusted_data() -> None:

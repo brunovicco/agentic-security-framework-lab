@@ -27,6 +27,7 @@ from agentic_lab.application.evidence import (
     SecurityPolicy,
     VulnerabilityEvidence,
 )
+from agentic_lab.application.validated_analysis import evaluate_human_review_policy
 from agentic_lab.domain.versioning import MajorMinorVersion
 from agentic_lab.domain.vulnerability import AffectedBeforeVersionRule
 
@@ -123,28 +124,13 @@ def apply_policy(state: AnalysisGraphState) -> AnalysisGraphState:
             "Policy evaluation requires vulnerability, inventory, policy, and assessment state"
         )
 
-    requires_human_review = False
-
-    for assessment in assessments:
-        if assessment.status == "unknown" and policy["unknown_applicability_requires_review"]:
-            requires_human_review = True
-            break
-
-        if assessment.status != "affected":
-            continue
-
-        asset = next(item for item in assets if item["asset_id"] == assessment.asset_id)
-
-        if (
-            vulnerability["severity"] == policy["human_review_severity"]
-            and asset["environment"] == policy["human_review_environment"]
-            and asset["network_exposure"] == policy["human_review_network_exposure"]
-        ):
-            requires_human_review = True
-            break
-
     return {
-        "requires_human_review": requires_human_review,
+        "requires_human_review": evaluate_human_review_policy(
+            vulnerability=vulnerability,
+            assets=assets,
+            policy=policy,
+            assessments=assessments,
+        )
     }
 
 
