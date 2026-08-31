@@ -66,7 +66,9 @@ def validate_analysis_draft(
             feedback="",
         )
 
-    asset_ids = sorted(set(expected) | set(observed) | set(expected_counts) | set(observed_counts))
+    asset_ids = sorted(
+        set(expected) | set(observed) | set(expected_counts) | set(observed_counts)
+    )
     mismatched_assets = [
         asset_id
         for asset_id in asset_ids
@@ -99,7 +101,10 @@ def evaluate_human_review_policy(
     assets_by_id = {asset["asset_id"]: asset for asset in assets}
 
     for assessment in assessments:
-        if assessment.status == "unknown" and policy["unknown_applicability_requires_review"]:
+        if (
+            assessment.status == "unknown"
+            and policy["unknown_applicability_requires_review"]
+        ):
             return True
 
         if assessment.status != "affected":
@@ -108,7 +113,9 @@ def evaluate_human_review_policy(
         asset = assets_by_id.get(assessment.asset_id)
 
         if asset is None:
-            raise RuntimeError("Policy evaluation received an assessment for an unknown asset")
+            raise RuntimeError(
+                "Policy evaluation received an assessment for an unknown asset"
+            )
 
         if (
             vulnerability["severity"] == policy["human_review_severity"]
@@ -156,6 +163,7 @@ def run_validated_analysis(
     assets = evidence_bundle["assets"]
     policy = evidence_bundle["policy"]
     feedback: str | None = None
+    last_validation: DraftValidation | None = None
 
     for attempt in range(1, max_attempts + 1):
         draft = analyzer.analyze(
@@ -168,6 +176,7 @@ def run_validated_analysis(
             assets=assets,
             draft=draft,
         )
+        last_validation = validation
 
         if validation.passed:
             requires_human_review = evaluate_human_review_policy(
@@ -191,6 +200,9 @@ def run_validated_analysis(
             )
 
         feedback = validation.feedback
+
+    if last_validation is None:
+        raise RuntimeError("Validated analysis ended without an evaluator decision")
 
     assessments = assess_assets_deterministically(
         vulnerability=vulnerability,
@@ -216,6 +228,6 @@ def run_validated_analysis(
         ),
         analysis_source="oracle_fallback",
         validation_passed=False,
-        validation_reason=validation.reason,
+        validation_reason=last_validation.reason,
         analysis_attempts=max_attempts,
     )
