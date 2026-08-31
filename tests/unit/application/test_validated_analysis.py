@@ -38,9 +38,7 @@ class SequencedAnalyzer:
 
 def _bundle(scenario_id: str) -> AnalysisEvidenceBundle:
     scenario = next(
-        scenario
-        for scenario in load_evaluation_scenarios()
-        if scenario.scenario_id == scenario_id
+        scenario for scenario in load_evaluation_scenarios() if scenario.scenario_id == scenario_id
     )
     return {
         "vulnerability": scenario.vulnerability,
