@@ -1,7 +1,7 @@
 [project]
 name = "agentic-security-framework-lab"
 version = "0.1.0"
-description = "Python library generated from the Python engineering harness"
+description = "Framework-neutral lab for evaluating and securing agentic AI workflows"
 readme = "README.md"
 requires-python = ">=3.13,<3.15"
 dependencies = [
