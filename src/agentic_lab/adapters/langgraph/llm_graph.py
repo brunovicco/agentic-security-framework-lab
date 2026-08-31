@@ -24,11 +24,11 @@ from agentic_lab.application.contracts import (
     Severity,
 )
 from agentic_lab.application.evidence import AnalysisEvidenceBundle
-from agentic_lab.application.oracle import (
-    assess_assets_deterministically,
+from agentic_lab.application.oracle import assess_assets_deterministically
+from agentic_lab.application.validated_analysis import (
+    DEFAULT_MAX_ANALYSIS_ATTEMPTS,
+    validate_analysis_draft,
 )
-
-_MAX_ANALYSIS_ATTEMPTS = 2
 
 
 class _InvokableGraph(Protocol):
@@ -109,37 +109,16 @@ def validate_against_oracle(
     if vulnerability is None or assets is None or draft is None:
         raise RuntimeError("LLM validation requires evidence and a structured draft")
 
-    oracle = assess_assets_deterministically(
+    validation = validate_analysis_draft(
         vulnerability=vulnerability,
         assets=assets,
+        draft=draft,
     )
 
-    expected = {assessment.asset_id: assessment.status for assessment in oracle}
-    observed = {assessment.asset_id: assessment.status for assessment in draft.assets}
-
-    if observed == expected:
-        return {
-            "validation_passed": True,
-            "validation_reason": ("LLM applicability matches deterministic oracle."),
-            "validation_feedback": "",
-        }
-
-    asset_ids = sorted(set(expected) | set(observed))
-    mismatched_assets = [
-        asset_id for asset_id in asset_ids if expected.get(asset_id) != observed.get(asset_id)
-    ]
-
-    mismatch_text = ", ".join(mismatched_assets)
-
     return {
-        "validation_passed": False,
-        "validation_reason": ("LLM applicability differs from deterministic oracle."),
-        "validation_feedback": (
-            f"Applicability mismatch for assets: {mismatch_text}. "
-            "Re-check product identity and compare installed versions "
-            "against the affected_before boundary using numeric "
-            "major.minor ordering. Use only the supplied evidence."
-        ),
+        "validation_passed": validation.passed,
+        "validation_reason": validation.reason,
+        "validation_feedback": validation.feedback,
     }
 
 
@@ -157,7 +136,7 @@ def route_after_validation(
 
     attempts = state.get("analysis_attempts", 0)
 
-    if attempts < _MAX_ANALYSIS_ATTEMPTS:
+    if attempts < DEFAULT_MAX_ANALYSIS_ATTEMPTS:
         return "retry"
 
     return "rejected"

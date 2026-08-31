@@ -1,6 +1,7 @@
 """CrewAI structured vulnerability-analysis adapter."""
 
 import json
+from dataclasses import dataclass
 from typing import Protocol, cast
 
 from crewai import LLM, Agent, Crew, Process, Task
@@ -25,6 +26,25 @@ Rules:
 """
 
 
+@dataclass(frozen=True, slots=True)
+class CrewAIUsage:
+    """Capture framework-reported LLM usage across CrewAI analysis attempts."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    model_calls: int = 0
+
+    def plus(self, other: "CrewAIUsage") -> "CrewAIUsage":
+        """Return the field-wise sum of two usage observations."""
+        return CrewAIUsage(
+            input_tokens=self.input_tokens + other.input_tokens,
+            output_tokens=self.output_tokens + other.output_tokens,
+            total_tokens=self.total_tokens + other.total_tokens,
+            model_calls=self.model_calls + other.model_calls,
+        )
+
+
 class CrewAIAnalysisRunner(Protocol):
     """Execute one structured CrewAI analysis task."""
 
@@ -39,6 +59,21 @@ class _CrewKickoff(Protocol):
     def kickoff(self) -> object:
         """Execute the crew synchronously."""
         ...
+
+
+class _UsageMetrics(Protocol):
+    """Minimum CrewAI usage surface required for benchmark telemetry."""
+
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    successful_requests: int
+
+
+class _CrewExecutionOutput(Protocol):
+    """Minimum Crew output surface required after execution."""
+
+    token_usage: _UsageMetrics
 
 
 class _StructuredTaskOutput(Protocol):
@@ -75,6 +110,13 @@ class CrewAIRuntime:
             model=normalize_crewai_model_name(model_name),
             temperature=0,
         )
+        self._pending_usage = CrewAIUsage()
+
+    def consume_usage(self) -> CrewAIUsage:
+        """Return and reset usage accumulated since the previous consumption."""
+        usage = self._pending_usage
+        self._pending_usage = CrewAIUsage()
+        return usage
 
     def run(self, task_description: str) -> LLMAnalysisDraft:
         """Execute a single-agent CrewAI task with Pydantic output validation."""
@@ -106,7 +148,17 @@ class CrewAIRuntime:
             verbose=False,
         )
 
-        _ = cast(_CrewKickoff, crew).kickoff()
+        execution_output = cast(_CrewExecutionOutput, cast(_CrewKickoff, crew).kickoff())
+        usage = execution_output.token_usage
+        self._pending_usage = self._pending_usage.plus(
+            CrewAIUsage(
+                input_tokens=usage.prompt_tokens,
+                output_tokens=usage.completion_tokens,
+                total_tokens=usage.total_tokens,
+                model_calls=usage.successful_requests,
+            )
+        )
+
         task_output = cast(_OutputTask, task).output
 
         if task_output is None or task_output.pydantic is None:
