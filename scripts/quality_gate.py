@@ -73,7 +73,7 @@ def configured_checks(root: Path) -> list[Check]:
         ),
         Check("loop-contracts", (sys.executable, "scripts/validate_loop_contracts.py")),
     ]
-    checks.append(Check("typing", ("mypy", *type_roots) if type_roots else ()))
+    checks.append(Check("typing", ("pyright", *type_roots) if type_roots else ()))
     checks.append(Check("tests", ("pytest",) if test_roots else ()))
     checks.append(
         Check(
