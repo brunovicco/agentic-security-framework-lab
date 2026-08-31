@@ -60,6 +60,10 @@ def test_llm_graph_accepts_analysis_matching_oracle() -> None:
     )
     result = output["result"]
 
+    assert output["analysis_source"] == "llm"
+    assert output["validation_passed"]
+    assert output["validation_reason"] == ("LLM applicability matches deterministic oracle.")
+
     assert result.recommendation == "Patch api-prod-01."
     assert result.confidence == 0.92
     assert result.requires_human_review
@@ -93,6 +97,10 @@ def test_llm_graph_falls_back_when_llm_disagrees_with_oracle() -> None:
     result = output["result"]
 
     statuses = {assessment.asset_id: assessment.status for assessment in result.assets}
+
+    assert output["analysis_source"] == "oracle_fallback"
+    assert not output["validation_passed"]
+    assert output["validation_reason"] == ("LLM applicability differs from deterministic oracle.")
 
     assert statuses == {
         "api-prod-01": "affected",

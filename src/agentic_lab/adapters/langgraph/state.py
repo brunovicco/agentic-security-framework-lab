@@ -1,6 +1,6 @@
 """State schemas for LangGraph vulnerability-analysis workflows."""
 
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 from agentic_lab.application.contracts import (
     AnalysisResult,
@@ -21,9 +21,18 @@ class AnalysisGraphInput(TypedDict):
 
 
 class AnalysisGraphOutput(TypedDict):
-    """Public output returned by the vulnerability-analysis graph."""
+    """Public output returned by the deterministic analysis graph."""
 
     result: AnalysisResult
+
+
+class LLMAnalysisGraphOutput(TypedDict):
+    """Public output returned by the validated LLM analysis graph."""
+
+    result: AnalysisResult
+    analysis_source: Literal["llm", "oracle_fallback"]
+    validation_passed: bool
+    validation_reason: str
 
 
 class AnalysisGraphState(TypedDict, total=False):
@@ -33,11 +42,15 @@ class AnalysisGraphState(TypedDict, total=False):
     vulnerability: VulnerabilityEvidence
     assets: tuple[AssetInventoryItem, ...]
     policy: SecurityPolicy
-    assessments: tuple[AssetAssessment, ...]
-    requires_human_review: bool
-    result: AnalysisResult
+
     llm_draft: LLMAnalysisDraft
     validation_passed: bool
     validation_reason: str
+    analysis_source: Literal["llm", "oracle_fallback"]
+
+    assessments: tuple[AssetAssessment, ...]
     recommendation: str
     confidence: float
+
+    requires_human_review: bool
+    result: AnalysisResult

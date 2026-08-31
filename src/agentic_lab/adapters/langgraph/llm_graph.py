@@ -14,8 +14,8 @@ from agentic_lab.adapters.langgraph.graph import (
 )
 from agentic_lab.adapters.langgraph.state import (
     AnalysisGraphInput,
-    AnalysisGraphOutput,
     AnalysisGraphState,
+    LLMAnalysisGraphOutput,
 )
 from agentic_lab.application.analyzer import VulnerabilityAnalyzer
 from agentic_lab.application.contracts import (
@@ -33,7 +33,7 @@ class _InvokableGraph(Protocol):
     def invoke(
         self,
         input: AnalysisGraphInput,
-    ) -> AnalysisGraphOutput:
+    ) -> LLMAnalysisGraphOutput:
         """Run the graph."""
         ...
 
@@ -132,6 +132,7 @@ def use_llm_analysis(
         "assessments": draft.assets,
         "recommendation": draft.recommendation,
         "confidence": draft.confidence,
+        "analysis_source": "llm",
     }
 
 
@@ -157,6 +158,7 @@ def fallback_to_oracle(
             "assessment and review the disagreement."
         ),
         "confidence": 1.0,
+        "analysis_source": "oracle_fallback",
     }
 
 
@@ -213,7 +215,7 @@ def build_llm_analysis_graph(
     builder = StateGraph(
         AnalysisGraphState,
         input_schema=AnalysisGraphInput,
-        output_schema=AnalysisGraphOutput,
+        output_schema=LLMAnalysisGraphOutput,
     )
 
     builder.add_node("collect_evidence", collect_evidence_node)
@@ -263,7 +265,7 @@ def build_llm_analysis_graph(
 def run_llm_analysis_graph(
     analyzer: VulnerabilityAnalyzer,
     cve_id: str,
-) -> AnalysisGraphOutput:
+) -> LLMAnalysisGraphOutput:
     """Run the LLM-backed vulnerability-analysis graph."""
     graph = build_llm_analysis_graph(analyzer)
 

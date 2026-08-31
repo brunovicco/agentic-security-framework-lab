@@ -20,6 +20,10 @@ def main() -> None:
         cve_id=DEMO_CVE_ID,
     )
 
+    print(f"analysis_source: {output['analysis_source']}")
+    print(f"validation_passed: {output['validation_passed']}")
+    print(f"validation_reason: {output['validation_reason']}")
+    print()
     print(output["result"].model_dump_json(indent=2))
 
 
