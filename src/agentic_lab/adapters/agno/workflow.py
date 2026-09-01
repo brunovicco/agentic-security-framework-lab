@@ -2,10 +2,9 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import Protocol
 
 from agno.run import RunStatus
-from agno.run.workflow import WorkflowRunOutput
 from agno.workflow import Condition, Loop, Step, Workflow
 from agno.workflow.types import HumanReview, OnError, StepInput, StepOutput
 
@@ -33,6 +32,9 @@ from agentic_lab.application.validated_analysis import (
     evaluate_human_review_policy,
     validate_analysis_draft,
 )
+
+AGNO_WORKFLOW_STEP_MAX_RETRIES = 0
+AGNO_WORKFLOW_TELEMETRY = False
 
 
 class _UsageAwareAgnoRunner(AgnoAnalysisRunner, Protocol):
@@ -91,7 +93,7 @@ def _analysis_step(state: _AgnoWorkflowState) -> Step:
     return Step(
         name="Analyze vulnerability",
         executor=execute,
-        max_retries=0,
+        max_retries=AGNO_WORKFLOW_STEP_MAX_RETRIES,
         skip_on_failure=False,
         human_review=_fail_closed_review(),
     )
@@ -113,7 +115,7 @@ def _validation_step(state: _AgnoWorkflowState) -> Step:
     return Step(
         name="Validate analysis",
         executor=execute,
-        max_retries=0,
+        max_retries=AGNO_WORKFLOW_STEP_MAX_RETRIES,
         skip_on_failure=False,
         human_review=_fail_closed_review(),
     )
@@ -167,7 +169,7 @@ def _finalize_llm_step(state: _AgnoWorkflowState) -> Step:
     return Step(
         name="Finalize accepted analysis",
         executor=execute,
-        max_retries=0,
+        max_retries=AGNO_WORKFLOW_STEP_MAX_RETRIES,
         skip_on_failure=False,
         human_review=_fail_closed_review(),
     )
@@ -207,7 +209,7 @@ def _finalize_fallback_step(state: _AgnoWorkflowState) -> Step:
     return Step(
         name="Finalize oracle fallback",
         executor=execute,
-        max_retries=0,
+        max_retries=AGNO_WORKFLOW_STEP_MAX_RETRIES,
         skip_on_failure=False,
         human_review=_fail_closed_review(),
     )
@@ -238,7 +240,7 @@ def _build_workflow(state: _AgnoWorkflowState) -> Workflow:
     return Workflow(
         name="Agno validated vulnerability analysis",
         steps=[analysis_loop, final_route],
-        telemetry=False,
+        telemetry=AGNO_WORKFLOW_TELEMETRY,
         cache_session=False,
         add_workflow_history_to_steps=False,
     )
@@ -275,7 +277,7 @@ class AgnoWorkflowRuntime:
             analyzer=analyzer,
         )
         workflow = _build_workflow(state)
-        raw_output = cast(WorkflowRunOutput, workflow.run(input="validated vulnerability analysis"))
+        raw_output = workflow.run(input="validated vulnerability analysis")
 
         if raw_output.status == RunStatus.error:
             raise RuntimeError("Agno Workflow execution failed")
