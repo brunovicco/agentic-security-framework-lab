@@ -124,6 +124,40 @@ def test_crewai_usage_adds_attempt_telemetry() -> None:
     )
 
 
+def test_crewai_usage_reports_delta_from_cumulative_baseline() -> None:
+    baseline = CrewAIUsage(
+        input_tokens=965,
+        output_tokens=193,
+        total_tokens=1158,
+        model_calls=1,
+    )
+    cumulative = CrewAIUsage(
+        input_tokens=1882,
+        output_tokens=363,
+        total_tokens=2245,
+        model_calls=2,
+    )
+
+    assert cumulative.delta_since(baseline) == CrewAIUsage(
+        input_tokens=917,
+        output_tokens=170,
+        total_tokens=1087,
+        model_calls=1,
+    )
+
+
+def test_crewai_usage_rejects_decreasing_cumulative_counters() -> None:
+    baseline = CrewAIUsage(total_tokens=100, model_calls=2)
+    current = CrewAIUsage(total_tokens=90, model_calls=1)
+
+    try:
+        current.delta_since(baseline)
+    except RuntimeError as exc:
+        assert str(exc) == "CrewAI usage telemetry counters decreased unexpectedly"
+    else:
+        raise AssertionError("Expected decreasing CrewAI usage counters to fail closed")
+
+
 def test_crewai_analyzer_frames_evidence_as_untrusted_data() -> None:
     runner = StubCrewAIAnalysisRunner(_draft())
     analyzer = CrewAIVulnerabilityAnalyzer(runner)
