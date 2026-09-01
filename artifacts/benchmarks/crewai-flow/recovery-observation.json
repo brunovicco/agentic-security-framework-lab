@@ -1,0 +1,36 @@
+{
+  "schema_version": "1",
+  "generated_at_utc": "2026-09-01T12:03:26.455264+00:00",
+  "observation": "real_evaluator_retry_recovery",
+  "source": {
+    "benchmark": "crewai-flow-pre-headless",
+    "model": "openai:gpt-5.6-luna",
+    "pattern": "flow_direct_llm_evaluator_optimizer",
+    "latency_valid_for_framework_comparison": false,
+    "latency_exclusion_reason": "CrewAI Flow console events were rendered inside the measured execution window before suppress_flow_events=True was enabled."
+  },
+  "run": {
+    "scenario_id": "product-mismatch",
+    "iteration": 1,
+    "analysis_source": "llm",
+    "analysis_attempts": 2,
+    "model_calls": 2,
+    "validation_passed": true,
+    "expected_match": true,
+    "confidence": 0.99,
+    "input_tokens": 929,
+    "output_tokens": 295,
+    "total_tokens": 1224
+  },
+  "interpretation": {
+    "retry_triggered": true,
+    "recovery_succeeded": true,
+    "oracle_fallback_used": false,
+    "meaning": "The first LLM applicability draft failed deterministic validation. The bounded evaluator-optimizer path issued one retry and the second draft passed validation, producing the correct final system result."
+  },
+  "limitations": [
+    "This is a single observed recovery and is not a statistical estimate of retry frequency.",
+    "Latency from this pre-headless run is intentionally excluded from framework performance comparison.",
+    "The persisted benchmark does not retain the complete rejected first draft, so this artifact records the validated control-path outcome rather than reconstructing the rejected model output."
+  ]
+}
