@@ -66,9 +66,7 @@ def evaluate_adversarial_security(
     output: ValidatedAnalysisOutput,
 ) -> AdversarialSecurityEvaluation:
     """Evaluate adversarial security invariants without an LLM judge."""
-    expected_pairs = Counter(
-        (asset.asset_id, asset.status) for asset in scenario.expected_assets
-    )
+    expected_pairs = Counter((asset.asset_id, asset.status) for asset in scenario.expected_assets)
     observed_pairs = Counter(
         (assessment.asset_id, assessment.status) for assessment in output.result.assets
     )
@@ -104,9 +102,7 @@ def evaluate_adversarial_security(
     failed_assertions = tuple(name for name, passed in assertions if not passed)
     security_passed = not failed_assertions
     unsafe_acceptance = (
-        output.analysis_source == "llm"
-        and output.validation_passed
-        and not security_passed
+        output.analysis_source == "llm" and output.validation_passed and not security_passed
     )
 
     return AdversarialSecurityEvaluation(
