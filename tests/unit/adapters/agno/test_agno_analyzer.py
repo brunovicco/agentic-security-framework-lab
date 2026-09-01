@@ -1,5 +1,7 @@
 """Tests for the Agno vulnerability-analysis adapter."""
 
+from collections.abc import Callable
+
 from agno.metrics import RunMetrics
 from agno.run.agent import RunOutput
 from pytest import MonkeyPatch, raises
@@ -42,6 +44,17 @@ class StubAgent:
         if not self.outputs:
             raise AssertionError("StubAgent received more runs than expected")
         return self.outputs.pop(0)
+
+
+def _factory_for(stub: StubAgent) -> Callable[[str, str], StubAgent]:
+    """Return a typed Agno agent factory for strict monkeypatch tests."""
+
+    def factory(model_name: str, system_prompt: str) -> StubAgent:
+        assert model_name == "openai:gpt-5.6-luna"
+        assert system_prompt == SECURITY_ANALYSIS_SYSTEM_PROMPT
+        return stub
+
+    return factory
 
 
 def _vulnerability() -> VulnerabilityEvidence:
@@ -178,7 +191,7 @@ def test_agno_runtime_rejects_system_prompt_boundary_change(
     monkeypatch: MonkeyPatch,
 ) -> None:
     stub = StubAgent([_run_output()])
-    monkeypatch.setattr(agno_module, "_create_agent", lambda model_name, system_prompt: stub)
+    monkeypatch.setattr(agno_module, "_create_agent", _factory_for(stub))
     runtime = AgnoRuntime("openai:gpt-5.6-luna")
 
     with raises(ValueError, match="system prompt does not match"):
@@ -199,7 +212,7 @@ def test_agno_runtime_usage_accumulates_attempts_then_resets(
             _run_output(input_tokens=120, output_tokens=30, total_tokens=150),
         ]
     )
-    monkeypatch.setattr(agno_module, "_create_agent", lambda model_name, system_prompt: stub)
+    monkeypatch.setattr(agno_module, "_create_agent", _factory_for(stub))
     runtime = AgnoRuntime("openai:gpt-5.6-luna")
 
     runtime.run(SECURITY_ANALYSIS_SYSTEM_PROMPT, "first")
@@ -221,7 +234,7 @@ def test_agno_runtime_usage_accumulates_attempts_then_resets(
 
 def test_agno_runtime_fails_closed_without_metrics(monkeypatch: MonkeyPatch) -> None:
     stub = StubAgent([RunOutput(content=_draft(), metrics=None)])
-    monkeypatch.setattr(agno_module, "_create_agent", lambda model_name, system_prompt: stub)
+    monkeypatch.setattr(agno_module, "_create_agent", _factory_for(stub))
     runtime = AgnoRuntime("openai:gpt-5.6-luna")
 
     with raises(RuntimeError, match="did not provide token metrics"):
@@ -232,7 +245,7 @@ def test_agno_runtime_fails_closed_without_metrics(monkeypatch: MonkeyPatch) -> 
 
 def test_agno_runtime_fails_closed_on_incomplete_metrics(monkeypatch: MonkeyPatch) -> None:
     stub = StubAgent([_run_output(output_tokens=0, total_tokens=100)])
-    monkeypatch.setattr(agno_module, "_create_agent", lambda model_name, system_prompt: stub)
+    monkeypatch.setattr(agno_module, "_create_agent", _factory_for(stub))
     runtime = AgnoRuntime("openai:gpt-5.6-luna")
 
     with raises(RuntimeError, match="reported no output tokens"):
@@ -245,7 +258,7 @@ def test_agno_runtime_fails_closed_on_non_structured_content(
     monkeypatch: MonkeyPatch,
 ) -> None:
     stub = StubAgent([_run_output(draft="not structured")])
-    monkeypatch.setattr(agno_module, "_create_agent", lambda model_name, system_prompt: stub)
+    monkeypatch.setattr(agno_module, "_create_agent", _factory_for(stub))
     runtime = AgnoRuntime("openai:gpt-5.6-luna")
 
     with raises(RuntimeError, match="did not return LLMAnalysisDraft"):
