@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol, cast
 
+from agno.run import RunStatus
 from agno.run.workflow import WorkflowRunOutput
 from agno.workflow import Condition, Loop, Step, Workflow
 from agno.workflow.types import HumanReview, OnError, StepInput, StepOutput
@@ -276,8 +277,10 @@ class AgnoWorkflowRuntime:
         workflow = _build_workflow(state)
         raw_output = cast(WorkflowRunOutput, workflow.run(input="validated vulnerability analysis"))
 
-        if raw_output.is_error:
+        if raw_output.status == RunStatus.error:
             raise RuntimeError("Agno Workflow execution failed")
+        if raw_output.status != RunStatus.completed:
+            raise RuntimeError(f"Agno Workflow ended with unexpected status: {raw_output.status}")
         if state.output is None:
             raise RuntimeError("Agno Workflow ended without a validated analysis result")
 
