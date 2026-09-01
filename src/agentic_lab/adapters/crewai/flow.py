@@ -94,6 +94,8 @@ def _create_structured_llm(model_name: str) -> _StructuredLLM:
 class CrewAIValidatedAnalysisFlow(Flow[CrewAIValidatedFlowState]):
     """Orchestrate analysis, deterministic validation, retry, and fallback in CrewAI Flow."""
 
+    suppress_flow_events: bool = True
+
     def _require_draft(self) -> LLMAnalysisDraft:
         draft = self.state.draft
         if draft is None:

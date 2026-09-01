@@ -107,6 +107,12 @@ def _install_stub(
     return stub
 
 
+def test_crewai_flow_suppresses_console_events_by_default() -> None:
+    flow = _flow()
+
+    assert flow.suppress_flow_events is True
+
+
 def test_crewai_flow_accepts_correct_first_analysis(monkeypatch: MonkeyPatch) -> None:
     stub = _install_stub(monkeypatch, [_correct_draft()])
     flow = _flow()
