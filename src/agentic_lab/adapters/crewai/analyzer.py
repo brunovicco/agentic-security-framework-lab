@@ -106,10 +106,7 @@ class CrewAIRuntime:
 
     def __init__(self, model_name: str) -> None:
         """Configure CrewAI with the shared model identifier."""
-        self._llm = LLM(
-            model=normalize_crewai_model_name(model_name),
-            temperature=0,
-        )
+        self._llm = LLM(model=normalize_crewai_model_name(model_name))
         self._pending_usage = CrewAIUsage()
 
     def consume_usage(self) -> CrewAIUsage:
