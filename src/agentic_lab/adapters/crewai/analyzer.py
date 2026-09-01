@@ -44,6 +44,25 @@ class CrewAIUsage:
             model_calls=self.model_calls + other.model_calls,
         )
 
+    def delta_since(self, baseline: "CrewAIUsage") -> "CrewAIUsage":
+        """Return usage accumulated since a previously observed cumulative baseline."""
+        deltas = (
+            self.input_tokens - baseline.input_tokens,
+            self.output_tokens - baseline.output_tokens,
+            self.total_tokens - baseline.total_tokens,
+            self.model_calls - baseline.model_calls,
+        )
+
+        if any(value < 0 for value in deltas):
+            raise RuntimeError("CrewAI usage telemetry counters decreased unexpectedly")
+
+        return CrewAIUsage(
+            input_tokens=deltas[0],
+            output_tokens=deltas[1],
+            total_tokens=deltas[2],
+            model_calls=deltas[3],
+        )
+
 
 class CrewAIAnalysisRunner(Protocol):
     """Execute one structured CrewAI analysis task."""
@@ -107,12 +126,13 @@ class CrewAIRuntime:
     def __init__(self, model_name: str) -> None:
         """Configure CrewAI with the shared model identifier."""
         self._llm = LLM(model=normalize_crewai_model_name(model_name))
-        self._pending_usage = CrewAIUsage()
+        self._latest_usage = CrewAIUsage()
+        self._consumed_usage = CrewAIUsage()
 
     def consume_usage(self) -> CrewAIUsage:
-        """Return and reset usage accumulated since the previous consumption."""
-        usage = self._pending_usage
-        self._pending_usage = CrewAIUsage()
+        """Return usage accumulated since the previous consumption."""
+        usage = self._latest_usage.delta_since(self._consumed_usage)
+        self._consumed_usage = self._latest_usage
         return usage
 
     def run(self, task_description: str) -> LLMAnalysisDraft:
@@ -147,13 +167,11 @@ class CrewAIRuntime:
 
         execution_output = cast(_CrewExecutionOutput, cast(_CrewKickoff, crew).kickoff())
         usage = execution_output.token_usage
-        self._pending_usage = self._pending_usage.plus(
-            CrewAIUsage(
-                input_tokens=usage.prompt_tokens,
-                output_tokens=usage.completion_tokens,
-                total_tokens=usage.total_tokens,
-                model_calls=usage.successful_requests,
-            )
+        self._latest_usage = CrewAIUsage(
+            input_tokens=usage.prompt_tokens,
+            output_tokens=usage.completion_tokens,
+            total_tokens=usage.total_tokens,
+            model_calls=usage.successful_requests,
         )
 
         task_output = cast(_OutputTask, task).output
