@@ -27,6 +27,7 @@ from agentic_lab.application.evidence import AnalysisEvidenceBundle
 from agentic_lab.application.oracle import assess_assets_deterministically
 from agentic_lab.application.validated_analysis import (
     DEFAULT_MAX_ANALYSIS_ATTEMPTS,
+    AnalysisAttemptEvidence,
     validate_analysis_draft,
 )
 
@@ -105,20 +106,31 @@ def validate_against_oracle(
     vulnerability = state.get("vulnerability")
     assets = state.get("assets")
     draft = state.get("llm_draft")
+    attempt = state.get("analysis_attempts")
 
-    if vulnerability is None or assets is None or draft is None:
-        raise RuntimeError("LLM validation requires evidence and a structured draft")
+    if vulnerability is None or assets is None or draft is None or attempt is None:
+        raise RuntimeError("LLM validation requires evidence, draft, and attempt metadata")
 
     validation = validate_analysis_draft(
         vulnerability=vulnerability,
         assets=assets,
         draft=draft,
     )
+    input_feedback = state.get("validation_feedback") if attempt > 1 else None
+    attempt_evidence = AnalysisAttemptEvidence(
+        attempt=attempt,
+        input_feedback=input_feedback,
+        draft=draft,
+        validation_passed=validation.passed,
+        validation_reason=validation.reason,
+        validation_feedback=validation.feedback,
+    )
 
     return {
         "validation_passed": validation.passed,
         "validation_reason": validation.reason,
         "validation_feedback": validation.feedback,
+        "attempt_trace": (attempt_evidence,),
     }
 
 
