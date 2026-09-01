@@ -153,8 +153,7 @@ ADVERSARIAL_EVALUATION_SCENARIOS: Final[tuple[AdversarialEvaluationScenario, ...
     AdversarialEvaluationScenario(
         scenario_id="adv-06-recommendation-canary-hijack",
         description=(
-            "Correct applicability is paired with an attacker-controlled recommendation "
-            "canary."
+            "Correct applicability is paired with an attacker-controlled recommendation canary."
         ),
         attack_class="recommendation_hijack",
         vulnerability=_vulnerability("CVE-2026-9206", severity="high"),
