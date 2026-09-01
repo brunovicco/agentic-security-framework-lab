@@ -2,17 +2,15 @@
 
 [![quality](https://github.com/brunovicco/agentic-security-framework-lab/actions/workflows/quality.yml/badge.svg)](https://github.com/brunovicco/agentic-security-framework-lab/actions/workflows/quality.yml)
 
-A framework-neutral lab for building, securing, evaluating, and comparing agentic AI systems using the same vulnerability-analysis workload.
+A controlled engineering lab for comparing **LangGraph, CrewAI, LlamaIndex, and Agno** on the same security-sensitive agentic workload.
 
-The project is designed to answer a practical question:
+The project asks a narrow but practical question:
 
-> How do different agentic frameworks behave when they must solve the same security-sensitive problem under the same contracts, evidence, evaluation dataset, and runtime controls?
+> What changes when different agentic orchestration abstractions solve the same problem under the same evidence, expected truth, deterministic validation, retry, fallback, policy, and model?
 
-The current implementation uses **LangChain** for model abstraction and structured LLM output, and **LangGraph** for orchestration.
+The workload is vulnerability applicability analysis. The LLM may reason about evidence, but it never owns the security-sensitive source of truth.
 
-Planned framework implementations include CrewAI, LlamaIndex, and Agno.
-
-## Core principle
+## Core invariant
 
 ```text
 LLM reasons
@@ -22,93 +20,75 @@ runtime executes
 evidence explains
 ```
 
-The LLM is treated as a probabilistic reasoning component, not as the final authority.
+The LLM is a probabilistic reasoning component, not the final authority.
 
-Deterministic software remains responsible for validation, policy enforcement, fallback behavior, and security-sensitive decisions.
+Application-owned deterministic software remains responsible for:
 
-## Use case
+- evidence identity validation;
+- applicability validation;
+- bounded retry decisions;
+- deterministic oracle fallback;
+- human-review policy;
+- final `AnalysisResult` construction.
 
-The shared workload is vulnerability analysis:
+## Five-way benchmark
 
-```text
-Analyze CVE-XXXX-YYYY and determine whether our environment is exposed.
-```
-
-The system receives vulnerability evidence and asset inventory data and produces a structured result containing:
-
-- asset applicability
-- severity
-- recommendation
-- confidence
-- evidence provenance
-- human-review requirement
-
-## Architecture
-
-The project keeps domain and application contracts independent from orchestration frameworks.
+The current official benchmark compares five orchestration variants using the same model and the same five scenarios.
 
 ```text
-                  Domain
-                    │
-                    ▼
-               Application
-                    │
-                    ▼
-            Ports / Contracts
-                    │
-        ┌───────────┴───────────┐
-        │                       │
-        ▼                       ▼
- Framework adapters       Shared evaluation
-        │
-        ├── LangChain
-        ├── LangGraph
-        ├── CrewAI       planned
-        ├── LlamaIndex   planned
-        └── Agno         planned
+Model: openai:gpt-5.6-luna
+Scenarios: 5
+Repetitions per scenario: 3
+Runs per variant: 15
+Sampling: provider default
 ```
 
-The current LangGraph workflow implements an evaluator-optimizer pattern:
+| Variant | Expected accuracy | First pass | Mean calls | Mean latency | p50 latency | Mean tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| LangGraph evaluator-optimizer | 100% | 100% | 1.00 | **2728.01 ms** | **2643.41 ms** | **613.80** |
+| CrewAI Agent + Task + Crew | 100% | 100% | 1.00 | 2866.79 ms | 2818.60 ms | 1143.33 |
+| CrewAI Flow + direct structured LLM | 100% | 100% | 1.00 | 2847.78 ms | 2739.98 ms | 630.27 |
+| LlamaIndex Workflow + `structured_predict()` | 100% | 100% | 1.00 | 2963.03 ms | 2837.52 ms | 630.13 |
+| Agno Workflow + native `Loop` / `Condition` | 100% | 100% | 1.00 | 3268.84 ms | 3159.27 ms | 634.20 |
+
+### What the benchmark suggests
+
+For this controlled workload, the three lighter orchestration variants added after the LangGraph baseline converged to a very similar token envelope:
 
 ```text
-evidence
-   │
-   ▼
-LLM analysis
-   │
-   ▼
-deterministic evaluator
-   │
-   ├── accepted
-   └── rejected
-          │
-          ▼
-   evaluator feedback
-          │
-          ▼
-     LLM retry
-          │
-          ▼
-   deterministic evaluator
-          │
-          ├── accepted
-          └── rejected
-                 │
-                 ▼
-          oracle fallback
-                 │
-                 ▼
-       deterministic policy
-                 │
-                 ▼
-          AnalysisResult
+LlamaIndex Workflow   630.13 tokens/run
+CrewAI Flow           630.27 tokens/run
+Agno Workflow         634.20 tokens/run
 ```
 
-The workflow allows a maximum of two LLM analysis attempts before falling back to deterministic assessment.
+Their spread is only **0.65%**.
 
-## Framework-neutral evidence
+By contrast, the CrewAI `Agent + Task + Crew` envelope used **1143.33 tokens/run**. Switching from that abstraction to CrewAI Flow removed **96.89%** of the Agent/Crew token excess above the LangGraph baseline; LlamaIndex removed **96.92%**, and Agno removed **96.15%**.
 
-Agentic engines consume the same application-level evidence contract:
+The useful conclusion is not that one framework is universally better:
+
+> **For this workload, orchestration abstraction choice affected token cost more than the difference among the lighter framework implementations.**
+
+Latency tells a different story. Agno remained in the same light token cluster but showed higher mean and p50 latency in this fifteen-run sample. Those latency results are descriptive only.
+
+Full evidence:
+
+- [Five-way human-readable report](artifacts/benchmarks/comparison/five-way-latest.md)
+- [Five-way machine-readable artifact](artifacts/benchmarks/comparison/five-way-latest.json)
+- [Framework decision matrix](docs/FRAMEWORK_DECISION_MATRIX.md)
+
+### What the benchmark does **not** prove
+
+- It does not establish statistical significance.
+- It does not establish production SLOs.
+- At `n=15`, nearest-rank p95 is the sample maximum and should be treated only as a small-sample tail indicator.
+- It does not establish a general framework ranking.
+- The adversarial asset-ID scenario is a narrow instruction/data-boundary test, not proof of broad prompt-injection resistance.
+- All five official samples happened to reach 100% first-pass acceptance, so the official run does not create a quality ranking between frameworks.
+
+## Shared workload
+
+Each implementation analyzes the same framework-neutral evidence contract:
 
 ```text
 AnalysisEvidenceBundle
@@ -117,13 +97,83 @@ AnalysisEvidenceBundle
 └── policy
 ```
 
-Injected evidence is fail-closed on vulnerability identity: a bundle whose CVE identifier does not match the graph input is rejected before LLM analysis.
+A request such as:
 
-This boundary is intentionally reusable by future framework implementations.
+```text
+Analyze CVE-XXXX-YYYY and determine whether our environment is exposed.
+```
+
+produces a structured result containing:
+
+- asset applicability;
+- severity;
+- recommendation;
+- confidence;
+- evidence provenance;
+- human-review requirement.
+
+The LLM does not own the CVE identifier, evidence provenance, deterministic policy, or final authority.
+
+## Shared evaluator-optimizer control loop
+
+Every benchmark variant is constrained by the same application-owned control semantics:
+
+```text
+evidence
+   │
+   ▼
+probabilistic analysis
+   │
+   ▼
+deterministic evaluator
+   │
+   ├── accepted ─────────────────────────────┐
+   │                                         │
+   └── rejected                              │
+          │                                  │
+          ▼                                  │
+   evaluator feedback                        │
+          │                                  │
+          ▼                                  │
+     bounded retry                           │
+          │                                  │
+          ▼                                  │
+   deterministic evaluator                   │
+          │                                  │
+          ├── accepted ──────────────────────┤
+          │                                  │
+          └── exhausted                      │
+                 │                           │
+                 ▼                           │
+        deterministic oracle                 │
+                 │                           │
+                 └──────────────┬────────────┘
+                                ▼
+                      deterministic policy
+                                │
+                                ▼
+                         AnalysisResult
+```
+
+A correct final system result therefore does not necessarily mean that the LLM was correct. The runtime can reject unsafe reasoning and recover through bounded retry or deterministic fallback.
+
+That distinction between **model quality** and **system safety** is central to the lab.
+
+## Framework implementations
+
+| Framework / abstraction | Native orchestration used | Structured reasoning path | Application-owned deterministic controls |
+| --- | --- | --- | --- |
+| LangGraph | graph nodes + conditional routing | LangChain structured model output | yes |
+| CrewAI Agent/Crew | `Agent` + `Task` + `Crew` | structured CrewAI output | yes, external evaluator |
+| CrewAI Flow | Flow routing/state | direct structured `LLM.call()` | yes |
+| LlamaIndex Workflow | typed Workflow events | `structured_predict()` | yes |
+| Agno Workflow | `Workflow` + `Loop` + `Condition` | Agent structured output | yes |
+
+The repository intentionally keeps framework adapters below the application boundary so orchestration can change without moving security authority into a framework.
+
+See [Architecture](docs/ARCHITECTURE.md) for the detailed design and trust boundaries.
 
 ## Evaluation dataset
-
-The initial evaluation dataset contains five scenarios.
 
 | Scenario | Purpose | Expected behavior |
 | --- | --- | --- |
@@ -133,84 +183,31 @@ The initial evaluation dataset contains five scenarios.
 | `fixed-boundary` | exclusive affected-version boundary | `not_affected` |
 | `adversarial-asset-id` | instruction-like text embedded in untrusted data | instruction remains data |
 
-The adversarial scenario is deliberately narrow. It tests an instruction/data boundary and is **not** intended as proof of general prompt-injection resistance.
+The expected truth is external to every framework implementation.
 
-## Current LangGraph benchmark
+## Security properties demonstrated
 
-The persisted benchmark was executed with:
+The current implementation exercises:
 
-```text
-Framework: LangGraph
-Pattern: evaluator-optimizer
-Model: openai:gpt-5.6-luna
-Scenarios: 5
-Runs per scenario: 3
-Total runs: 15
-```
+- structured LLM output;
+- explicit application contracts;
+- domain/application isolation from framework adapters;
+- fail-closed CVE/evidence identity validation;
+- deterministic applicability evaluation;
+- evaluator feedback;
+- bounded retry;
+- deterministic fallback;
+- deterministic human-review policy;
+- separation of instructions from untrusted evidence;
+- framework-level hidden retry suppression where relevant;
+- framework telemetry suppression where relevant;
+- per-run model-call accounting;
+- token accounting;
+- latency measurement;
+- external expected truth;
+- persisted benchmark evidence.
 
-### Results
-
-| Metric | Result |
-| --- | ---: |
-| Expected accuracy | 100.0% |
-| First-attempt acceptance | 100.0% |
-| Retry rate | 0.0% |
-| Recovery rate | N/A |
-| Fallback rate | 0.0% |
-| Mean model calls | 1.00 |
-| Mean latency | 2728.01 ms |
-| p50 latency | 2643.41 ms |
-| p95 latency | 3526.02 ms |
-| Mean tokens/run | 613.80 |
-| Total tokens | 9207 |
-
-All 15 final results matched the framework-neutral expected truth.
-
-The adversarial scenario also matched expected truth on all three runs without retry or deterministic fallback.
-
-Recovery is reported as `N/A` because no run required the evaluator-optimizer retry path.
-
-These measurements are intentionally small-sample engineering benchmarks. Latency percentiles should not be interpreted as production SLO measurements.
-
-Full benchmark evidence:
-
-- [`artifacts/benchmarks/langgraph/latest.md`](artifacts/benchmarks/langgraph/latest.md)
-- [`artifacts/benchmarks/langgraph/latest.json`](artifacts/benchmarks/langgraph/latest.json)
-
-## Security properties
-
-The current implementation demonstrates several agentic-security controls:
-
-- structured LLM output
-- explicit application contracts
-- deterministic applicability oracle
-- deterministic policy enforcement
-- conditional validation routing
-- evaluator feedback
-- bounded retry
-- deterministic fallback
-- fail-closed evidence identity validation
-- separation of instructions from untrusted evidence
-- external expected truth for evaluation
-- runtime-path evidence
-- token and latency measurement
-
-A successful final result does not necessarily imply that the LLM succeeded.
-
-For example:
-
-```text
-LLM attempt 1: wrong
-LLM attempt 2: wrong
-        │
-        ▼
-deterministic fallback
-        │
-        ▼
-final system result: correct
-```
-
-This distinction between **model quality** and **system safety** is central to the project.
+The security model is documented in [Architecture](docs/ARCHITECTURE.md).
 
 ## Project structure
 
@@ -219,32 +216,34 @@ src/agentic_lab/
 ├── domain/
 ├── application/
 └── adapters/
+    ├── agno/
+    ├── crewai/
     ├── fixtures/
     ├── langchain/
-    └── langgraph/
-
-tests/
-└── unit/
+    ├── langgraph/
+    └── llamaindex/
 
 scripts/
-├── benchmark_langgraph.py
 ├── benchmark_langgraph_scenarios.py
-├── run_llm_demo.py
+├── benchmark_crewai_scenarios.py
+├── benchmark_crewai_flow_scenarios.py
+├── benchmark_llamaindex_workflow_scenarios.py
+├── benchmark_agno_workflow_scenarios.py
+├── compare_five_way_benchmarks.py
 └── quality_gate.py
 
-artifacts/
-└── benchmarks/
-    └── langgraph/
-        ├── latest.json
-        └── latest.md
-
-docs/
-├── AGENTIC_FAST_TRACK.md
-├── ARCHITECTURE.md
-└── DEVELOPMENT.md
+artifacts/benchmarks/
+├── langgraph/
+├── crewai/
+├── crewai-flow/
+├── llamaindex-workflow/
+├── agno-workflow/
+└── comparison/
 ```
 
-## Requirements
+## Reproduce the environment
+
+Requirements:
 
 - Python 3.13
 - [uv](https://docs.astral.sh/uv/)
@@ -255,37 +254,23 @@ Install the locked environment:
 uv sync --frozen --all-groups
 ```
 
-## Quality gate
-
-Run the complete local engineering gate:
+Run the complete engineering gate:
 
 ```bash
 uv run python scripts/quality_gate.py
 ```
 
-The gate covers:
+The gate covers lockfile consistency, Ruff, architecture checks, governance checks, Pyright strict typing, pytest, coverage, Bandit, and dependency auditing. The same gate runs in GitHub Actions.
 
-- lockfile consistency
-- Ruff linting
-- Ruff formatting
-- architecture boundaries
-- Pyright strict typing
-- pytest
-- coverage threshold
-- Bandit
-- dependency vulnerability audit
+## Run a real-provider benchmark
 
-The same quality gate runs in GitHub Actions.
-
-## Run the deterministic/LLM demo
-
-Configure a model:
+Set the model without embedding credentials in repository files:
 
 ```bash
-export AGENTIC_LAB_MODEL="openai:<model-id>"
+export AGENTIC_LAB_MODEL="openai:gpt-5.6-luna"
 ```
 
-Load the API key without echoing it to the terminal:
+Load the API key without echoing it:
 
 ```bash
 read -s "OPENAI_API_KEY?OpenAI API key: "
@@ -293,77 +278,61 @@ echo
 export OPENAI_API_KEY
 ```
 
-Run:
-
-```bash
-uv run python scripts/run_llm_demo.py
-```
-
-## Run the single-scenario benchmark
-
-```bash
-uv run python scripts/benchmark_langgraph.py --runs 5
-```
-
-## Run the multi-scenario benchmark
+Examples:
 
 ```bash
 uv run python scripts/benchmark_langgraph_scenarios.py --runs 3
+uv run python scripts/benchmark_crewai_scenarios.py --runs 3
+uv run python scripts/benchmark_crewai_flow_scenarios.py --runs 3
+uv run python scripts/benchmark_llamaindex_workflow_scenarios.py --runs 3
+AGNO_TELEMETRY=false uv run python scripts/benchmark_agno_workflow_scenarios.py --runs 3
 ```
 
-The benchmark produces:
+Regenerate the current consolidated comparison:
 
-```text
-artifacts/benchmarks/langgraph/latest.json
-artifacts/benchmarks/langgraph/latest.md
+```bash
+uv run python scripts/compare_five_way_benchmarks.py
 ```
 
 ## Documentation
 
+- [Architecture and security model](docs/ARCHITECTURE.md)
+- [Framework decision matrix](docs/FRAMEWORK_DECISION_MATRIX.md)
+- [Five-way benchmark report](artifacts/benchmarks/comparison/five-way-latest.md)
 - [Agentic fast track](docs/AGENTIC_FAST_TRACK.md)
-- [Architecture](docs/ARCHITECTURE.md)
 - [Development](docs/DEVELOPMENT.md)
+- [MCP](docs/MCP.md)
+- [Privacy](docs/PRIVACY.md)
 - [Engineering contract](AGENTS.md)
+- [Portuguese README](README.pt-br.md)
 
-## Roadmap
+## Current status and next experiments
 
-### Current
+Completed:
 
-- [x] deterministic vulnerability-analysis foundation
-- [x] LangChain model abstraction
-- [x] structured LLM analysis
-- [x] LangGraph deterministic workflow
-- [x] LangGraph evaluator-optimizer
-- [x] deterministic validation and fallback
-- [x] framework-neutral evaluation dataset
-- [x] adversarial instruction/data-boundary scenario
-- [x] latency and token benchmarks
-- [x] persisted benchmark evidence
+- [x] framework-neutral vulnerability-analysis domain and evidence contract;
+- [x] deterministic evaluator, policy, retry, and oracle fallback;
+- [x] LangGraph evaluator-optimizer;
+- [x] CrewAI Agent/Task/Crew implementation;
+- [x] CrewAI Flow direct-LLM implementation;
+- [x] LlamaIndex Workflow implementation;
+- [x] Agno Workflow implementation;
+- [x] shared five-scenario evaluation dataset;
+- [x] official 15-run benchmark for every variant;
+- [x] persisted five-way comparison;
+- [x] strict local/CI quality gate.
 
-### Next
+Candidate next experiments:
 
-- [ ] CrewAI implementation
-- [ ] cross-framework benchmark
-- [ ] LlamaIndex implementation
-- [ ] Agno implementation
-- [ ] provider/model comparison
-- [ ] richer adversarial evaluation dataset
-- [ ] MCP integration and tool authorization
-- [ ] observability and trace correlation
-- [ ] human-in-the-loop workflows
+- [ ] richer adversarial dataset and explicit prompt-injection test families;
+- [ ] model/provider comparison under the same framework-neutral controls;
+- [ ] MCP/tool authorization and least-privilege experiments;
+- [ ] trace correlation and observability comparison;
+- [ ] controlled human-in-the-loop workflows;
+- [ ] larger samples for latency distributions and uncertainty estimates.
 
 ## Why this project exists
 
-Agentic frameworks make it easy to build impressive demos.
+Agentic frameworks make impressive demos easy to build. The harder problem is designing systems where probabilistic reasoning can be constrained, validated, measured, audited, recovered, compared, and safely replaced.
 
-The harder engineering problem is building systems where probabilistic reasoning can be:
-
-- constrained,
-- validated,
-- measured,
-- audited,
-- recovered,
-- compared,
-- and safely replaced.
-
-This repository is a learning and engineering lab for exploring those tradeoffs under a consistent security-sensitive workload.
+This repository treats framework choice as an implementation detail beneath a stable security boundary and uses reproducible evidence to study the tradeoffs.
