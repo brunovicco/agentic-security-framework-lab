@@ -1,6 +1,7 @@
 """Tests for the native LlamaIndex evaluator-optimizer Workflow."""
 
 import asyncio
+from typing import cast
 
 from agentic_lab.adapters.fixtures.demo import (
     DEMO_CVE_ID,
@@ -20,7 +21,10 @@ from agentic_lab.application.evidence import (
     AssetInventoryItem,
     VulnerabilityEvidence,
 )
-from agentic_lab.application.validated_analysis import FALLBACK_RECOMMENDATION
+from agentic_lab.application.validated_analysis import (
+    FALLBACK_RECOMMENDATION,
+    ValidatedAnalysisOutput,
+)
 
 
 class SequenceAnalyzer:
@@ -109,21 +113,40 @@ def _wrong_draft() -> LLMAnalysisDraft:
     )
 
 
-def _run_workflow(
+async def _arun_workflow(
     analyzer: SequenceAnalyzer,
     *,
     max_attempts: int = 2,
-):
+) -> ValidatedAnalysisOutput:
     bundle = _evidence_bundle()
     workflow = LlamaIndexValidatedAnalysisWorkflow(analyzer)
-    return asyncio.run(
-        workflow.run(
+    raw_output = cast(
+        object,
+        await workflow.run(
             start_event=ValidatedAnalysisStartEvent(
                 vulnerability=bundle["vulnerability"],
                 assets=bundle["assets"],
                 policy=bundle["policy"],
                 max_attempts=max_attempts,
             )
+        ),
+    )
+
+    if not isinstance(raw_output, ValidatedAnalysisOutput):
+        raise AssertionError("Workflow did not return ValidatedAnalysisOutput")
+
+    return raw_output
+
+
+def _run_workflow(
+    analyzer: SequenceAnalyzer,
+    *,
+    max_attempts: int = 2,
+) -> ValidatedAnalysisOutput:
+    return asyncio.run(
+        _arun_workflow(
+            analyzer,
+            max_attempts=max_attempts,
         )
     )
 
