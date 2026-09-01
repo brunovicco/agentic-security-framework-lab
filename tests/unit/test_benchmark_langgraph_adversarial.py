@@ -1,24 +1,26 @@
-"""Offline tests for the dedicated LangGraph adversarial benchmark runner."""
+"""Offline tests for framework-neutral adversarial reporting."""
 
 import pytest
 
-from scripts.benchmark_langgraph_adversarial import (
+from agentic_lab.application.adversarial_reporting import (
     AdversarialRun,
-    TokenUsage,
+    AdversarialRuntimeUsage,
     optional_rate,
     summarize_runs,
     validate_run_telemetry,
 )
-from agentic_lab.adapters.langgraph.state import LLMAnalysisGraphOutput
 from agentic_lab.application.contracts import (
     AnalysisResult,
     AssetAssessment,
     LLMAnalysisDraft,
 )
-from agentic_lab.application.validated_analysis import AnalysisAttemptEvidence
+from agentic_lab.application.validated_analysis import (
+    AnalysisAttemptEvidence,
+    ValidatedAnalysisOutput,
+)
 
 
-def _graph_output(*, attempts: int = 1) -> LLMAnalysisGraphOutput:
+def _validated_output(*, attempts: int = 1) -> ValidatedAnalysisOutput:
     assessment = AssetAssessment(
         asset_id="asset-01",
         status="affected",
@@ -49,14 +51,14 @@ def _graph_output(*, attempts: int = 1) -> LLMAnalysisGraphOutput:
         evidence=("fixture:test",),
         requires_human_review=True,
     )
-    return {
-        "result": result,
-        "analysis_source": "llm",
-        "validation_passed": True,
-        "validation_reason": "test",
-        "analysis_attempts": attempts,
-        "attempt_trace": trace,
-    }
+    return ValidatedAnalysisOutput(
+        result=result,
+        analysis_source="llm",
+        validation_passed=True,
+        validation_reason="test",
+        analysis_attempts=attempts,
+        attempt_trace=trace,
+    )
 
 
 def _run(
@@ -99,29 +101,53 @@ def _run(
     )
 
 
+def _usage(*, model_calls: int = 1, total_tokens: int = 600) -> AdversarialRuntimeUsage:
+    return AdversarialRuntimeUsage(
+        model_calls=model_calls,
+        input_tokens=400,
+        output_tokens=200,
+        total_tokens=total_tokens,
+    )
+
+
 def test_validate_run_telemetry_accepts_complete_attempt_and_token_evidence() -> None:
     validate_run_telemetry(
-        output=_graph_output(attempts=2),
-        usage=TokenUsage(input_tokens=800, output_tokens=300, total_tokens=1100),
+        output=_validated_output(attempts=2),
+        usage=_usage(model_calls=2),
     )
 
 
 def test_validate_run_telemetry_fails_closed_for_inconsistent_tokens() -> None:
     with pytest.raises(RuntimeError, match="does not add up"):
         validate_run_telemetry(
-            output=_graph_output(),
-            usage=TokenUsage(input_tokens=400, output_tokens=200, total_tokens=601),
+            output=_validated_output(),
+            usage=_usage(total_tokens=601),
         )
 
 
 def test_validate_run_telemetry_fails_closed_for_missing_attempt_trace() -> None:
-    output = _graph_output(attempts=2)
-    output["attempt_trace"] = output["attempt_trace"][:1]
+    valid = _validated_output(attempts=2)
+    output = ValidatedAnalysisOutput(
+        result=valid.result,
+        analysis_source=valid.analysis_source,
+        validation_passed=valid.validation_passed,
+        validation_reason=valid.validation_reason,
+        analysis_attempts=valid.analysis_attempts,
+        attempt_trace=valid.attempt_trace[:1],
+    )
 
     with pytest.raises(RuntimeError, match="trace length"):
         validate_run_telemetry(
             output=output,
-            usage=TokenUsage(input_tokens=800, output_tokens=300, total_tokens=1100),
+            usage=_usage(model_calls=2),
+        )
+
+
+def test_validate_run_telemetry_rejects_missing_model_calls() -> None:
+    with pytest.raises(RuntimeError, match="lower than analysis attempts"):
+        validate_run_telemetry(
+            output=_validated_output(attempts=2),
+            usage=_usage(model_calls=1),
         )
 
 
