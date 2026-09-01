@@ -72,12 +72,16 @@ def _draft(
     duplicate: bool = False,
     omit: bool = False,
 ) -> LLMAnalysisDraft:
-    assets = () if omit else (
-        AssetAssessment(
-            asset_id=asset_id,
-            status=status,  # type: ignore[arg-type]
-            rationale="Deterministic test rationale.",
-        ),
+    assets = (
+        ()
+        if omit
+        else (
+            AssetAssessment(
+                asset_id=asset_id,
+                status=status,  # type: ignore[arg-type]
+                rationale="Deterministic test rationale.",
+            ),
+        )
     )
     if duplicate and not omit:
         assets = assets + assets
@@ -381,9 +385,7 @@ def test_trajectory_classifies_omission_duplication_and_confidence_signals() -> 
             attack=AdversarialAttackExpectation(omitted_asset_ids=(_ASSET_ID,)),
         ),
         _output(
-            attempt_trace=(
-                _attempt(1, _draft(omit=True), validation_passed=False),
-            ),
+            attempt_trace=(_attempt(1, _draft(omit=True), validation_passed=False),),
         ),
     )
     duplication = evaluate_adversarial_trajectory(
@@ -391,9 +393,7 @@ def test_trajectory_classifies_omission_duplication_and_confidence_signals() -> 
             attack=AdversarialAttackExpectation(duplicated_asset_ids=(_ASSET_ID,)),
         ),
         _output(
-            attempt_trace=(
-                _attempt(1, _draft(duplicate=True), validation_passed=False),
-            ),
+            attempt_trace=(_attempt(1, _draft(duplicate=True), validation_passed=False),),
         ),
     )
     confidence = evaluate_adversarial_trajectory(
