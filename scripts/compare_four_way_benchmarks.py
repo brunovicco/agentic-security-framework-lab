@@ -10,9 +10,7 @@ from typing import Any, cast
 LANGGRAPH_PATH = Path("artifacts/benchmarks/langgraph/latest.json")
 CREWAI_AGENT_PATH = Path("artifacts/benchmarks/crewai/latest.json")
 CREWAI_FLOW_PATH = Path("artifacts/benchmarks/crewai-flow/latest.json")
-LLAMAINDEX_WORKFLOW_PATH = Path(
-    "artifacts/benchmarks/llamaindex-workflow/latest.json"
-)
+LLAMAINDEX_WORKFLOW_PATH = Path("artifacts/benchmarks/llamaindex-workflow/latest.json")
 
 OUTPUT_DIR = Path("artifacts/benchmarks/comparison")
 JSON_OUTPUT = OUTPUT_DIR / "four-way-latest.json"
@@ -80,14 +78,9 @@ def validate_comparability(artifacts: dict[str, dict[str, Any]]) -> None:
     if len(models) != 1:
         raise RuntimeError(f"Benchmark models differ: {sorted(models)}")
 
-    repetitions = {
-        cast(int, payload["repetitions_per_scenario"])
-        for payload in artifacts.values()
-    }
+    repetitions = {cast(int, payload["repetitions_per_scenario"]) for payload in artifacts.values()}
     if repetitions != {3}:
-        raise RuntimeError(
-            "Expected three repetitions per scenario for every benchmark"
-        )
+        raise RuntimeError("Expected three repetitions per scenario for every benchmark")
 
     expected_scenarios: set[str] | None = None
 
@@ -112,9 +105,7 @@ def validate_comparability(artifacts: dict[str, dict[str, Any]]) -> None:
 
     llamaindex = artifacts["llamaindex_workflow"]
     if llamaindex.get("sampling") != "provider_default":
-        raise RuntimeError(
-            "LlamaIndex Workflow benchmark must record provider-default sampling"
-        )
+        raise RuntimeError("LlamaIndex Workflow benchmark must record provider-default sampling")
 
 
 def comparison_metrics(
@@ -140,8 +131,7 @@ def comparison_metrics(
             float(baseline["fallback_rate"]),
         ),
         "mean_model_calls_delta": round(
-            float(candidate["mean_model_calls"])
-            - float(baseline["mean_model_calls"]),
+            float(candidate["mean_model_calls"]) - float(baseline["mean_model_calls"]),
             2,
         ),
         "mean_latency_delta_pct": percent_delta(
@@ -164,8 +154,7 @@ def comparison_metrics(
             float(candidate["mean_total_tokens"]),
             float(baseline["mean_total_tokens"]),
         ),
-        "total_tokens_delta": int(candidate["total_tokens"])
-        - int(baseline["total_tokens"]),
+        "total_tokens_delta": int(candidate["total_tokens"]) - int(baseline["total_tokens"]),
     }
 
 
@@ -178,9 +167,7 @@ def overhead_elimination(
     """Quantify how much Agent/Crew excess a lighter abstraction removes."""
     original_excess = agent_tokens - langgraph_tokens
     if original_excess <= 0:
-        raise RuntimeError(
-            "CrewAI Agent/Crew must exceed LangGraph tokens for overhead analysis"
-        )
+        raise RuntimeError("CrewAI Agent/Crew must exceed LangGraph tokens for overhead analysis")
 
     candidate_excess = candidate_tokens - langgraph_tokens
     eliminated = agent_tokens - candidate_tokens
@@ -241,9 +228,7 @@ def slim_scenario(summary: dict[str, Any]) -> dict[str, Any]:
     """Return the scenario metrics used in the cross-framework report."""
     return {
         "expected_accuracy": summary["expected_accuracy"],
-        "first_attempt_acceptance_rate": summary[
-            "first_attempt_acceptance_rate"
-        ],
+        "first_attempt_acceptance_rate": summary["first_attempt_acceptance_rate"],
         "retry_rate": summary["retry_rate"],
         "fallback_rate": summary["fallback_rate"],
         "mean_model_calls": summary["mean_model_calls"],
@@ -287,9 +272,7 @@ def build_payload(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any]:
     return {
         "schema_version": "1",
         "generated_at_utc": datetime.now(UTC).isoformat(),
-        "comparison": (
-            "langgraph_vs_crewai_agent_vs_crewai_flow_vs_llamaindex_workflow"
-        ),
+        "comparison": ("langgraph_vs_crewai_agent_vs_crewai_flow_vs_llamaindex_workflow"),
         "methodology": {
             "model": artifacts["langgraph"]["model"],
             "scenarios": 5,
@@ -389,9 +372,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
     agent_vs_lg = comparisons["crewai_agent_vs_langgraph"]
 
     flow_overhead = cast(dict[str, Any], token_analysis["crewai_flow"])
-    llama_overhead = cast(
-        dict[str, Any], token_analysis["llamaindex_workflow"]
-    )
+    llama_overhead = cast(dict[str, Any], token_analysis["llamaindex_workflow"])
 
     lines = [
         "# Four-Way Agentic Framework Benchmark",
@@ -410,10 +391,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
         "",
         "## Overall results",
         "",
-        (
-            "| Metric | LangGraph | CrewAI Agent/Crew | CrewAI Flow | "
-            "LlamaIndex Workflow |"
-        ),
+        ("| Metric | LangGraph | CrewAI Agent/Crew | CrewAI Flow | LlamaIndex Workflow |"),
         "| --- | ---: | ---: | ---: | ---: |",
         (
             f"| Expected accuracy | {lg['expected_accuracy']:.1%} | "
@@ -532,10 +510,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
             "",
             "## Scenario p50 latency",
             "",
-            (
-                "| Scenario | LangGraph | CrewAI Agent/Crew | CrewAI Flow | "
-                "LlamaIndex Workflow |"
-            ),
+            ("| Scenario | LangGraph | CrewAI Agent/Crew | CrewAI Flow | LlamaIndex Workflow |"),
             "| --- | ---: | ---: | ---: | ---: |",
         ]
     )
