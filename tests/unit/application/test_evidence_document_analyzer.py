@@ -1,7 +1,5 @@
 """Tests for binding textual evidence outside deterministic control state."""
 
-from dataclasses import dataclass, field
-
 from agentic_lab.application.contracts import LLMAnalysisDraft
 from agentic_lab.application.evidence import (
     AnalysisEvidenceBundle,
@@ -55,9 +53,9 @@ def _bundle() -> AnalysisEvidenceBundle:
     }
 
 
-@dataclass
 class _RecordingAnalyzer:
-    calls: list[tuple[str | None, tuple[EvidenceDocument, ...]]] = field(default_factory=list)
+    def __init__(self) -> None:
+        self.calls: list[tuple[str | None, tuple[EvidenceDocument, ...]]] = []
 
     def analyze(
         self,
@@ -77,6 +75,7 @@ class _RecordingAnalyzer:
 def test_binding_extracts_documents_from_evidence_bundle() -> None:
     delegate = _RecordingAnalyzer()
     bundle = _bundle()
+    expected_documents = bundle.get("documents", ())
     analyzer = bind_evidence_documents(delegate, bundle)
 
     analyzer.analyze(
@@ -84,12 +83,13 @@ def test_binding_extracts_documents_from_evidence_bundle() -> None:
         assets=bundle["assets"],
     )
 
-    assert delegate.calls == [(None, bundle["documents"])]
+    assert delegate.calls == [(None, expected_documents)]
 
 
 def test_binding_reuses_same_documents_on_retry_feedback() -> None:
     delegate = _RecordingAnalyzer()
     bundle = _bundle()
+    expected_documents = bundle.get("documents", ())
     analyzer = bind_evidence_documents(delegate, bundle)
 
     analyzer.analyze(
@@ -103,8 +103,8 @@ def test_binding_reuses_same_documents_on_retry_feedback() -> None:
     )
 
     assert delegate.calls == [
-        (None, bundle["documents"]),
-        ("Correct the applicability status.", bundle["documents"]),
+        (None, expected_documents),
+        ("Correct the applicability status.", expected_documents),
     ]
 
 
