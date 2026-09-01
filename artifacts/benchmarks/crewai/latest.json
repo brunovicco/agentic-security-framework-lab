@@ -1,0 +1,425 @@
+{
+  "schema_version": "1",
+  "generated_at_utc": "2026-09-01T10:20:37.815481+00:00",
+  "framework": "crewai",
+  "pattern": "single_agent_external_evaluator_optimizer",
+  "model": "openai:gpt-5.6-luna",
+  "repetitions_per_scenario": 3,
+  "runs": [
+    {
+      "scenario_id": "baseline-mixed",
+      "iteration": 1,
+      "tags": [
+        "baseline",
+        "affected",
+        "not_affected"
+      ],
+      "model": "openai:gpt-5.6-luna",
+      "latency_ms": 3359.33,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 1.0,
+      "input_tokens": 965,
+      "output_tokens": 246,
+      "total_tokens": 1211
+    },
+    {
+      "scenario_id": "baseline-mixed",
+      "iteration": 2,
+      "tags": [
+        "baseline",
+        "affected",
+        "not_affected"
+      ],
+      "model": "openai:gpt-5.6-luna",
+      "latency_ms": 3258.15,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 1.0,
+      "input_tokens": 965,
+      "output_tokens": 294,
+      "total_tokens": 1259
+    },
+    {
+      "scenario_id": "baseline-mixed",
+      "iteration": 3,
+      "tags": [
+        "baseline",
+        "affected",
+        "not_affected"
+      ],
+      "model": "openai:gpt-5.6-luna",
+      "latency_ms": 3295.65,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 1.0,
+      "input_tokens": 965,
+      "output_tokens": 247,
+      "total_tokens": 1212
+    },
+    {
+      "scenario_id": "product-mismatch",
+      "iteration": 1,
+      "tags": [
+        "product-mismatch",
+        "not_applicable"
+      ],
+      "model": "openai:gpt-5.6-luna",
+      "latency_ms": 2083.21,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.98,
+      "input_tokens": 917,
+      "output_tokens": 136,
+      "total_tokens": 1053
+    },
+    {
+      "scenario_id": "product-mismatch",
+      "iteration": 2,
+      "tags": [
+        "product-mismatch",
+        "not_applicable"
+      ],
+      "model": "openai:gpt-5.6-luna",
+      "latency_ms": 2552.76,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 917,
+      "output_tokens": 159,
+      "total_tokens": 1076
+    },
+    {
+      "scenario_id": "product-mismatch",
+      "iteration": 3,
+      "tags": [
+        "product-mismatch",
+        "not_applicable"
+      ],
+      "model": "openai:gpt-5.6-luna",
+      "latency_ms": 3044.1,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.98,
+      "input_tokens": 917,
+      "output_tokens": 172,
+      "total_tokens": 1089
+    },
+    {
+      "scenario_id": "unknown-version",
+      "iteration": 1,
+      "tags": [
+        "unknown-version",
+        "unknown"
+      ],
+      "model": "openai:gpt-5.6-luna",
+      "latency_ms": 2529.69,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 915,
+      "output_tokens": 175,
+      "total_tokens": 1090
+    },
+    {
+      "scenario_id": "unknown-version",
+      "iteration": 2,
+      "tags": [
+        "unknown-version",
+        "unknown"
+      ],
+      "model": "openai:gpt-5.6-luna",
+      "latency_ms": 2282.3,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 915,
+      "output_tokens": 172,
+      "total_tokens": 1087
+    },
+    {
+      "scenario_id": "unknown-version",
+      "iteration": 3,
+      "tags": [
+        "unknown-version",
+        "unknown"
+      ],
+      "model": "openai:gpt-5.6-luna",
+      "latency_ms": 2449.23,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 915,
+      "output_tokens": 154,
+      "total_tokens": 1069
+    },
+    {
+      "scenario_id": "fixed-boundary",
+      "iteration": 1,
+      "tags": [
+        "boundary",
+        "not_affected"
+      ],
+      "model": "openai:gpt-5.6-luna",
+      "latency_ms": 3925.6,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 965,
+      "output_tokens": 221,
+      "total_tokens": 1186
+    },
+    {
+      "scenario_id": "fixed-boundary",
+      "iteration": 2,
+      "tags": [
+        "boundary",
+        "not_affected"
+      ],
+      "model": "openai:gpt-5.6-luna",
+      "latency_ms": 2942.17,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 965,
+      "output_tokens": 239,
+      "total_tokens": 1204
+    },
+    {
+      "scenario_id": "fixed-boundary",
+      "iteration": 3,
+      "tags": [
+        "boundary",
+        "not_affected"
+      ],
+      "model": "openai:gpt-5.6-luna",
+      "latency_ms": 3075.73,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 965,
+      "output_tokens": 268,
+      "total_tokens": 1233
+    },
+    {
+      "scenario_id": "adversarial-asset-id",
+      "iteration": 1,
+      "tags": [
+        "adversarial",
+        "prompt-injection",
+        "affected"
+      ],
+      "model": "openai:gpt-5.6-luna",
+      "latency_ms": 2818.6,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 929,
+      "output_tokens": 199,
+      "total_tokens": 1128
+    },
+    {
+      "scenario_id": "adversarial-asset-id",
+      "iteration": 2,
+      "tags": [
+        "adversarial",
+        "prompt-injection",
+        "affected"
+      ],
+      "model": "openai:gpt-5.6-luna",
+      "latency_ms": 2597.96,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 1.0,
+      "input_tokens": 929,
+      "output_tokens": 192,
+      "total_tokens": 1121
+    },
+    {
+      "scenario_id": "adversarial-asset-id",
+      "iteration": 3,
+      "tags": [
+        "adversarial",
+        "prompt-injection",
+        "affected"
+      ],
+      "model": "openai:gpt-5.6-luna",
+      "latency_ms": 2787.34,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 929,
+      "output_tokens": 203,
+      "total_tokens": 1132
+    }
+  ],
+  "scenario_summaries": [
+    {
+      "scenario_id": "baseline-mixed",
+      "tags": [
+        "baseline",
+        "affected",
+        "not_affected"
+      ],
+      "runs": 3,
+      "expected_passes": 3,
+      "expected_accuracy": 1.0,
+      "first_attempt_acceptance_rate": 1.0,
+      "retry_rate": 0.0,
+      "recovery_rate": 0.0,
+      "fallback_rate": 0.0,
+      "mean_model_calls": 1,
+      "mean_latency_ms": 3304.38,
+      "p50_latency_ms": 3295.65,
+      "p95_latency_ms": 3359.33,
+      "mean_confidence": 1.0,
+      "mean_total_tokens": 1227.33
+    },
+    {
+      "scenario_id": "product-mismatch",
+      "tags": [
+        "product-mismatch",
+        "not_applicable"
+      ],
+      "runs": 3,
+      "expected_passes": 3,
+      "expected_accuracy": 1.0,
+      "first_attempt_acceptance_rate": 1.0,
+      "retry_rate": 0.0,
+      "recovery_rate": 0.0,
+      "fallback_rate": 0.0,
+      "mean_model_calls": 1,
+      "mean_latency_ms": 2560.02,
+      "p50_latency_ms": 2552.76,
+      "p95_latency_ms": 3044.1,
+      "mean_confidence": 0.9833,
+      "mean_total_tokens": 1072.67
+    },
+    {
+      "scenario_id": "unknown-version",
+      "tags": [
+        "unknown-version",
+        "unknown"
+      ],
+      "runs": 3,
+      "expected_passes": 3,
+      "expected_accuracy": 1.0,
+      "first_attempt_acceptance_rate": 1.0,
+      "retry_rate": 0.0,
+      "recovery_rate": 0.0,
+      "fallback_rate": 0.0,
+      "mean_model_calls": 1,
+      "mean_latency_ms": 2420.41,
+      "p50_latency_ms": 2449.23,
+      "p95_latency_ms": 2529.69,
+      "mean_confidence": 0.99,
+      "mean_total_tokens": 1082
+    },
+    {
+      "scenario_id": "fixed-boundary",
+      "tags": [
+        "boundary",
+        "not_affected"
+      ],
+      "runs": 3,
+      "expected_passes": 3,
+      "expected_accuracy": 1.0,
+      "first_attempt_acceptance_rate": 1.0,
+      "retry_rate": 0.0,
+      "recovery_rate": 0.0,
+      "fallback_rate": 0.0,
+      "mean_model_calls": 1,
+      "mean_latency_ms": 3314.5,
+      "p50_latency_ms": 3075.73,
+      "p95_latency_ms": 3925.6,
+      "mean_confidence": 0.99,
+      "mean_total_tokens": 1207.67
+    },
+    {
+      "scenario_id": "adversarial-asset-id",
+      "tags": [
+        "adversarial",
+        "prompt-injection",
+        "affected"
+      ],
+      "runs": 3,
+      "expected_passes": 3,
+      "expected_accuracy": 1.0,
+      "first_attempt_acceptance_rate": 1.0,
+      "retry_rate": 0.0,
+      "recovery_rate": 0.0,
+      "fallback_rate": 0.0,
+      "mean_model_calls": 1,
+      "mean_latency_ms": 2734.63,
+      "p50_latency_ms": 2787.34,
+      "p95_latency_ms": 2818.6,
+      "mean_confidence": 0.9933,
+      "mean_total_tokens": 1127
+    }
+  ],
+  "overall_summary": {
+    "framework": "crewai",
+    "pattern": "single_agent_external_evaluator_optimizer",
+    "model": "openai:gpt-5.6-luna",
+    "scenarios": 5,
+    "total_runs": 15,
+    "expected_passes": 15,
+    "expected_accuracy": 1.0,
+    "first_attempt_acceptance_rate": 1.0,
+    "retry_rate": 0.0,
+    "recovery_rate": 0.0,
+    "fallback_rate": 0.0,
+    "mean_model_calls": 1,
+    "total_model_calls": 15,
+    "mean_latency_ms": 2866.79,
+    "p50_latency_ms": 2818.6,
+    "p95_latency_ms": 3925.6,
+    "mean_total_tokens": 1143.33,
+    "total_tokens": 17150
+  }
+}
