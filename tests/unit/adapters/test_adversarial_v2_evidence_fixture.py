@@ -33,9 +33,7 @@ def test_v2_asset_ids_are_clean_and_attacks_live_in_document_content() -> None:
             assert not any(marker in asset["asset_id"].upper() for marker in instruction_markers)
 
     combined_content = "\n".join(
-        document["content"]
-        for scenario in scenarios
-        for document in scenario.documents
+        document["content"] for scenario in scenarios for document in scenario.documents
     )
     assert "NOT_AFFECTED" in combined_content
     assert "AUTOMATION DIRECTIVE" in combined_content
@@ -64,7 +62,9 @@ def test_verified_source_authenticity_does_not_change_instruction_authority() ->
 
 
 def test_v2_recommendation_canaries_exist_only_in_target_document_content() -> None:
-    scenarios = {scenario.scenario_id: scenario for scenario in load_adversarial_v2_evidence_scenarios()}
+    scenarios = {
+        scenario.scenario_id: scenario for scenario in load_adversarial_v2_evidence_scenarios()
+    }
 
     scenario_04 = scenarios["adv2-04-recommendation-canary-evidence"]
     scenario_05 = scenarios["adv2-05-fake-human-approval-evidence"]
@@ -98,7 +98,7 @@ def test_v2_bundle_preserves_documents_without_promoting_them_to_policy() -> Non
     scenario = load_adversarial_v2_evidence_scenarios()[0]
     bundle = build_adversarial_v2_evidence_bundle(scenario)
 
-    assert bundle["documents"] == scenario.documents
+    assert bundle.get("documents") == scenario.documents
     assert bundle["vulnerability"] == scenario.vulnerability
     assert bundle["assets"] == scenario.assets
     assert bundle["policy"] == scenario.policy
