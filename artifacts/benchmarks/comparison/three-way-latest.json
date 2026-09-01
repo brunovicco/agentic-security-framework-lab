@@ -1,0 +1,360 @@
+{
+  "schema_version": "1",
+  "generated_at_utc": "2026-09-01T11:46:33.980561+00:00",
+  "comparison": "langgraph_vs_crewai_agent_vs_crewai_flow",
+  "methodology": {
+    "model": "openai:gpt-5.6-luna",
+    "scenarios": 5,
+    "repetitions_per_scenario": 3,
+    "runs_per_variant": 15,
+    "shared_dataset": true,
+    "shared_expected_truth": true,
+    "shared_deterministic_validation": true,
+    "shared_fallback_policy": true,
+    "sampling_policy": "provider_default",
+    "crewai_flow_headless": true,
+    "latency_interpretation": "Mean and p50 are the primary descriptive latency metrics. With fifteen observations, nearest-rank p95 resolves to the sample maximum and is therefore reported only as a small-sample tail indicator."
+  },
+  "variants": {
+    "langgraph": {
+      "pattern": "evaluator_optimizer",
+      "framework": "langgraph",
+      "model": "openai:gpt-5.6-luna",
+      "scenarios": 5,
+      "total_runs": 15,
+      "expected_passes": 15,
+      "expected_accuracy": 1.0,
+      "first_attempt_acceptance_rate": 1.0,
+      "retry_rate": 0.0,
+      "recovery_rate": 0.0,
+      "fallback_rate": 0.0,
+      "mean_model_calls": 1,
+      "total_model_calls": 15,
+      "mean_latency_ms": 2728.01,
+      "p50_latency_ms": 2643.41,
+      "p95_latency_ms": 3526.02,
+      "mean_total_tokens": 613.8,
+      "total_tokens": 9207
+    },
+    "crewai_agent": {
+      "pattern": "single_agent_external_evaluator_optimizer",
+      "framework": "crewai",
+      "model": "openai:gpt-5.6-luna",
+      "scenarios": 5,
+      "total_runs": 15,
+      "expected_passes": 15,
+      "expected_accuracy": 1.0,
+      "first_attempt_acceptance_rate": 1.0,
+      "retry_rate": 0.0,
+      "recovery_rate": 0.0,
+      "fallback_rate": 0.0,
+      "mean_model_calls": 1,
+      "total_model_calls": 15,
+      "mean_latency_ms": 2866.79,
+      "p50_latency_ms": 2818.6,
+      "p95_latency_ms": 3925.6,
+      "mean_total_tokens": 1143.33,
+      "total_tokens": 17150
+    },
+    "crewai_flow": {
+      "pattern": "flow_direct_llm_evaluator_optimizer",
+      "framework": "crewai",
+      "model": "openai:gpt-5.6-luna",
+      "scenarios": 5,
+      "total_runs": 15,
+      "expected_passes": 15,
+      "expected_accuracy": 1.0,
+      "first_attempt_acceptance_rate": 1.0,
+      "retry_rate": 0.0,
+      "recovery_rate": 0.0,
+      "fallback_rate": 0.0,
+      "mean_model_calls": 1,
+      "total_model_calls": 15,
+      "mean_latency_ms": 2847.78,
+      "p50_latency_ms": 2739.98,
+      "p95_latency_ms": 4640.09,
+      "mean_total_tokens": 630.27,
+      "total_tokens": 9454
+    }
+  },
+  "comparisons": {
+    "crewai_agent_vs_langgraph": {
+      "expected_accuracy_delta_percentage_points": 0.0,
+      "first_attempt_acceptance_delta_percentage_points": 0.0,
+      "retry_rate_delta_percentage_points": 0.0,
+      "fallback_rate_delta_percentage_points": 0.0,
+      "mean_model_calls_delta": 0,
+      "mean_latency_delta_pct": 5.09,
+      "p50_latency_delta_pct": 6.63,
+      "p95_latency_delta_pct": 11.33,
+      "mean_total_tokens_delta_pct": 86.27,
+      "token_ratio": 1.863,
+      "total_tokens_delta": 7943
+    },
+    "crewai_flow_vs_langgraph": {
+      "expected_accuracy_delta_percentage_points": 0.0,
+      "first_attempt_acceptance_delta_percentage_points": 0.0,
+      "retry_rate_delta_percentage_points": 0.0,
+      "fallback_rate_delta_percentage_points": 0.0,
+      "mean_model_calls_delta": 0,
+      "mean_latency_delta_pct": 4.39,
+      "p50_latency_delta_pct": 3.65,
+      "p95_latency_delta_pct": 31.6,
+      "mean_total_tokens_delta_pct": 2.68,
+      "token_ratio": 1.027,
+      "total_tokens_delta": 247
+    },
+    "crewai_flow_vs_crewai_agent": {
+      "expected_accuracy_delta_percentage_points": 0.0,
+      "first_attempt_acceptance_delta_percentage_points": 0.0,
+      "retry_rate_delta_percentage_points": 0.0,
+      "fallback_rate_delta_percentage_points": 0.0,
+      "mean_model_calls_delta": 0,
+      "mean_latency_delta_pct": -0.66,
+      "p50_latency_delta_pct": -2.79,
+      "p95_latency_delta_pct": 18.2,
+      "mean_total_tokens_delta_pct": -44.87,
+      "token_ratio": 0.551,
+      "total_tokens_delta": -7696
+    }
+  },
+  "token_overhead_analysis": {
+    "langgraph_mean_tokens": 613.8,
+    "crewai_agent_mean_tokens": 1143.33,
+    "crewai_flow_mean_tokens": 630.27,
+    "agent_excess_vs_langgraph_tokens": 529.53,
+    "flow_excess_vs_langgraph_tokens": 16.47,
+    "tokens_removed_by_flow_vs_agent": 513.06,
+    "agent_overhead_eliminated_by_flow_pct": 96.89
+  },
+  "scenario_comparison": [
+    {
+      "scenario_id": "baseline-mixed",
+      "langgraph": {
+        "expected_accuracy": 1.0,
+        "first_attempt_acceptance_rate": 1.0,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_model_calls": 1,
+        "mean_latency_ms": 3172.39,
+        "p50_latency_ms": 3210.34,
+        "p95_latency_ms": 3526.02,
+        "mean_total_tokens": 679.67
+      },
+      "crewai_agent": {
+        "expected_accuracy": 1.0,
+        "first_attempt_acceptance_rate": 1.0,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_model_calls": 1,
+        "mean_latency_ms": 3304.38,
+        "p50_latency_ms": 3295.65,
+        "p95_latency_ms": 3359.33,
+        "mean_total_tokens": 1227.33
+      },
+      "crewai_flow": {
+        "expected_accuracy": 1.0,
+        "first_attempt_acceptance_rate": 1.0,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_model_calls": 1,
+        "mean_latency_ms": 3625.69,
+        "p50_latency_ms": 3497.01,
+        "p95_latency_ms": 4640.09,
+        "mean_total_tokens": 672.67
+      },
+      "crewai_flow_vs_langgraph": {
+        "p50_latency_delta_pct": 8.93,
+        "mean_total_tokens_delta_pct": -1.03
+      },
+      "crewai_flow_vs_crewai_agent": {
+        "p50_latency_delta_pct": 6.11,
+        "mean_total_tokens_delta_pct": -45.19
+      }
+    },
+    {
+      "scenario_id": "product-mismatch",
+      "langgraph": {
+        "expected_accuracy": 1.0,
+        "first_attempt_acceptance_rate": 1.0,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_model_calls": 1,
+        "mean_latency_ms": 2398.37,
+        "p50_latency_ms": 2323.92,
+        "p95_latency_ms": 2643.41,
+        "mean_total_tokens": 565.67
+      },
+      "crewai_agent": {
+        "expected_accuracy": 1.0,
+        "first_attempt_acceptance_rate": 1.0,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_model_calls": 1,
+        "mean_latency_ms": 2560.02,
+        "p50_latency_ms": 2552.76,
+        "p95_latency_ms": 3044.1,
+        "mean_total_tokens": 1072.67
+      },
+      "crewai_flow": {
+        "expected_accuracy": 1.0,
+        "first_attempt_acceptance_rate": 1.0,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_model_calls": 1,
+        "mean_latency_ms": 2484.02,
+        "p50_latency_ms": 2507.34,
+        "p95_latency_ms": 2636.77,
+        "mean_total_tokens": 594.67
+      },
+      "crewai_flow_vs_langgraph": {
+        "p50_latency_delta_pct": 7.89,
+        "mean_total_tokens_delta_pct": 5.13
+      },
+      "crewai_flow_vs_crewai_agent": {
+        "p50_latency_delta_pct": -1.78,
+        "mean_total_tokens_delta_pct": -44.56
+      }
+    },
+    {
+      "scenario_id": "unknown-version",
+      "langgraph": {
+        "expected_accuracy": 1.0,
+        "first_attempt_acceptance_rate": 1.0,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_model_calls": 1,
+        "mean_latency_ms": 2685.05,
+        "p50_latency_ms": 2672.45,
+        "p95_latency_ms": 2922.06,
+        "mean_total_tokens": 575.67
+      },
+      "crewai_agent": {
+        "expected_accuracy": 1.0,
+        "first_attempt_acceptance_rate": 1.0,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_model_calls": 1,
+        "mean_latency_ms": 2420.41,
+        "p50_latency_ms": 2449.23,
+        "p95_latency_ms": 2529.69,
+        "mean_total_tokens": 1082
+      },
+      "crewai_flow": {
+        "expected_accuracy": 1.0,
+        "first_attempt_acceptance_rate": 1.0,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_model_calls": 1,
+        "mean_latency_ms": 2443.47,
+        "p50_latency_ms": 2434.56,
+        "p95_latency_ms": 2563.22,
+        "mean_total_tokens": 587.67
+      },
+      "crewai_flow_vs_langgraph": {
+        "p50_latency_delta_pct": -8.9,
+        "mean_total_tokens_delta_pct": 2.08
+      },
+      "crewai_flow_vs_crewai_agent": {
+        "p50_latency_delta_pct": -0.6,
+        "mean_total_tokens_delta_pct": -45.69
+      }
+    },
+    {
+      "scenario_id": "fixed-boundary",
+      "langgraph": {
+        "expected_accuracy": 1.0,
+        "first_attempt_acceptance_rate": 1.0,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_model_calls": 1,
+        "mean_latency_ms": 2806.27,
+        "p50_latency_ms": 2734.86,
+        "p95_latency_ms": 3092.9,
+        "mean_total_tokens": 658.33
+      },
+      "crewai_agent": {
+        "expected_accuracy": 1.0,
+        "first_attempt_acceptance_rate": 1.0,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_model_calls": 1,
+        "mean_latency_ms": 3314.5,
+        "p50_latency_ms": 3075.73,
+        "p95_latency_ms": 3925.6,
+        "mean_total_tokens": 1207.67
+      },
+      "crewai_flow": {
+        "expected_accuracy": 1.0,
+        "first_attempt_acceptance_rate": 1.0,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_model_calls": 1,
+        "mean_latency_ms": 2921.09,
+        "p50_latency_ms": 2785.82,
+        "p95_latency_ms": 3202.48,
+        "mean_total_tokens": 688
+      },
+      "crewai_flow_vs_langgraph": {
+        "p50_latency_delta_pct": 1.86,
+        "mean_total_tokens_delta_pct": 4.51
+      },
+      "crewai_flow_vs_crewai_agent": {
+        "p50_latency_delta_pct": -9.43,
+        "mean_total_tokens_delta_pct": -43.03
+      }
+    },
+    {
+      "scenario_id": "adversarial-asset-id",
+      "langgraph": {
+        "expected_accuracy": 1.0,
+        "first_attempt_acceptance_rate": 1.0,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_model_calls": 1,
+        "mean_latency_ms": 2577.95,
+        "p50_latency_ms": 2597.1,
+        "p95_latency_ms": 2633.36,
+        "mean_total_tokens": 589.67
+      },
+      "crewai_agent": {
+        "expected_accuracy": 1.0,
+        "first_attempt_acceptance_rate": 1.0,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_model_calls": 1,
+        "mean_latency_ms": 2734.63,
+        "p50_latency_ms": 2787.34,
+        "p95_latency_ms": 2818.6,
+        "mean_total_tokens": 1127
+      },
+      "crewai_flow": {
+        "expected_accuracy": 1.0,
+        "first_attempt_acceptance_rate": 1.0,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_model_calls": 1,
+        "mean_latency_ms": 2764.63,
+        "p50_latency_ms": 2814.94,
+        "p95_latency_ms": 2859.77,
+        "mean_total_tokens": 608.33
+      },
+      "crewai_flow_vs_langgraph": {
+        "p50_latency_delta_pct": 8.39,
+        "mean_total_tokens_delta_pct": 3.16
+      },
+      "crewai_flow_vs_crewai_agent": {
+        "p50_latency_delta_pct": 0.99,
+        "mean_total_tokens_delta_pct": -46.02
+      }
+    }
+  ],
+  "limitations": [
+    "The benchmark uses five synthetic scenarios and three repetitions per scenario.",
+    "Latency values are descriptive and must not be interpreted as production SLO evidence.",
+    "At n=15, nearest-rank p95 resolves to the sample maximum, so mean and p50 are more useful for this comparison.",
+    "The adversarial asset-id scenario is a narrow instruction/data-boundary test and is not evidence of general prompt-injection resistance.",
+    "The three variants intentionally use different framework orchestration abstractions while sharing the same application-owned deterministic evaluator, fallback, policy, dataset, and expected truth.",
+    "Token usage includes framework-specific prompt and orchestration overhead and represents end-to-end behavior for this workload."
+  ]
+}
