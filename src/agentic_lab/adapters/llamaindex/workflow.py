@@ -3,7 +3,7 @@
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, cast
 
 from pydantic import Field
 from workflows import Workflow, step
@@ -274,13 +274,16 @@ class LlamaIndexWorkflowRuntime:
         runner = self._runner_factory(self._model_name)
         analyzer = LlamaIndexVulnerabilityAnalyzer(runner)
         workflow = LlamaIndexValidatedAnalysisWorkflow(analyzer)
-        raw_output = await workflow.run(
-            start_event=ValidatedAnalysisStartEvent(
-                vulnerability=evidence_bundle["vulnerability"],
-                assets=evidence_bundle["assets"],
-                policy=evidence_bundle["policy"],
-                max_attempts=max_attempts,
-            )
+        raw_output = cast(
+            object,
+            await workflow.run(
+                start_event=ValidatedAnalysisStartEvent(
+                    vulnerability=evidence_bundle["vulnerability"],
+                    assets=evidence_bundle["assets"],
+                    policy=evidence_bundle["policy"],
+                    max_attempts=max_attempts,
+                )
+            ),
         )
 
         if not isinstance(raw_output, ValidatedAnalysisOutput):
@@ -307,4 +310,6 @@ class LlamaIndexWorkflowRuntime:
                 )
             )
 
-        raise RuntimeError("LlamaIndexWorkflowRuntime.run() cannot be used inside an active event loop; use arun()")
+        raise RuntimeError(
+            "LlamaIndexWorkflowRuntime.run() cannot be used inside an active event loop; use arun()"
+        )
