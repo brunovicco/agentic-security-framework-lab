@@ -20,6 +20,10 @@ from agentic_lab.application.evidence import (
 from agentic_lab.application.oracle import assess_assets_deterministically
 
 DEFAULT_MAX_ANALYSIS_ATTEMPTS = 2
+FALLBACK_RECOMMENDATION = (
+    "LLM applicability remained invalid after retry; use "
+    "deterministic assessment and review the disagreement."
+)
 AnalysisSource = Literal["llm", "oracle_fallback"]
 
 
@@ -120,7 +124,7 @@ def evaluate_human_review_policy(
     return False
 
 
-def _build_result(
+def build_analysis_result(
     vulnerability: VulnerabilityEvidence,
     assessments: tuple[AssetAssessment, ...],
     recommendation: str,
@@ -179,7 +183,7 @@ def run_validated_analysis(
                 assessments=draft.assets,
             )
             return ValidatedAnalysisOutput(
-                result=_build_result(
+                result=build_analysis_result(
                     vulnerability=vulnerability,
                     assessments=draft.assets,
                     recommendation=draft.recommendation,
@@ -209,13 +213,10 @@ def run_validated_analysis(
     )
 
     return ValidatedAnalysisOutput(
-        result=_build_result(
+        result=build_analysis_result(
             vulnerability=vulnerability,
             assessments=assessments,
-            recommendation=(
-                "LLM applicability remained invalid after retry; use "
-                "deterministic assessment and review the disagreement."
-            ),
+            recommendation=FALLBACK_RECOMMENDATION,
             confidence=1.0,
             requires_human_review=requires_human_review,
         ),
