@@ -110,6 +110,13 @@ def test_llm_graph_accepts_correct_first_attempt() -> None:
     assert output["analysis_attempts"] == 1
     assert analyzer.feedbacks == [None]
 
+    attempt_trace = output["attempt_trace"]
+    assert len(attempt_trace) == 1
+    assert attempt_trace[0].attempt == 1
+    assert attempt_trace[0].input_feedback is None
+    assert attempt_trace[0].validation_passed is True
+    assert attempt_trace[0].draft == correct_draft()
+
     assert output["result"].recommendation == "Patch api-prod-01."
     assert output["result"].confidence == 0.92
 
@@ -139,6 +146,16 @@ def test_llm_graph_recovers_after_evaluator_feedback() -> None:
     assert analyzer.feedbacks[1] is not None
     assert "api-prod-01" in analyzer.feedbacks[1]
 
+    attempt_trace = output["attempt_trace"]
+    assert len(attempt_trace) == 2
+    first_attempt, second_attempt = attempt_trace
+    assert first_attempt.attempt == 1
+    assert first_attempt.validation_passed is False
+    assert first_attempt.input_feedback is None
+    assert second_attempt.attempt == 2
+    assert second_attempt.validation_passed is True
+    assert second_attempt.input_feedback == first_attempt.validation_feedback
+
     assert output["result"].recommendation == "Patch after evaluator correction."
     assert output["result"].confidence == 0.97
 
@@ -167,6 +184,13 @@ def test_llm_graph_falls_back_after_retry_is_exhausted() -> None:
     assert len(analyzer.feedbacks) == 2
     assert analyzer.feedbacks[0] is None
     assert analyzer.feedbacks[1] is not None
+
+    attempt_trace = output["attempt_trace"]
+    assert len(attempt_trace) == 2
+    first_attempt, second_attempt = attempt_trace
+    assert first_attempt.validation_passed is False
+    assert second_attempt.validation_passed is False
+    assert second_attempt.input_feedback == first_attempt.validation_feedback
 
     assert statuses == {
         "api-prod-01": "affected",
@@ -218,6 +242,8 @@ def test_llm_graph_accepts_injected_evaluation_evidence() -> None:
     assert output["analysis_source"] == "llm"
     assert output["validation_passed"]
     assert output["analysis_attempts"] == 1
+    assert len(output["attempt_trace"]) == 1
+    assert output["attempt_trace"][0].validation_passed is True
 
     result = output["result"]
 

@@ -79,6 +79,14 @@ def test_validated_analysis_accepts_correct_first_attempt() -> None:
     assert output.result.assets[0].status == "not_applicable"
     assert analyzer.feedback == [None]
 
+    assert len(output.attempt_trace) == 1
+    attempt = output.attempt_trace[0]
+    assert attempt.attempt == 1
+    assert attempt.input_feedback is None
+    assert attempt.draft.assets[0].status == "not_applicable"
+    assert attempt.validation_passed is True
+    assert attempt.validation_feedback == ""
+
 
 def test_validated_analysis_retries_with_deterministic_feedback() -> None:
     analyzer = SequencedAnalyzer(
@@ -100,6 +108,15 @@ def test_validated_analysis_retries_with_deterministic_feedback() -> None:
     assert analyzer.feedback[1] is not None
     assert "api-prod-03" in analyzer.feedback[1]
 
+    assert len(output.attempt_trace) == 2
+    first_attempt, second_attempt = output.attempt_trace
+    assert first_attempt.attempt == 1
+    assert first_attempt.input_feedback is None
+    assert first_attempt.validation_passed is False
+    assert second_attempt.attempt == 2
+    assert second_attempt.input_feedback == first_attempt.validation_feedback
+    assert second_attempt.validation_passed is True
+
 
 def test_validated_analysis_falls_back_after_bounded_retries() -> None:
     analyzer = SequencedAnalyzer(
@@ -119,6 +136,12 @@ def test_validated_analysis_falls_back_after_bounded_retries() -> None:
     assert output.analysis_attempts == 2
     assert output.result.assets[0].status == "not_applicable"
     assert output.result.confidence == 1.0
+
+    assert len(output.attempt_trace) == 2
+    first_attempt, second_attempt = output.attempt_trace
+    assert first_attempt.validation_passed is False
+    assert second_attempt.validation_passed is False
+    assert second_attempt.input_feedback == first_attempt.validation_feedback
 
 
 def test_validated_analysis_applies_unknown_review_policy() -> None:
