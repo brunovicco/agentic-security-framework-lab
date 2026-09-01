@@ -12,6 +12,7 @@ from agentic_lab.application.analysis_prompt import (
 from agentic_lab.application.contracts import LLMAnalysisDraft
 from agentic_lab.application.evidence import (
     AssetInventoryItem,
+    EvidenceDocument,
     VulnerabilityEvidence,
 )
 
@@ -116,12 +117,14 @@ def build_crewai_analysis_task_description(
     vulnerability: VulnerabilityEvidence,
     assets: tuple[AssetInventoryItem, ...],
     feedback: str | None = None,
+    documents: tuple[EvidenceDocument, ...] = (),
 ) -> str:
     """Build the shared CrewAI user prompt for one analysis attempt."""
     return build_security_analysis_user_prompt(
         vulnerability=vulnerability,
         assets=assets,
         feedback=feedback,
+        documents=documents,
     )
 
 
@@ -199,12 +202,14 @@ class CrewAIVulnerabilityAnalyzer:
         vulnerability: VulnerabilityEvidence,
         assets: tuple[AssetInventoryItem, ...],
         feedback: str | None = None,
+        documents: tuple[EvidenceDocument, ...] = (),
     ) -> LLMAnalysisDraft:
-        """Analyze vulnerability evidence against asset inventory."""
+        """Analyze vulnerability evidence against asset inventory and documents."""
         return self._runner.run(
             build_crewai_analysis_task_description(
                 vulnerability=vulnerability,
                 assets=assets,
                 feedback=feedback,
+                documents=documents,
             )
         )

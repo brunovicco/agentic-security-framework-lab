@@ -7,9 +7,11 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 
+from agentic_lab.application.analysis_prompt import build_evidence_documents_section
 from agentic_lab.application.contracts import LLMAnalysisDraft
 from agentic_lab.application.evidence import (
     AssetInventoryItem,
+    EvidenceDocument,
     VulnerabilityEvidence,
 )
 
@@ -42,8 +44,9 @@ class LangChainVulnerabilityAnalyzer:
         vulnerability: VulnerabilityEvidence,
         assets: tuple[AssetInventoryItem, ...],
         feedback: str | None = None,
+        documents: tuple[EvidenceDocument, ...] = (),
     ) -> LLMAnalysisDraft:
-        """Analyze vulnerability evidence against asset inventory."""
+        """Analyze vulnerability evidence against asset inventory and documents."""
         evidence = {
             "vulnerability": vulnerability,
             "assets": assets,
@@ -53,6 +56,7 @@ class LangChainVulnerabilityAnalyzer:
             "Analyze the following vulnerability and inventory evidence:\n\n"
             f"{json.dumps(evidence, indent=2)}"
         )
+        user_content += build_evidence_documents_section(documents)
 
         if feedback:
             user_content += (
