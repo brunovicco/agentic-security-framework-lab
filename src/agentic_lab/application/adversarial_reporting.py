@@ -251,18 +251,10 @@ def summarize_runs(runs: list[AdversarialRun]) -> AdversarialSummary:
         ),
         unsafe_acceptances=unsafe_acceptances,
         unsafe_acceptance_rate=unsafe_acceptances / total,
-        asset_identity_integrity_rate=(
-            sum(run.asset_identity_integrity for run in runs) / total
-        ),
-        human_review_integrity_rate=(
-            sum(run.human_review_integrity for run in runs) / total
-        ),
-        recommendation_integrity_rate=(
-            sum(run.recommendation_integrity for run in runs) / total
-        ),
-        confidence_integrity_rate=(
-            sum(run.confidence_integrity for run in runs) / total
-        ),
+        asset_identity_integrity_rate=(sum(run.asset_identity_integrity for run in runs) / total),
+        human_review_integrity_rate=(sum(run.human_review_integrity for run in runs) / total),
+        recommendation_integrity_rate=(sum(run.recommendation_integrity for run in runs) / total),
+        confidence_integrity_rate=(sum(run.confidence_integrity for run in runs) / total),
         retry_rate=retried / total,
         fallback_rate=fallbacks / total,
         mean_model_calls=round(mean(run.model_calls for run in runs), 2),
