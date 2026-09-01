@@ -10,9 +10,7 @@ from typing import Any, cast
 LANGGRAPH_PATH = Path("artifacts/benchmarks/langgraph/latest.json")
 CREWAI_AGENT_PATH = Path("artifacts/benchmarks/crewai/latest.json")
 CREWAI_FLOW_PATH = Path("artifacts/benchmarks/crewai-flow/latest.json")
-LLAMAINDEX_WORKFLOW_PATH = Path(
-    "artifacts/benchmarks/llamaindex-workflow/latest.json"
-)
+LLAMAINDEX_WORKFLOW_PATH = Path("artifacts/benchmarks/llamaindex-workflow/latest.json")
 AGNO_WORKFLOW_PATH = Path("artifacts/benchmarks/agno-workflow/latest.json")
 
 OUTPUT_DIR = Path("artifacts/benchmarks/comparison")
@@ -97,14 +95,9 @@ def validate_comparability(artifacts: dict[str, dict[str, Any]]) -> None:
     if len(models) != 1:
         raise RuntimeError(f"Benchmark models differ: {sorted(models)}")
 
-    repetitions = {
-        cast(int, payload["repetitions_per_scenario"])
-        for payload in artifacts.values()
-    }
+    repetitions = {cast(int, payload["repetitions_per_scenario"]) for payload in artifacts.values()}
     if repetitions != {3}:
-        raise RuntimeError(
-            "Expected three repetitions per scenario for every benchmark"
-        )
+        raise RuntimeError("Expected three repetitions per scenario for every benchmark")
 
     expected_scenarios: set[str] | None = None
     for name, payload in artifacts.items():
@@ -128,9 +121,7 @@ def validate_comparability(artifacts: dict[str, dict[str, Any]]) -> None:
 
     for name in ("llamaindex_workflow", "agno_workflow"):
         if artifacts[name].get("sampling") != "provider_default":
-            raise RuntimeError(
-                f"{name} benchmark must record provider-default sampling"
-            )
+            raise RuntimeError(f"{name} benchmark must record provider-default sampling")
 
 
 def comparison_metrics(
@@ -156,8 +147,7 @@ def comparison_metrics(
             float(baseline["fallback_rate"]),
         ),
         "mean_model_calls_delta": round(
-            float(candidate["mean_model_calls"])
-            - float(baseline["mean_model_calls"]),
+            float(candidate["mean_model_calls"]) - float(baseline["mean_model_calls"]),
             2,
         ),
         "mean_latency_delta_pct": percent_delta(
@@ -180,8 +170,7 @@ def comparison_metrics(
             float(candidate["mean_total_tokens"]),
             float(baseline["mean_total_tokens"]),
         ),
-        "total_tokens_delta": int(candidate["total_tokens"])
-        - int(baseline["total_tokens"]),
+        "total_tokens_delta": int(candidate["total_tokens"]) - int(baseline["total_tokens"]),
     }
 
 
@@ -194,9 +183,7 @@ def overhead_elimination(
     """Quantify how much Agent/Crew excess a lighter abstraction removes."""
     original_excess = agent_tokens - langgraph_tokens
     if original_excess <= 0:
-        raise RuntimeError(
-            "CrewAI Agent/Crew must exceed LangGraph tokens for overhead analysis"
-        )
+        raise RuntimeError("CrewAI Agent/Crew must exceed LangGraph tokens for overhead analysis")
 
     candidate_excess = candidate_tokens - langgraph_tokens
     eliminated = agent_tokens - candidate_tokens
@@ -272,9 +259,7 @@ def slim_scenario(summary: dict[str, Any]) -> dict[str, Any]:
     """Return the scenario metrics used in the cross-framework report."""
     return {
         "expected_accuracy": summary["expected_accuracy"],
-        "first_attempt_acceptance_rate": summary[
-            "first_attempt_acceptance_rate"
-        ],
+        "first_attempt_acceptance_rate": summary["first_attempt_acceptance_rate"],
         "retry_rate": summary["retry_rate"],
         "fallback_rate": summary["fallback_rate"],
         "mean_model_calls": summary["mean_model_calls"],
@@ -351,8 +336,7 @@ def build_payload(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "schema_version": "1",
         "generated_at_utc": datetime.now(UTC).isoformat(),
         "comparison": (
-            "langgraph_vs_crewai_agent_vs_crewai_flow_vs_"
-            "llamaindex_workflow_vs_agno_workflow"
+            "langgraph_vs_crewai_agent_vs_crewai_flow_vs_llamaindex_workflow_vs_agno_workflow"
         ),
         "methodology": {
             "model": artifacts["langgraph"]["model"],
@@ -387,10 +371,7 @@ def build_payload(artifacts: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "token_overhead_analysis": build_token_analysis(overalls),
         "scenario_comparison": build_scenario_comparison(artifacts),
         "limitations": [
-            (
-                "The benchmark uses five synthetic scenarios and three "
-                "repetitions per scenario."
-            ),
+            ("The benchmark uses five synthetic scenarios and three repetitions per scenario."),
             (
                 "Latency values are descriptive and must not be interpreted "
                 "as production SLO evidence."
@@ -430,9 +411,7 @@ def metric_row(
     suffix: str = "",
 ) -> str:
     """Render one numeric row in stable variant order."""
-    values = [
-        f"{float(variants[name][key]):.2f}{suffix}" for name in VARIANT_ORDER
-    ]
+    values = [f"{float(variants[name][key]):.2f}{suffix}" for name in VARIANT_ORDER]
     return f"| {label} | " + " | ".join(values) + " |"
 
 
@@ -458,10 +437,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
         "- Repetitions per scenario: 3",
         "- Runs per variant: 15",
         "- Shared dataset and expected truth: yes",
-        (
-            "- Shared deterministic evaluator, retry, fallback, and "
-            "human-review policy: yes"
-        ),
+        ("- Shared deterministic evaluator, retry, fallback, and human-review policy: yes"),
         "- Sampling: provider default",
         "- CrewAI Flow execution: headless",
         "- LlamaIndex Workflow execution: native async",
@@ -476,17 +452,13 @@ def render_markdown(payload: dict[str, Any]) -> str:
         "| --- | ---: | ---: | ---: | ---: | ---: |",
         (
             "| Expected accuracy | "
-            + " | ".join(
-                f"{variants[name]['expected_accuracy']:.1%}"
-                for name in VARIANT_ORDER
-            )
+            + " | ".join(f"{variants[name]['expected_accuracy']:.1%}" for name in VARIANT_ORDER)
             + " |"
         ),
         (
             "| First-attempt acceptance | "
             + " | ".join(
-                f"{variants[name]['first_attempt_acceptance_rate']:.1%}"
-                for name in VARIANT_ORDER
+                f"{variants[name]['first_attempt_acceptance_rate']:.1%}" for name in VARIANT_ORDER
             )
             + " |"
         ),
@@ -497,27 +469,16 @@ def render_markdown(payload: dict[str, Any]) -> str:
         metric_row("Mean total tokens", "mean_total_tokens", variants),
         (
             "| Total tokens | "
-            + " | ".join(
-                str(variants[name]["total_tokens"]) for name in VARIANT_ORDER
-            )
+            + " | ".join(str(variants[name]["total_tokens"]) for name in VARIANT_ORDER)
             + " |"
         ),
         "",
-        (
-            "\\* At n=15, nearest-rank p95 is the sample maximum and is "
-            "not a stable tail estimate."
-        ),
+        ("\\* At n=15, nearest-rank p95 is the sample maximum and is not a stable tail estimate."),
         "",
         "## Agno Workflow comparisons",
         "",
-        (
-            f"- vs LangGraph tokens: "
-            f"**{agno_vs_lg['mean_total_tokens_delta_pct']:+.2f}%**"
-        ),
-        (
-            f"- vs CrewAI Flow tokens: "
-            f"**{agno_vs_flow['mean_total_tokens_delta_pct']:+.2f}%**"
-        ),
+        (f"- vs LangGraph tokens: **{agno_vs_lg['mean_total_tokens_delta_pct']:+.2f}%**"),
+        (f"- vs CrewAI Flow tokens: **{agno_vs_flow['mean_total_tokens_delta_pct']:+.2f}%**"),
         (
             f"- vs LlamaIndex Workflow tokens: "
             f"**{agno_vs_llama['mean_total_tokens_delta_pct']:+.2f}%**"
