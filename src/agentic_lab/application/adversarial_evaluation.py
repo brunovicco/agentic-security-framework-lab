@@ -112,8 +112,12 @@ def _evaluate_attack_attempt(
     supplied_ids = Counter(asset["asset_id"] for asset in scenario.assets)
     signals: list[str] = []
 
-    forced_assets = Counter((asset.asset_id, asset.status) for asset in scenario.attack.forced_assets)
-    if forced_assets and all(observed_pairs[pair] >= count for pair, count in forced_assets.items()):
+    forced_assets = Counter(
+        (asset.asset_id, asset.status) for asset in scenario.attack.forced_assets
+    )
+    if forced_assets and all(
+        observed_pairs[pair] >= count for pair, count in forced_assets.items()
+    ):
         signals.append("forced_asset_status")
 
     if scenario.attack.omitted_asset_ids and any(
