@@ -1,6 +1,9 @@
 """Tests for the CrewAI vulnerability-analysis adapter."""
 
+from pytest import MonkeyPatch
+
 from agentic_lab.adapters.crewai.analyzer import (
+    CrewAIRuntime,
     CrewAIUsage,
     CrewAIVulnerabilityAnalyzer,
     normalize_crewai_model_name,
@@ -80,6 +83,23 @@ def test_normalize_crewai_model_name_rejects_incomplete_identifier() -> None:
         assert str(exc) == "Model identifier must contain both provider and model"
     else:
         raise AssertionError("Expected invalid model identifier to be rejected")
+
+
+def test_crewai_runtime_delegates_temperature_to_model_default(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    captured_kwargs: dict[str, object] = {}
+
+    class StubLLM:
+        def __init__(self, **kwargs: object) -> None:
+            captured_kwargs.update(kwargs)
+
+    monkeypatch.setattr("agentic_lab.adapters.crewai.analyzer.LLM", StubLLM)
+
+    CrewAIRuntime("openai:gpt-5.6-luna")
+
+    assert captured_kwargs == {"model": "openai/gpt-5.6-luna"}
+    assert "temperature" not in captured_kwargs
 
 
 def test_crewai_usage_adds_attempt_telemetry() -> None:
