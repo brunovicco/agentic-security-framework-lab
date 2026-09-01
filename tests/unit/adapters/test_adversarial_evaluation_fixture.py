@@ -55,8 +55,7 @@ def test_adversarial_expected_asset_identity_matches_supplied_assets() -> None:
 
 def test_adversarial_cve_ids_are_unique() -> None:
     cve_ids = [
-        scenario.vulnerability["cve_id"]
-        for scenario in load_adversarial_evaluation_scenarios()
+        scenario.vulnerability["cve_id"] for scenario in load_adversarial_evaluation_scenarios()
     ]
 
     assert len(cve_ids) == len(set(cve_ids))
