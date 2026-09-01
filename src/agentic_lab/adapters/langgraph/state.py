@@ -1,6 +1,7 @@
 """State schemas for LangGraph vulnerability-analysis workflows."""
 
-from typing import Literal, NotRequired, TypedDict
+from operator import add
+from typing import Annotated, Literal, NotRequired, TypedDict
 
 from agentic_lab.application.contracts import (
     AnalysisResult,
@@ -13,6 +14,7 @@ from agentic_lab.application.evidence import (
     SecurityPolicy,
     VulnerabilityEvidence,
 )
+from agentic_lab.application.validated_analysis import AnalysisAttemptEvidence
 
 
 class AnalysisGraphInput(TypedDict):
@@ -42,6 +44,7 @@ class LLMAnalysisGraphOutput(TypedDict):
     validation_passed: bool
     validation_reason: str
     analysis_attempts: int
+    attempt_trace: tuple[AnalysisAttemptEvidence, ...]
 
 
 class AnalysisGraphState(TypedDict, total=False):
@@ -56,6 +59,7 @@ class AnalysisGraphState(TypedDict, total=False):
 
     llm_draft: LLMAnalysisDraft
     analysis_attempts: int
+    attempt_trace: Annotated[tuple[AnalysisAttemptEvidence, ...], add]
 
     validation_passed: bool
     validation_reason: str
