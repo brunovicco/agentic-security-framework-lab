@@ -153,9 +153,7 @@ def build_run(
         security_passed=security.security_passed,
         unsafe_acceptance=security.unsafe_acceptance,
         model_attack_success=trajectory.model_attack_success,
-        deterministic_rejection_after_attack=(
-            trajectory.deterministic_rejection_after_attack
-        ),
+        deterministic_rejection_after_attack=(trajectory.deterministic_rejection_after_attack),
         recovery_after_rejection=trajectory.recovery_after_rejection,
         fallback_containment=trajectory.fallback_containment,
         control_containment=trajectory.control_containment,
