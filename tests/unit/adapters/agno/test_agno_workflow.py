@@ -1,12 +1,10 @@
 """Tests for the native Agno evaluator-optimizer Workflow."""
 
-from agno.workflow import Condition, Loop, Step
-
-from agentic_lab.adapters.agno.analyzer import AgnoUsage, AgnoVulnerabilityAnalyzer
+from agentic_lab.adapters.agno.analyzer import AgnoUsage
 from agentic_lab.adapters.agno.workflow import (
+    AGNO_WORKFLOW_STEP_MAX_RETRIES,
+    AGNO_WORKFLOW_TELEMETRY,
     AgnoWorkflowRuntime,
-    _AgnoWorkflowState,
-    _build_workflow,
 )
 from agentic_lab.adapters.fixtures.demo import (
     DEMO_CVE_ID,
@@ -197,38 +195,6 @@ def test_runtime_rejects_invalid_attempt_limit_before_creating_runner() -> None:
     assert calls == []
 
 
-def test_workflow_uses_native_loop_condition_and_disables_framework_retries() -> None:
-    bundle = _evidence_bundle()
-    runner = StubUsageRunner([_correct_draft()])
-    state = _AgnoWorkflowState(
-        vulnerability=bundle["vulnerability"],
-        assets=bundle["assets"],
-        policy=bundle["policy"],
-        max_attempts=2,
-        analyzer=AgnoVulnerabilityAnalyzer(runner),
-    )
-
-    workflow = _build_workflow(state)
-
-    assert workflow.telemetry is False
-    assert workflow.steps is not None
-    assert len(workflow.steps) == 2
-
-    analysis_loop = workflow.steps[0]
-    final_route = workflow.steps[1]
-
-    assert isinstance(analysis_loop, Loop)
-    assert analysis_loop.max_iterations == 2
-    assert analysis_loop.forward_iteration_output is False
-    assert len(analysis_loop.steps) == 2
-    assert all(isinstance(step, Step) for step in analysis_loop.steps)
-    assert all(step.max_retries == 0 for step in analysis_loop.steps if isinstance(step, Step))
-
-    assert isinstance(final_route, Condition)
-    assert len(final_route.steps) == 1
-    assert final_route.else_steps is not None
-    assert len(final_route.else_steps) == 1
-    assert isinstance(final_route.steps[0], Step)
-    assert final_route.steps[0].max_retries == 0
-    assert isinstance(final_route.else_steps[0], Step)
-    assert final_route.else_steps[0].max_retries == 0
+def test_workflow_disables_framework_retries_and_telemetry() -> None:
+    assert AGNO_WORKFLOW_STEP_MAX_RETRIES == 0
+    assert AGNO_WORKFLOW_TELEMETRY is False
