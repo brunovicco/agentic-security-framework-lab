@@ -37,6 +37,18 @@ class DraftValidation:
 
 
 @dataclass(frozen=True, slots=True)
+class AnalysisAttemptEvidence:
+    """Record one model attempt and its deterministic evaluator decision."""
+
+    attempt: int
+    input_feedback: str | None
+    draft: LLMAnalysisDraft
+    validation_passed: bool
+    validation_reason: str
+    validation_feedback: str
+
+
+@dataclass(frozen=True, slots=True)
 class ValidatedAnalysisOutput:
     """Represent one validated framework-neutral analysis execution."""
 
@@ -45,6 +57,7 @@ class ValidatedAnalysisOutput:
     validation_passed: bool
     validation_reason: str
     analysis_attempts: int
+    attempt_trace: tuple[AnalysisAttemptEvidence, ...] = ()
 
 
 def validate_analysis_draft(
@@ -161,12 +174,14 @@ def run_validated_analysis(
     policy = evidence_bundle["policy"]
     feedback: str | None = None
     last_validation: DraftValidation | None = None
+    attempt_trace: list[AnalysisAttemptEvidence] = []
 
     for attempt in range(1, max_attempts + 1):
+        input_feedback = feedback
         draft = analyzer.analyze(
             vulnerability=vulnerability,
             assets=assets,
-            feedback=feedback,
+            feedback=input_feedback,
         )
         validation = validate_analysis_draft(
             vulnerability=vulnerability,
@@ -174,6 +189,16 @@ def run_validated_analysis(
             draft=draft,
         )
         last_validation = validation
+        attempt_trace.append(
+            AnalysisAttemptEvidence(
+                attempt=attempt,
+                input_feedback=input_feedback,
+                draft=draft,
+                validation_passed=validation.passed,
+                validation_reason=validation.reason,
+                validation_feedback=validation.feedback,
+            )
+        )
 
         if validation.passed:
             requires_human_review = evaluate_human_review_policy(
@@ -194,6 +219,7 @@ def run_validated_analysis(
                 validation_passed=True,
                 validation_reason=validation.reason,
                 analysis_attempts=attempt,
+                attempt_trace=tuple(attempt_trace),
             )
 
         feedback = validation.feedback
@@ -224,4 +250,5 @@ def run_validated_analysis(
         validation_passed=False,
         validation_reason=last_validation.reason,
         analysis_attempts=max_attempts,
+        attempt_trace=tuple(attempt_trace),
     )
