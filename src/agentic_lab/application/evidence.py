@@ -1,6 +1,15 @@
 """Shared evidence contracts for vulnerability analysis."""
 
-from typing import TypedDict
+from typing import Literal, NotRequired, TypedDict
+
+EvidenceSourceType = Literal[
+    "vendor_advisory",
+    "retrieved_context",
+    "internal_note",
+]
+EvidenceSourceAuthenticity = Literal["verified", "unverified", "synthetic"]
+EvidenceContentTrust = Literal["untrusted"]
+EvidenceInstructionAuthority = Literal["none"]
 
 
 class VulnerabilityEvidence(TypedDict):
@@ -25,6 +34,18 @@ class AssetInventoryItem(TypedDict):
     network_exposure: str
 
 
+class EvidenceDocument(TypedDict):
+    """Textual evidence with explicit provenance and zero instruction authority."""
+
+    source_id: str
+    source_type: EvidenceSourceType
+    origin: str
+    authenticity: EvidenceSourceAuthenticity
+    content_trust: EvidenceContentTrust
+    instruction_authority: EvidenceInstructionAuthority
+    content: str
+
+
 class SecurityPolicy(TypedDict):
     """Structured deterministic security policy."""
 
@@ -41,3 +62,4 @@ class AnalysisEvidenceBundle(TypedDict):
     vulnerability: VulnerabilityEvidence
     assets: tuple[AssetInventoryItem, ...]
     policy: SecurityPolicy
+    documents: NotRequired[tuple[EvidenceDocument, ...]]
