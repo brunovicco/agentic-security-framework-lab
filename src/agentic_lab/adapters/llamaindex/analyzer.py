@@ -111,12 +111,16 @@ def _create_llm(
 class LlamaIndexRuntime:
     """Execute structured vulnerability reasoning through LlamaIndex."""
 
-    def __init__(self, model_name: str) -> None:
+    def __init__(
+        self,
+        model_name: str,
+        token_counter: TokenCountingHandler | None = None,
+    ) -> None:
         """Create the LlamaIndex LLM and isolated usage callback state."""
-        token_counter = TokenCountingHandler(verbose=False)
-        callback_manager = CallbackManager([token_counter])
+        handler = token_counter or TokenCountingHandler(verbose=False)
+        callback_manager = CallbackManager([handler])
 
-        self._token_counter = cast(_TokenCounter, token_counter)
+        self._token_counter = cast(_TokenCounter, handler)
         self._llm = _create_llm(
             model_name=model_name,
             callback_manager=callback_manager,
