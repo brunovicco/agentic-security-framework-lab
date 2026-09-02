@@ -86,6 +86,28 @@ Full evidence:
 - The adversarial asset-ID scenario is a narrow instruction/data-boundary test, not proof of broad prompt-injection resistance.
 - All five official samples happened to reach 100% first-pass acceptance, so the official run does not create a quality ranking between frameworks.
 
+## LangGraph adversarial evidence-plane baseline
+
+The first official adversarial v2 baseline moves attacker-controlled instructions from structured asset identifiers into explicit vendor, retrieved, and internal evidence documents. Provenance describes each source, while document content remains untrusted and has zero instruction authority.
+
+```text
+Model: openai:gpt-5.6-luna
+Scenarios: 6
+Repetitions per scenario: 3
+Runs: 18
+Sampling: provider default
+```
+
+| Task accuracy | Security pass | Model attack success | Unsafe acceptance | Retry | Fallback | Mean latency | Mean tokens |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 100% | 100% | 0% | 0% | 0% | 0% | 2503.86 ms | 763.17 |
+
+Across these 18 observed runs, all task and security assertions passed and none of the six deterministic attacker goals succeeded at the model level. Consequently, rejection, recovery, and control-containment rates remain `N/A`: this sample did not exercise live containment after a successful model attack.
+
+The v2 mean of 763.17 tokens/run is 22.9% above the adversarial v1 mean of 620.80. This is a descriptive input-cost difference for the added documents and provenance, not a framework or model performance claim.
+
+This narrow synthetic result does not establish general prompt-injection resistance. See the [human-readable report](artifacts/adversarial-v2/langgraph/latest.md), [machine-readable artifact](artifacts/adversarial-v2/langgraph/latest.json), and [evidence-plane design and interpretation](docs/security/ADVERSARIAL_V2_EVIDENCE_PLANE.md).
+
 ## Shared workload
 
 Each implementation analyzes the same framework-neutral evidence contract:
@@ -94,7 +116,8 @@ Each implementation analyzes the same framework-neutral evidence contract:
 AnalysisEvidenceBundle
 ├── vulnerability
 ├── assets
-└── policy
+├── policy
+└── documents (optional)
 ```
 
 A request such as:
@@ -282,6 +305,7 @@ Examples:
 
 ```bash
 uv run python scripts/benchmark_langgraph_scenarios.py --runs 3
+uv run python scripts/benchmark_langgraph_adversarial_v2.py --runs 3
 uv run python scripts/benchmark_crewai_scenarios.py --runs 3
 uv run python scripts/benchmark_crewai_flow_scenarios.py --runs 3
 uv run python scripts/benchmark_llamaindex_workflow_scenarios.py --runs 3
@@ -299,6 +323,8 @@ uv run python scripts/compare_five_way_benchmarks.py
 - [Architecture and security model](docs/ARCHITECTURE.md)
 - [Framework decision matrix](docs/FRAMEWORK_DECISION_MATRIX.md)
 - [Five-way benchmark report](artifacts/benchmarks/comparison/five-way-latest.md)
+- [LangGraph adversarial v2 report](artifacts/adversarial-v2/langgraph/latest.md)
+- [Adversarial v2 evidence-plane design](docs/security/ADVERSARIAL_V2_EVIDENCE_PLANE.md)
 - [Agentic fast track](docs/AGENTIC_FAST_TRACK.md)
 - [Development](docs/DEVELOPMENT.md)
 - [MCP](docs/MCP.md)
@@ -320,11 +346,14 @@ Completed:
 - [x] shared five-scenario evaluation dataset;
 - [x] official 15-run benchmark for every variant;
 - [x] persisted five-way comparison;
+- [x] explicit evidence-document provenance and instruction-authority boundary;
+- [x] official 18-run LangGraph adversarial v2 evidence-plane baseline;
 - [x] strict local/CI quality gate.
 
 Candidate next experiments:
 
-- [ ] richer adversarial dataset and explicit prompt-injection test families;
+- [ ] isolated benchmark-sensitivity control that can exercise model-attack and containment paths;
+- [ ] reuse the adversarial v2 suite across the lighter framework variants;
 - [ ] model/provider comparison under the same framework-neutral controls;
 - [ ] MCP/tool authorization and least-privilege experiments;
 - [ ] trace correlation and observability comparison;

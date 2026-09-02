@@ -130,14 +130,17 @@ Every framework consumes the same application-level bundle:
 AnalysisEvidenceBundle
 ├── vulnerability
 ├── assets
-└── policy
+├── policy
+└── documents (optional)
+    ├── provenance metadata
+    └── untrusted content
 ```
 
 Evidence identity is validated before probabilistic reasoning. A vulnerability bundle whose CVE identifier does not match the requested vulnerability is rejected fail-closed.
 
-The evidence payload is treated as **data**, even when a field contains instruction-like text.
+The evidence payload is treated as **data**, even when a field contains instruction-like text. Document source authenticity records origin confidence; it never grants instruction authority to document content.
 
-The `adversarial-asset-id` evaluation scenario exercises this narrow boundary by embedding instruction-like text in an asset identifier. It is not intended as a broad prompt-injection benchmark.
+The `adversarial-asset-id` evaluation scenario exercises this narrow boundary by embedding instruction-like text in an asset identifier. Adversarial v2 extends the boundary to explicit vendor, retrieved, and internal documents through the application-owned `EvidenceDocumentBoundAnalyzer`, while preserving the canonical analyzer port and deterministic control state. Neither suite is intended as proof of broad prompt-injection resistance.
 
 ## 5. Prompt and structured-output boundary
 
