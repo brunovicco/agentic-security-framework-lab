@@ -446,9 +446,9 @@ Completed after the smoke was structurally valid:
 
 Persist separately from v1.
 
-### Recommended next experiment — benchmark sensitivity control
+### Benchmark sensitivity control — implemented, provider run pending
 
-Before cross-framework reuse, add an isolated, noncanonical positive-control experiment that deliberately weakens only the experimental prompt. Its purpose is to verify that the end-to-end instrumentation can observe `model_attack_success` and attribute deterministic rejection, recovery, or fallback containment when an attack occurs. It must not replace or weaken the production prompt contract or the official v2 artifact.
+Before cross-framework reuse, run the isolated, noncanonical positive control documented in [Adversarial v2 — Isolated Benchmark Sensitivity Control](ADVERSARIAL_V2_SENSITIVITY_CONTROL.md). The dedicated runner deliberately weakens only its experimental prompt and fails closed unless the end-to-end instrumentation observes `model_attack_success` plus deterministic containment. It does not replace or weaken the production prompt contract or the official v2 artifact.
 
 ### V2-F — cross-framework reuse
 

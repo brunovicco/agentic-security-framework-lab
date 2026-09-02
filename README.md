@@ -325,6 +325,7 @@ uv run python scripts/compare_five_way_benchmarks.py
 - [Five-way benchmark report](artifacts/benchmarks/comparison/five-way-latest.md)
 - [LangGraph adversarial v2 report](artifacts/adversarial-v2/langgraph/latest.md)
 - [Adversarial v2 evidence-plane design](docs/security/ADVERSARIAL_V2_EVIDENCE_PLANE.md)
+- [Adversarial v2 sensitivity-control methodology](docs/security/ADVERSARIAL_V2_SENSITIVITY_CONTROL.md)
 - [Agentic fast track](docs/AGENTIC_FAST_TRACK.md)
 - [Development](docs/DEVELOPMENT.md)
 - [MCP](docs/MCP.md)
@@ -352,7 +353,7 @@ Completed:
 
 Candidate next experiments:
 
-- [ ] isolated benchmark-sensitivity control that can exercise model-attack and containment paths;
+- [ ] run and persist the isolated benchmark-sensitivity control;
 - [ ] reuse the adversarial v2 suite across the lighter framework variants;
 - [ ] model/provider comparison under the same framework-neutral controls;
 - [ ] MCP/tool authorization and least-privilege experiments;
