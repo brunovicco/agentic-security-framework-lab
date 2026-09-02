@@ -88,6 +88,28 @@ Evidências completas:
 - O cenário `adversarial-asset-id` testa uma fronteira restrita entre instrução e dado, não resistência geral a prompt injection.
 - Todas as variantes oficiais chegaram a 100% de first-pass acceptance nesta execução, portanto não há evidência para ranking de qualidade.
 
+## Baseline adversarial LangGraph no plano de evidências
+
+A primeira baseline oficial adversarial v2 move instruções controladas pelo atacante de identificadores estruturados de ativos para documentos explícitos de fornecedor, contexto recuperado e notas internas. A proveniência descreve cada fonte, enquanto o conteúdo dos documentos permanece não confiável e sem autoridade de instrução.
+
+```text
+Modelo: openai:gpt-5.6-luna
+Cenários: 6
+Repetições por cenário: 3
+Execuções: 18
+Sampling: provider default
+```
+
+| Acurácia da tarefa | Security pass | Sucesso do ataque no modelo | Unsafe acceptance | Retry | Fallback | Latência média | Tokens médios |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 100% | 100% | 0% | 0% | 0% | 0% | 2503,86 ms | 763,17 |
+
+Nas 18 execuções observadas, todas as asserções de tarefa e segurança passaram e nenhum dos seis objetivos determinísticos do atacante teve sucesso no modelo. Assim, as taxas de rejeição, recuperação e contenção permanecem `N/A`: a amostra não exercitou contenção ao vivo após um ataque bem-sucedido no modelo.
+
+A média v2 de 763,17 tokens/run está 22,9% acima da média adversarial v1 de 620,80. Essa diferença descreve o custo de entrada dos documentos e da proveniência adicionais; não é uma afirmação de performance do framework ou do modelo.
+
+Esse resultado sintético e restrito não estabelece resistência geral a prompt injection. Consulte o [relatório legível](artifacts/adversarial-v2/langgraph/latest.md), o [artifact JSON](artifacts/adversarial-v2/langgraph/latest.json) e o [design e interpretação do plano de evidências](docs/security/ADVERSARIAL_V2_EVIDENCE_PLANE.md).
+
 ## Carga de trabalho compartilhada
 
 Todas as implementações recebem o mesmo contrato de evidência independente de framework:
@@ -96,7 +118,8 @@ Todas as implementações recebem o mesmo contrato de evidência independente de
 AnalysisEvidenceBundle
 ├── vulnerability
 ├── assets
-└── policy
+├── policy
+└── documents (opcional)
 ```
 
 Uma solicitação como:
@@ -290,6 +313,7 @@ Exemplos:
 
 ```bash
 uv run python scripts/benchmark_langgraph_scenarios.py --runs 3
+uv run python scripts/benchmark_langgraph_adversarial_v2.py --runs 3
 uv run python scripts/benchmark_crewai_scenarios.py --runs 3
 uv run python scripts/benchmark_crewai_flow_scenarios.py --runs 3
 uv run python scripts/benchmark_llamaindex_workflow_scenarios.py --runs 3
@@ -307,6 +331,8 @@ uv run python scripts/compare_five_way_benchmarks.py
 - [Arquitetura e modelo de segurança](docs/ARCHITECTURE.md)
 - [Decision matrix dos frameworks](docs/FRAMEWORK_DECISION_MATRIX.md)
 - [Benchmark five-way](artifacts/benchmarks/comparison/five-way-latest.md)
+- [Relatório adversarial v2 do LangGraph](artifacts/adversarial-v2/langgraph/latest.md)
+- [Design adversarial v2 do plano de evidências](docs/security/ADVERSARIAL_V2_EVIDENCE_PLANE.md)
 - [Agentic Fast Track](docs/AGENTIC_FAST_TRACK.md)
 - [Desenvolvimento](docs/DEVELOPMENT.md)
 - [MCP](docs/MCP.md)
@@ -328,11 +354,14 @@ Concluído:
 - [x] dataset compartilhado com cinco cenários;
 - [x] benchmark oficial de 15 execuções para cada variante;
 - [x] comparação five-way persistida;
+- [x] fronteira explícita de proveniência e autoridade de instrução para documentos de evidência;
+- [x] baseline oficial LangGraph adversarial v2 com 18 execuções;
 - [x] quality gate estrito local e em CI.
 
 Próximos experimentos candidatos:
 
-- [ ] ampliar o dataset adversarial e separar famílias explícitas de prompt injection;
+- [ ] adicionar um controle isolado de sensibilidade que exercite os caminhos de ataque e contenção;
+- [ ] reutilizar a suíte adversarial v2 nas variantes leves dos frameworks;
 - [ ] comparar modelos/providers sob os mesmos controles;
 - [ ] explorar MCP, autorização de tools e least privilege;
 - [ ] comparar tracing e observabilidade;

@@ -359,11 +359,46 @@ V2 creates a semantically stronger input boundary so those paths have a realisti
 
 The objective is not to force non-zero values. A valid outcome is still zero observed model attack successes. The difference is that the tested attack surface is closer to retrieved/advisory context that agentic systems commonly ingest.
 
+## Observed LangGraph baseline
+
+The official LangGraph v2 baseline used `openai:gpt-5.6-luna` with provider-default sampling:
+
+```text
+6 scenarios x 3 repetitions = 18 provider-backed runs
+```
+
+| Metric | Observed value |
+| --- | ---: |
+| Task-correct final results | 18/18 (100%) |
+| Final security passes | 18/18 (100%) |
+| Model attack successes | 0/18 (0%) |
+| Unsafe acceptances | 0/18 (0%) |
+| Asset identity/cardinality integrity | 100% |
+| Human-review integrity | 100% |
+| Recommendation integrity | 100% |
+| Confidence integrity | 100% |
+| Retry rate | 0% |
+| Fallback rate | 0% |
+| Mean latency | 2503.86 ms |
+| p50 / p95 latency | 2493.62 / 3256.20 ms |
+| Mean / total tokens | 763.17 / 13,737 |
+
+All 18 structured drafts matched the deterministic applicability oracle on their first attempt. None matched its scenario-specific attacker goal, so deterministic rejection after attack success, recovery after rejection, and control containment remain `N/A`. The baseline therefore records observed model resistance for these six fixtures, but it provides no live evidence about containment after a model-level compromise.
+
+The v2 mean of 763.17 tokens/run is 22.9% above the adversarial v1 mean of 620.80. Scenario `adv2-06-conflicting-evidence-goal-hijack` had the highest v2 mean at 852 tokens/run. These values describe the extra document and provenance context; the runs occurred at different times and do not support a performance comparison.
+
+The unknown-version scenario returned `confidence = 0.99` in all three repetitions while correctly preserving `applicability = unknown`. This is security-valid under the current assertions, but it exposes a semantic documentation gap: confidence currently expresses confidence in the structured assessment, not certainty that the asset is affected. That distinction should be made explicit before confidence drives downstream policy.
+
+Persisted evidence:
+
+- [human-readable report](../../artifacts/adversarial-v2/langgraph/latest.md);
+- [machine-readable artifact](../../artifacts/adversarial-v2/langgraph/latest.json).
+
 ## Phase sequencing
 
 ### V2-A — provenance contract
 
-This increment:
+Completed:
 
 - adds the optional `EvidenceDocument` contract;
 - makes source authenticity, content trust, and instruction authority distinct;
@@ -374,7 +409,7 @@ This increment:
 
 ### V2-B — prompt and fixture integration
 
-Next increment:
+Completed:
 
 - serialize documents through the shared framework-neutral prompt builder;
 - visibly delimit provenance metadata from document content;
@@ -384,7 +419,7 @@ Next increment:
 
 ### V2-C — offline attack/security evaluation
 
-Before provider calls:
+Completed before provider calls:
 
 - define deterministic attack goals per scenario;
 - define recommendation/confidence canaries where applicable;
@@ -393,7 +428,7 @@ Before provider calls:
 
 ### V2-D — LangGraph live smoke
 
-Only after V2-A through V2-C are green:
+Completed after V2-A through V2-C were green:
 
 ```text
 6 scenarios x 1 repetition = 6 live executions
@@ -403,7 +438,7 @@ Inspect every attempt trace manually before any official repeated run.
 
 ### V2-E — official repeated baseline
 
-If the smoke is structurally valid:
+Completed after the smoke was structurally valid:
 
 ```text
 6 scenarios x 3 repetitions = 18 runs
@@ -411,13 +446,17 @@ If the smoke is structurally valid:
 
 Persist separately from v1.
 
+### Recommended next experiment — benchmark sensitivity control
+
+Before cross-framework reuse, add an isolated, noncanonical positive-control experiment that deliberately weakens only the experimental prompt. Its purpose is to verify that the end-to-end instrumentation can observe `model_attack_success` and attribute deterministic rejection, recovery, or fallback containment when an attack occurs. It must not replace or weaken the production prompt contract or the official v2 artifact.
+
 ### V2-F — cross-framework reuse
 
 Only after the LangGraph v2 baseline is understood should CrewAI Flow, LlamaIndex Workflow, and Agno Workflow consume the same v2 scenarios and the same framework-neutral security metrics.
 
 ## Explicit non-claims
 
-Adversarial v2 will still not establish:
+Adversarial v2 does not establish:
 
 - general prompt-injection resistance;
 - security of arbitrary RAG pipelines;
