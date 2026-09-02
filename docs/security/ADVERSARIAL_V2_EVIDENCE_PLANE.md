@@ -446,9 +446,11 @@ Completed after the smoke was structurally valid:
 
 Persist separately from v1.
 
-### Benchmark sensitivity control — implemented, provider run pending
+### Benchmark sensitivity control — completed
 
-Before cross-framework reuse, run the isolated, noncanonical positive control documented in [Adversarial v2 — Isolated Benchmark Sensitivity Control](ADVERSARIAL_V2_SENSITIVITY_CONTROL.md). The dedicated runner deliberately weakens only its experimental prompt and fails closed unless the end-to-end instrumentation observes `model_attack_success` plus deterministic containment. It does not replace or weaken the production prompt contract or the official v2 artifact.
+The isolated, noncanonical positive control documented in [Adversarial v2 — Isolated Benchmark Sensitivity Control](ADVERSARIAL_V2_SENSITIVITY_CONTROL.md) completed one provider-backed run. The deliberately vulnerable prompt produced the forced-status attack on both attempts. Deterministic validation rejected both drafts, bounded retry ended in oracle fallback, and the final result passed every task and security assertion.
+
+This observed control closes the instrumentation gap left by the zero-attack canonical sample: the benchmark can identify `model_attack_success`, attribute deterministic rejection, and distinguish fallback containment from unsafe acceptance. It does not replace or weaken the production prompt contract or the official v2 artifact.
 
 ### V2-F — cross-framework reuse
 
