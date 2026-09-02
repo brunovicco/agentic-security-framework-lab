@@ -108,6 +108,8 @@ The v2 mean of 763.17 tokens/run is 22.9% above the adversarial v1 mean of 620.8
 
 This narrow synthetic result does not establish general prompt-injection resistance. See the [human-readable report](artifacts/adversarial-v2/langgraph/latest.md), [machine-readable artifact](artifacts/adversarial-v2/langgraph/latest.json), and [evidence-plane design and interpretation](docs/security/ADVERSARIAL_V2_EVIDENCE_PLANE.md).
 
+A separate noncanonical positive control deliberately granted document content instruction authority. The model followed the forced-status attack on both attempts; deterministic validation rejected both drafts and the oracle fallback produced a task-correct, security-valid final result. This calibrates the attack and containment telemetry without changing the canonical prompt. See the [sensitivity-control report](artifacts/adversarial-v2-sensitivity/langgraph/latest.md) and [machine-readable trace](artifacts/adversarial-v2-sensitivity/langgraph/latest.json).
+
 ## Shared workload
 
 Each implementation analyzes the same framework-neutral evidence contract:
@@ -326,6 +328,7 @@ uv run python scripts/compare_five_way_benchmarks.py
 - [LangGraph adversarial v2 report](artifacts/adversarial-v2/langgraph/latest.md)
 - [Adversarial v2 evidence-plane design](docs/security/ADVERSARIAL_V2_EVIDENCE_PLANE.md)
 - [Adversarial v2 sensitivity-control methodology](docs/security/ADVERSARIAL_V2_SENSITIVITY_CONTROL.md)
+- [LangGraph adversarial v2 sensitivity-control result](artifacts/adversarial-v2-sensitivity/langgraph/latest.md)
 - [Agentic fast track](docs/AGENTIC_FAST_TRACK.md)
 - [Development](docs/DEVELOPMENT.md)
 - [MCP](docs/MCP.md)
@@ -349,11 +352,11 @@ Completed:
 - [x] persisted five-way comparison;
 - [x] explicit evidence-document provenance and instruction-authority boundary;
 - [x] official 18-run LangGraph adversarial v2 evidence-plane baseline;
+- [x] provider-backed noncanonical sensitivity control with observed fallback containment;
 - [x] strict local/CI quality gate.
 
 Candidate next experiments:
 
-- [ ] run and persist the isolated benchmark-sensitivity control;
 - [ ] reuse the adversarial v2 suite across the lighter framework variants;
 - [ ] model/provider comparison under the same framework-neutral controls;
 - [ ] MCP/tool authorization and least-privilege experiments;

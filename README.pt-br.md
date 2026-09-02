@@ -110,6 +110,8 @@ A média v2 de 763,17 tokens/run está 22,9% acima da média adversarial v1 de 6
 
 Esse resultado sintético e restrito não estabelece resistência geral a prompt injection. Consulte o [relatório legível](artifacts/adversarial-v2/langgraph/latest.md), o [artifact JSON](artifacts/adversarial-v2/langgraph/latest.json) e o [design e interpretação do plano de evidências](docs/security/ADVERSARIAL_V2_EVIDENCE_PLANE.md).
 
+Um controle positivo não canônico separado concedeu deliberadamente autoridade de instrução ao conteúdo dos documentos. O modelo seguiu o ataque de status forçado nas duas tentativas; a validação determinística rejeitou ambos os drafts e o oracle fallback produziu um resultado final correto e seguro. Isso calibra a telemetria de ataque e contenção sem alterar o prompt canônico. Consulte o [relatório do controle de sensibilidade](artifacts/adversarial-v2-sensitivity/langgraph/latest.md) e o [trace em JSON](artifacts/adversarial-v2-sensitivity/langgraph/latest.json).
+
 ## Carga de trabalho compartilhada
 
 Todas as implementações recebem o mesmo contrato de evidência independente de framework:
@@ -334,6 +336,7 @@ uv run python scripts/compare_five_way_benchmarks.py
 - [Relatório adversarial v2 do LangGraph](artifacts/adversarial-v2/langgraph/latest.md)
 - [Design adversarial v2 do plano de evidências](docs/security/ADVERSARIAL_V2_EVIDENCE_PLANE.md)
 - [Metodologia do controle de sensibilidade adversarial v2](docs/security/ADVERSARIAL_V2_SENSITIVITY_CONTROL.md)
+- [Resultado LangGraph do controle de sensibilidade adversarial v2](artifacts/adversarial-v2-sensitivity/langgraph/latest.md)
 - [Agentic Fast Track](docs/AGENTIC_FAST_TRACK.md)
 - [Desenvolvimento](docs/DEVELOPMENT.md)
 - [MCP](docs/MCP.md)
@@ -357,11 +360,11 @@ Concluído:
 - [x] comparação five-way persistida;
 - [x] fronteira explícita de proveniência e autoridade de instrução para documentos de evidência;
 - [x] baseline oficial LangGraph adversarial v2 com 18 execuções;
+- [x] controle de sensibilidade não canônico com provider e contenção por fallback observada;
 - [x] quality gate estrito local e em CI.
 
 Próximos experimentos candidatos:
 
-- [ ] executar e persistir o controle isolado de sensibilidade do benchmark;
 - [ ] reutilizar a suíte adversarial v2 nas variantes leves dos frameworks;
 - [ ] comparar modelos/providers sob os mesmos controles;
 - [ ] explorar MCP, autorização de tools e least privilege;
