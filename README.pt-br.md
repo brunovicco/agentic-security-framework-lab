@@ -362,11 +362,12 @@ Concluído:
 - [x] baseline oficial LangGraph adversarial v2 com 18 execuções;
 - [x] controle de sensibilidade não canônico com provider e contenção por fallback observada;
 - [x] binding compartilhado de documentos de evidência e telemetria de tentativas nos workflows leves;
+- [x] runner protegido de smoke adversarial v2 com uma repetição para os workflows leves;
 - [x] quality gate estrito local e em CI.
 
 Próximos experimentos candidatos:
 
-- [ ] reutilizar a suíte adversarial v2 nas variantes leves dos frameworks;
+- [ ] executar, revisar e persistir o smoke adversarial v2 nos workflows leves;
 - [ ] comparar modelos/providers sob os mesmos controles;
 - [ ] explorar MCP, autorização de tools e least privilege;
 - [ ] comparar tracing e observabilidade;

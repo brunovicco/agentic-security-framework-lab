@@ -354,11 +354,12 @@ Completed:
 - [x] official 18-run LangGraph adversarial v2 evidence-plane baseline;
 - [x] provider-backed noncanonical sensitivity control with observed fallback containment;
 - [x] shared evidence-document binding and attempt telemetry across lightweight workflows;
+- [x] guarded one-repetition adversarial v2 smoke runner for lightweight workflows;
 - [x] strict local/CI quality gate.
 
 Candidate next experiments:
 
-- [ ] reuse the adversarial v2 suite across the lighter framework variants;
+- [ ] execute, review, and persist the adversarial v2 smoke across lighter workflows;
 - [ ] model/provider comparison under the same framework-neutral controls;
 - [ ] MCP/tool authorization and least-privilege experiments;
 - [ ] trace correlation and observability comparison;
