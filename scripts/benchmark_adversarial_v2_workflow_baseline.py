@@ -224,9 +224,7 @@ def run_framework_baseline(
 ) -> FrameworkBaselineResult:
     """Run every v2 scenario repeatedly through one lightweight workflow runtime."""
     if len(scenarios) != _EXPECTED_SCENARIO_COUNT:
-        raise RuntimeError(
-            f"Adversarial v2 baseline expected {_EXPECTED_SCENARIO_COUNT} scenarios"
-        )
+        raise RuntimeError(f"Adversarial v2 baseline expected {_EXPECTED_SCENARIO_COUNT} scenarios")
     if repetitions < _MIN_BASELINE_REPETITIONS:
         raise ValueError(
             f"Baseline execution requires at least {_MIN_BASELINE_REPETITIONS} repetitions"
