@@ -200,15 +200,15 @@ That distinction between **model quality** and **system safety** is central to t
 
 | Framework / abstraction | Native orchestration used | Structured reasoning path | Application-owned deterministic controls |
 | --- | --- | --- | --- |
-| LangGraph | graph nodes + conditional routing | LangChain structured model output | yes |
+| LangGraph | graph nodes + conditional routing | LangChain structured model output through LiteLLM Proxy | yes |
 | CrewAI Agent/Crew | `Agent` + `Task` + `Crew` | structured CrewAI output | yes, external evaluator |
 | CrewAI Flow | Flow routing/state | direct structured `LLM.call()` | yes |
 | LlamaIndex Workflow | typed Workflow events | `structured_predict()` | yes |
 | Agno Workflow | `Workflow` + `Loop` + `Condition` | Agent structured output | yes |
 
-The repository intentionally keeps framework adapters below the application boundary so orchestration can change without moving security authority into a framework.
+The repository intentionally keeps framework adapters below the application boundary so orchestration can change without moving security authority into a framework. Provider access is now being moved behind LiteLLM incrementally; LangGraph is the first migrated client.
 
-See [Architecture](docs/ARCHITECTURE.md) for the detailed design and trust boundaries.
+See [Architecture](docs/ARCHITECTURE.md) for the detailed design and trust boundaries and [LiteLLM gateway foundation](docs/litellm/GATEWAY_FOUNDATION.md) for the provider-access boundary.
 
 ## Evaluation dataset
 
@@ -242,7 +242,8 @@ The current implementation exercises:
 - token accounting;
 - latency measurement;
 - external expected truth;
-- persisted benchmark evidence.
+- persisted benchmark evidence;
+- a governed LiteLLM model alias that separates the first framework client from the upstream provider identifier.
 
 The security model is documented in [Architecture](docs/ARCHITECTURE.md).
 
@@ -259,6 +260,10 @@ src/agentic_lab/
     ├── langchain/
     ├── langgraph/
     └── llamaindex/
+
+config/
+└── litellm/
+    └── config.yaml
 
 scripts/
 ├── benchmark_langgraph_scenarios.py
@@ -299,27 +304,50 @@ uv run python scripts/quality_gate.py
 
 The gate covers lockfile consistency, Ruff, architecture checks, governance checks, Pyright strict typing, pytest, coverage, Bandit, and dependency auditing. The same gate runs in GitHub Actions.
 
-## Run a real-provider benchmark
+## Run provider-backed experiments
 
-Set the model without embedding credentials in repository files:
+Provider access is temporarily mixed while framework clients migrate one at a time.
 
-```bash
-export AGENTIC_LAB_MODEL="openai:gpt-5.6-luna"
-```
+### LangGraph through LiteLLM Proxy
 
-Load the API key without echoing it:
+The LangGraph path no longer accepts a direct upstream model through `AGENTIC_LAB_MODEL`. Its LangChain client always requests the governed alias `security-analysis` from LiteLLM.
+
+Load the provider key and a local gateway master key without committing either secret:
 
 ```bash
 read -s "OPENAI_API_KEY?OpenAI API key: "
 echo
 export OPENAI_API_KEY
+
+read -s "LITELLM_MASTER_KEY?LiteLLM master key: "
+echo
+export LITELLM_MASTER_KEY
 ```
 
-Examples:
+Install the proxy as a `uv` tool, outside the project dependency graph, and start it with the committed configuration:
 
 ```bash
+uv tool install 'litellm[proxy]'
+litellm --config config/litellm/config.yaml
+```
+
+In another shell, configure the client boundary. A local setup may temporarily use the master key as the client credential; later milestones can replace it with a scoped virtual key without changing the LangChain adapter.
+
+```bash
+export AGENTIC_LAB_GATEWAY_BASE_URL="http://localhost:4000"
+export AGENTIC_LAB_GATEWAY_API_KEY="$LITELLM_MASTER_KEY"
+
 uv run python scripts/benchmark_langgraph_scenarios.py --runs 3
 uv run python scripts/benchmark_langgraph_adversarial_v2.py --runs 3
+```
+
+### Frameworks not yet migrated
+
+CrewAI, LlamaIndex, and Agno still select the direct provider model during this transitional milestone:
+
+```bash
+export AGENTIC_LAB_MODEL="openai:gpt-5.6-luna"
+
 uv run python scripts/benchmark_crewai_scenarios.py --runs 3
 uv run python scripts/benchmark_crewai_flow_scenarios.py --runs 3
 uv run python scripts/benchmark_llamaindex_workflow_scenarios.py --runs 3
@@ -336,6 +364,8 @@ uv run python scripts/compare_five_way_benchmarks.py
 
 - [Architecture and security model](docs/ARCHITECTURE.md)
 - [Framework decision matrix](docs/FRAMEWORK_DECISION_MATRIX.md)
+- [LiteLLM gateway foundation](docs/litellm/GATEWAY_FOUNDATION.md)
+- [LiteLLM gateway ADR](docs/adr/0002-centralize-llm-provider-access-behind-litellm-proxy.md)
 - [Five-way benchmark report](artifacts/benchmarks/comparison/five-way-latest.md)
 - [LangGraph adversarial v2 report](artifacts/adversarial-v2/langgraph/latest.md)
 - [Adversarial v2 evidence-plane design](docs/security/ADVERSARIAL_V2_EVIDENCE_PLANE.md)
@@ -369,11 +399,16 @@ Completed:
 - [x] shared evidence-document binding and attempt telemetry across lightweight workflows;
 - [x] guarded one-repetition adversarial v2 smoke runner for lightweight workflows;
 - [x] provider-backed, manually reviewed adversarial v2 smoke across lightweight workflows;
+- [x] accepted cross-framework adversarial v2 baseline comparison;
+- [x] LiteLLM gateway foundation with a governed `security-analysis` alias;
+- [x] LangChain/LangGraph client routed through the LiteLLM gateway boundary;
 - [x] strict local/CI quality gate.
 
 Candidate next experiments:
 
-- [ ] model/provider comparison under the same framework-neutral controls;
+- [ ] provider-backed LangGraph smoke through the gateway and trace review;
+- [ ] migrate CrewAI, LlamaIndex, and Agno to the same gateway alias one at a time;
+- [ ] introduce explicit gateway retry/fallback policy only after all clients share the boundary;
 - [ ] MCP/tool authorization and least-privilege experiments;
 - [ ] trace correlation and observability comparison;
 - [ ] controlled human-in-the-loop workflows;
