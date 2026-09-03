@@ -16,6 +16,7 @@ from agentic_lab.application.analysis_prompt import (
 from agentic_lab.application.contracts import LLMAnalysisDraft
 from agentic_lab.application.evidence import (
     AssetInventoryItem,
+    EvidenceDocument,
     VulnerabilityEvidence,
 )
 
@@ -170,13 +171,15 @@ class LlamaIndexVulnerabilityAnalyzer:
         vulnerability: VulnerabilityEvidence,
         assets: tuple[AssetInventoryItem, ...],
         feedback: str | None = None,
+        documents: tuple[EvidenceDocument, ...] = (),
     ) -> LLMAnalysisDraft:
-        """Analyze vulnerability evidence against asset inventory."""
+        """Analyze vulnerability evidence against asset inventory and documents."""
         return self._runner.run(
             system_prompt=SECURITY_ANALYSIS_SYSTEM_PROMPT,
             user_prompt=build_security_analysis_user_prompt(
                 vulnerability=vulnerability,
                 assets=assets,
                 feedback=feedback,
+                documents=documents,
             ),
         )

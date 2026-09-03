@@ -353,6 +353,7 @@ Completed:
 - [x] explicit evidence-document provenance and instruction-authority boundary;
 - [x] official 18-run LangGraph adversarial v2 evidence-plane baseline;
 - [x] provider-backed noncanonical sensitivity control with observed fallback containment;
+- [x] shared evidence-document binding and attempt telemetry across lightweight workflows;
 - [x] strict local/CI quality gate.
 
 Candidate next experiments:
