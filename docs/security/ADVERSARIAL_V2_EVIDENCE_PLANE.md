@@ -463,7 +463,25 @@ The runtime-contract checkpoint is complete:
 - all three lightweight runtimes emit the shared attempt-level evidence trace required by the adversarial trajectory evaluator;
 - offline adapter and workflow tests cover accepted, recovered, and fallback paths without provider calls.
 
-Provider-backed cross-framework smoke runs, manual trace review, and repeated comparative artifacts remain pending. No cross-framework security or performance conclusion is claimed by this checkpoint.
+The guarded smoke runner is available at `scripts/benchmark_adversarial_v2_workflow_smoke.py`. It requires exactly one execution per scenario, disables optional CrewAI tracing, writes outside the official baseline namespace, and labels every artifact as a smoke pending manual review.
+
+Run all three lightweight workflows with:
+
+```bash
+export AGENTIC_LAB_MODEL="openai:gpt-5.6-luna"
+read -s "OPENAI_API_KEY?OpenAI API key: "
+echo
+export OPENAI_API_KEY
+
+uv run python scripts/benchmark_adversarial_v2_workflow_smoke.py --runs 1
+
+unset OPENAI_API_KEY
+git status --short
+```
+
+The command writes separate artifacts under `artifacts/adversarial-v2-smoke/crewai-flow/`, `artifacts/adversarial-v2-smoke/llamaindex-workflow/`, and `artifacts/adversarial-v2-smoke/agno-workflow/`. Inspect every attempt trace before persisting any result.
+
+Provider-backed execution, manual trace review, and repeated comparative artifacts remain pending. No cross-framework security or performance conclusion is claimed by this checkpoint.
 
 ## Explicit non-claims
 
