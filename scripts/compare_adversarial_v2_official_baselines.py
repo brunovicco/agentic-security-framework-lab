@@ -195,10 +195,7 @@ def render_markdown(comparison: dict[str, Any]) -> str:
             "| Baseline | Task | Security | Model attack | Unsafe | Retry | Fallback | "
             "Mean latency | p50 | p95 | Mean tokens |"
         ),
-        (
-            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
-            "---: | ---: |"
-        ),
+        ("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"),
     ]
     for row in comparison["baselines"]:
         metrics = row["metrics"]
