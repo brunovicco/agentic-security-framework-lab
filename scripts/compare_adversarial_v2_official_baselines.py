@@ -71,9 +71,7 @@ def _validate_experiment_identity(name: str, payload: dict[str, Any]) -> None:
     }
     mismatches = [key for key, value in expected.items() if payload.get(key) != value]
     if mismatches:
-        raise ValueError(
-            f"Experiment identity mismatch for {name}: {', '.join(mismatches)}"
-        )
+        raise ValueError(f"Experiment identity mismatch for {name}: {', '.join(mismatches)}")
 
 
 def _validate_acceptance(name: str, path: Path, payload: dict[str, Any]) -> None:
@@ -100,7 +98,7 @@ def _validate_acceptance(name: str, path: Path, payload: dict[str, Any]) -> None
         raise ValueError(f"Baseline {name} has invalid source candidate provenance")
 
 
-def _extract_metrics(name: str, payload: dict[str, Any]) -> dict[str, Any]:
+def _validate_modern_assessment(name: str, payload: dict[str, Any]) -> None:
     assessment = payload.get("baseline_assessment")
     if not isinstance(assessment, dict):
         raise ValueError(f"Baseline {name} lacks baseline assessment")
@@ -108,6 +106,11 @@ def _extract_metrics(name: str, payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"Baseline {name} did not pass its baseline assessment")
     if assessment.get("runs") != _EXPECTED_RUNS or assessment.get("failures") != []:
         raise ValueError(f"Baseline {name} has inconsistent baseline assessment")
+
+
+def _extract_metrics(name: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if name != "langgraph":
+        _validate_modern_assessment(name, payload)
 
     summary = payload.get("overall_summary")
     if not isinstance(summary, dict):
@@ -133,8 +136,7 @@ def build_comparison(
     expected_names = tuple(_BASELINES)
     if tuple(paths) != expected_names:
         raise ValueError(
-            "Comparison requires exactly these baselines in order: "
-            + ", ".join(expected_names)
+            "Comparison requires exactly these baselines in order: " + ", ".join(expected_names)
         )
 
     rows: list[dict[str, Any]] = []
@@ -189,8 +191,14 @@ def render_markdown(comparison: dict[str, Any]) -> str:
         "",
         "This report compares only accepted, like-for-like official baselines.",
         "",
-        "| Baseline | Task | Security | Model attack | Unsafe | Retry | Fallback | Mean latency | p50 | p95 | Mean tokens |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        (
+            "| Baseline | Task | Security | Model attack | Unsafe | Retry | Fallback | "
+            "Mean latency | p50 | p95 | Mean tokens |"
+        ),
+        (
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
+            "---: | ---: |"
+        ),
     ]
     for row in comparison["baselines"]:
         metrics = row["metrics"]
@@ -218,10 +226,22 @@ def render_markdown(comparison: dict[str, Any]) -> str:
             "## Interpretation",
             "",
             "- No framework winner is declared from this sample.",
-            "- Latency and token differences are descriptive only; provider variance is material.",
-            "- The canonical suite observed no successful live model attack in these accepted runs, so containment-after-attack rates are not exercised here.",
-            "- Deterministic rejection and fallback containment remain evidenced by the separate LangGraph sensitivity control.",
-            "- The LangGraph baseline is a pinned legacy official artifact; newer baselines require explicit accepted-review promotion metadata.",
+            (
+                "- Latency and token differences are descriptive only; provider variance "
+                "is material."
+            ),
+            (
+                "- The canonical suite observed no successful live model attack in these "
+                "accepted runs, so containment-after-attack rates are not exercised here."
+            ),
+            (
+                "- Deterministic rejection and fallback containment remain evidenced by "
+                "the separate LangGraph sensitivity control."
+            ),
+            (
+                "- The LangGraph baseline is a pinned legacy official artifact; newer "
+                "baselines require explicit accepted-review promotion metadata."
+            ),
             "",
         ]
     )
