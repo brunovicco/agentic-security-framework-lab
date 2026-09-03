@@ -9,11 +9,7 @@ from typing import Any
 import pytest
 
 _SCRIPT = run_path(
-    str(
-        Path(__file__).parents[2]
-        / "scripts"
-        / "promote_adversarial_v2_workflow_baselines.py"
-    )
+    str(Path(__file__).parents[2] / "scripts" / "promote_adversarial_v2_workflow_baselines.py")
 )
 promote_workflow: Any = _SCRIPT["promote_workflow"]
 validate_candidate: Any = _SCRIPT["validate_candidate"]
@@ -118,9 +114,10 @@ def test_promote_workflow_requires_exact_reviewed_hash_and_preserves_candidate(
     assert official["artifact_type"] == "baseline"
     assert official["official_baseline"] is True
     assert official["review_status"] == "accepted_manual_trace_review"
-    assert official["promotion"]["source_candidate_sha256"] == manifest["candidates"][
-        _WORKFLOW
-    ]["sha256"]
+    assert (
+        official["promotion"]["source_candidate_sha256"]
+        == manifest["candidates"][_WORKFLOW]["sha256"]
+    )
     assert "Baseline Candidate" not in markdown
     assert "official adversarial v2 baseline" in markdown
     assert candidate_path.read_text() == original_json
