@@ -43,7 +43,10 @@ def test_gateway_config_rejects_literal_master_key(tmp_path: Path) -> None:
     payload["general_settings"]["master_key"] = "sk-literal-admin-secret"
     path.write_text(json.dumps(payload, indent=2) + "\n")
 
-    with pytest.raises(ValueError, match="gateway master_key must reference an environment variable"):
+    with pytest.raises(
+        ValueError,
+        match="gateway master_key must reference an environment variable",
+    ):
         validate_gateway_config(path)
 
 
@@ -63,7 +66,10 @@ def test_gateway_config_rejects_upstream_model_drift(tmp_path: Path) -> None:
     payload["model_list"][0]["litellm_params"]["model"] = "anthropic/other-model"
     path.write_text(json.dumps(payload, indent=2) + "\n")
 
-    with pytest.raises(ValueError, match="gateway upstream model must remain openai/gpt-5.6-luna"):
+    with pytest.raises(
+        ValueError,
+        match=r"gateway upstream model must remain openai/gpt-5\.6-luna",
+    ):
         validate_gateway_config(path)
 
 
