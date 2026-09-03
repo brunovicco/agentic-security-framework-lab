@@ -8,9 +8,7 @@ from typing import Any
 import pytest
 
 _REPO_ROOT = Path(__file__).parents[2]
-_SCRIPT = run_path(
-    str(_REPO_ROOT / "scripts" / "compare_adversarial_v2_official_baselines.py")
-)
+_SCRIPT = run_path(str(_REPO_ROOT / "scripts" / "compare_adversarial_v2_official_baselines.py"))
 build_comparison: Any = _SCRIPT["build_comparison"]
 render_markdown: Any = _SCRIPT["render_markdown"]
 
@@ -24,8 +22,7 @@ _NAMES = (
 
 def _repo_paths() -> dict[str, Path]:
     return {
-        name: _REPO_ROOT / "artifacts" / "adversarial-v2" / name / "latest.json"
-        for name in _NAMES
+        name: _REPO_ROOT / "artifacts" / "adversarial-v2" / name / "latest.json" for name in _NAMES
     }
 
 
@@ -45,10 +42,7 @@ def test_build_comparison_accepts_exact_official_evidence_set() -> None:
     assert comparison["total_runs"] == 72
     assert [row["baseline"] for row in comparison["baselines"]] == list(_NAMES)
     assert comparison["interpretation"]["winner_declared"] is False
-    assert (
-        comparison["interpretation"]["canonical_suite_observed_live_model_attack"]
-        is False
-    )
+    assert comparison["interpretation"]["canonical_suite_observed_live_model_attack"] is False
     for row in comparison["baselines"]:
         metrics = row["metrics"]
         assert metrics["runs"] == 18
@@ -101,4 +95,5 @@ def test_render_markdown_keeps_interpretation_descriptive() -> None:
 
     assert "No framework winner is declared" in markdown
     assert "descriptive only" in markdown
-    assert "10" not in markdown or "winner" in markdown.lower()
+    assert "| agno-workflow |" in markdown
+    assert "10151.05 ms" in markdown
