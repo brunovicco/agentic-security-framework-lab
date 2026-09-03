@@ -19,10 +19,15 @@ def _required_environment_value(name: str) -> str:
     return value
 
 
+def gateway_model_alias() -> str:
+    """Return the stable client-facing model alias exposed by the gateway."""
+    return _GATEWAY_MODEL_ALIAS
+
+
 def create_chat_model() -> BaseChatModel:
     """Create the LangChain client for the governed LiteLLM model alias."""
     return ChatOpenAI(
-        model=_GATEWAY_MODEL_ALIAS,
+        model=gateway_model_alias(),
         base_url=_required_environment_value(_GATEWAY_BASE_URL_ENV),
         api_key=SecretStr(_required_environment_value(_GATEWAY_API_KEY_ENV)),
         temperature=0,
