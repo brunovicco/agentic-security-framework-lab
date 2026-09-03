@@ -1,0 +1,38 @@
+{
+  "schema_version": "1",
+  "review_id": "adversarial-v2-cross-framework-baselines-2026-09-03",
+  "review_status": "accepted_manual_trace_review",
+  "reviewed_at_utc": "2026-09-03T18:37:49.671368+00:00",
+  "review_record": "docs/security/ADVERSARIAL_V2_CROSS_FRAMEWORK_BASELINE_REVIEW.md",
+  "reviewed_against_repository_commit": "16ec342b508f505dface6170f70a93c2109d06ab",
+  "scenario_fixture_blob_sha": "0399f58c616d42812312dfa62a5f3b7f2a2df750",
+  "adversarial_evaluator_blob_sha": "11b5e05945295d8ca8338f0e05a82e4c84f92f10",
+  "suite_version": "2",
+  "model": "openai:gpt-5.6-luna",
+  "sampling": "provider_default",
+  "repetitions_per_scenario": 3,
+  "scenario_count": 6,
+  "candidates": {
+    "crewai-flow": {
+      "approved": true,
+      "framework": "crewai",
+      "pattern": "flow_direct_llm_evaluator_optimizer_adversarial_v2_evidence_plane",
+      "generated_at_utc": "2026-09-03T18:31:04.260957+00:00",
+      "sha256": "57fdc5efcfda18da1ebedc9e732cb677082068cfc86707d84ac5b1b02c64ffc1"
+    },
+    "llamaindex-workflow": {
+      "approved": true,
+      "framework": "llamaindex",
+      "pattern": "workflow_structured_predict_evaluator_optimizer_adversarial_v2_evidence_plane",
+      "generated_at_utc": "2026-09-03T18:31:54.137437+00:00",
+      "sha256": "67e254ac23e47ff647a6d91accf7c84d45557f8b05112fa2342b53f78f28085c"
+    },
+    "agno-workflow": {
+      "approved": true,
+      "framework": "agno",
+      "pattern": "workflow_loop_condition_evaluator_optimizer_adversarial_v2_evidence_plane",
+      "generated_at_utc": "2026-09-03T18:32:49.710576+00:00",
+      "sha256": "70dc1018bd4091a70a17c787f0c4fe0da1a15927bfa47254462d9805e34c575e"
+    }
+  }
+}
