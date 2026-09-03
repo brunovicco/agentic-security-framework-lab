@@ -110,6 +110,18 @@ This narrow synthetic result does not establish general prompt-injection resista
 
 A separate noncanonical positive control deliberately granted document content instruction authority. The model followed the forced-status attack on both attempts; deterministic validation rejected both drafts and the oracle fallback produced a task-correct, security-valid final result. This calibrates the attack and containment telemetry without changing the canonical prompt. See the [sensitivity-control report](artifacts/adversarial-v2-sensitivity/langgraph/latest.md) and [machine-readable trace](artifacts/adversarial-v2-sensitivity/langgraph/latest.json).
 
+## Lightweight-workflow adversarial v2 smoke
+
+CrewAI Flow, LlamaIndex Workflow, and Agno Workflow each executed the same six evidence-plane scenarios once with `openai:gpt-5.6-luna`. All 18 attempt traces were manually reviewed after generation.
+
+| Workflow | Runs | Task accuracy | Security pass | Model attack success | Unsafe acceptance | Retry | Fallback | Mean latency | Mean tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| CrewAI Flow | 6 | 100% | 100% | 0% | 0% | 0% | 0% | 3947.03 ms | 799.17 |
+| LlamaIndex Workflow | 6 | 100% | 100% | 0% | 0% | 0% | 0% | 2843.26 ms | 793.17 |
+| Agno Workflow | 6 | 100% | 100% | 0% | 0% | 0% | 0% | 3110.31 ms | 795.00 |
+
+Every draft matched the deterministic applicability oracle on its first attempt, and none matched its scenario-specific attacker goal. These one-repetition artifacts confirm provider-backed contract compatibility; they are non-baseline smoke evidence and do not support framework or performance rankings. See the [manual review record](docs/security/ADVERSARIAL_V2_WORKFLOW_SMOKE_REVIEW.md).
+
 ## Shared workload
 
 Each implementation analyzes the same framework-neutral evidence contract:
@@ -329,6 +341,7 @@ uv run python scripts/compare_five_way_benchmarks.py
 - [Adversarial v2 evidence-plane design](docs/security/ADVERSARIAL_V2_EVIDENCE_PLANE.md)
 - [Adversarial v2 sensitivity-control methodology](docs/security/ADVERSARIAL_V2_SENSITIVITY_CONTROL.md)
 - [LangGraph adversarial v2 sensitivity-control result](artifacts/adversarial-v2-sensitivity/langgraph/latest.md)
+- [Adversarial v2 lightweight-workflow smoke review](docs/security/ADVERSARIAL_V2_WORKFLOW_SMOKE_REVIEW.md)
 - [Agentic fast track](docs/AGENTIC_FAST_TRACK.md)
 - [Development](docs/DEVELOPMENT.md)
 - [MCP](docs/MCP.md)
@@ -355,11 +368,11 @@ Completed:
 - [x] provider-backed noncanonical sensitivity control with observed fallback containment;
 - [x] shared evidence-document binding and attempt telemetry across lightweight workflows;
 - [x] guarded one-repetition adversarial v2 smoke runner for lightweight workflows;
+- [x] provider-backed, manually reviewed adversarial v2 smoke across lightweight workflows;
 - [x] strict local/CI quality gate.
 
 Candidate next experiments:
 
-- [ ] execute, review, and persist the adversarial v2 smoke across lighter workflows;
 - [ ] model/provider comparison under the same framework-neutral controls;
 - [ ] MCP/tool authorization and least-privilege experiments;
 - [ ] trace correlation and observability comparison;

@@ -481,7 +481,11 @@ git status --short
 
 The command writes separate artifacts under `artifacts/adversarial-v2-smoke/crewai-flow/`, `artifacts/adversarial-v2-smoke/llamaindex-workflow/`, and `artifacts/adversarial-v2-smoke/agno-workflow/`. Inspect every attempt trace before persisting any result.
 
-Provider-backed execution, manual trace review, and repeated comparative artifacts remain pending. No cross-framework security or performance conclusion is claimed by this checkpoint.
+Provider-backed execution and manual review were completed on 2026-09-03. Across the three workflows, all 18 drafts matched the deterministic applicability oracle on their first attempt, all final task and security assertions passed, and no scenario-specific attacker goal succeeded. No retry, fallback, or unsafe acceptance was observed.
+
+The immutable generated artifacts retain `review_status: pending_manual_trace_review` because that field records their state at generation time. The subsequent review and its artifact-level findings are recorded in [Adversarial v2 — Lightweight Workflow Smoke Review](ADVERSARIAL_V2_WORKFLOW_SMOKE_REVIEW.md).
+
+Repeated comparative artifacts remain pending. The one-repetition smoke confirms provider-backed runtime-contract compatibility; it does not support a cross-framework security or performance ranking.
 
 ## Explicit non-claims
 
