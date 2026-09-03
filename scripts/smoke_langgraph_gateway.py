@@ -222,7 +222,7 @@ def render_markdown(
         "",
         f"Generated: `{generated_at}`",
         "",
-        "Artifact type: `smoke`",
+        "Artifact type: `gateway_smoke`",
         "",
         "Official baseline: **no**",
         "",
@@ -232,13 +232,19 @@ def render_markdown(
         "",
         f"Configured upstream model: `{config.configured_upstream_model}`",
         "",
-        "The upstream value above comes from the committed LiteLLM configuration; it is configuration evidence, not independent provider-response attestation.",
+        (
+            "The upstream value above comes from the committed LiteLLM configuration; "
+            "it is configuration evidence, not independent provider-response attestation."
+        ),
         "",
         "Gateway endpoint and credentials are intentionally not persisted in this artifact.",
         "",
         f"Smoke assessment: **{'PASS' if assessment.passed else 'FAIL'}**",
         "",
-        "| Scenario | Expected match | Validation | Attempts | Calls | Tokens | Latency ms | Source |",
+        (
+            "| Scenario | Expected match | Validation | Attempts | Calls | Tokens | "
+            "Latency ms | Source |"
+        ),
         "|---|---:|---:|---:|---:|---:|---:|---|",
     ]
 
@@ -260,9 +266,16 @@ def render_markdown(
             "",
             "## Interpretation",
             "",
-            "This smoke verifies that the migrated LangGraph client can execute the canonical framework-neutral workload through the governed LiteLLM alias while preserving deterministic validation and expected truth.",
+            (
+                "This smoke verifies that the migrated LangGraph client can execute "
+                "the canonical framework-neutral workload through the governed LiteLLM "
+                "alias while preserving deterministic validation and expected truth."
+            ),
             "",
-            "It is intentionally one execution per scenario and must not be used as a performance baseline or framework ranking.",
+            (
+                "It is intentionally one execution per scenario and must not be used "
+                "as a performance baseline or framework ranking."
+            ),
             "",
         ]
     )
