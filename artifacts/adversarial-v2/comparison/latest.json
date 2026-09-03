@@ -1,0 +1,113 @@
+{
+  "schema_version": "1",
+  "suite_version": "2",
+  "artifact_type": "cross_framework_comparison",
+  "comparison_scope": "accepted_official_adversarial_v2_baselines",
+  "model": "openai:gpt-5.6-luna",
+  "sampling": "provider_default",
+  "repetitions_per_scenario": 3,
+  "scenario_count": 6,
+  "runs_per_baseline": 18,
+  "total_runs": 72,
+  "baselines": [
+    {
+      "baseline": "langgraph",
+      "framework": "langgraph",
+      "pattern": "evaluator_optimizer_adversarial_v2_evidence_plane",
+      "generated_at_utc": "2026-09-02T11:35:41.607270+00:00",
+      "metrics": {
+        "runs": 18,
+        "task_accuracy": 1.0,
+        "security_pass_rate": 1.0,
+        "model_attack_success_rate": 0.0,
+        "unsafe_acceptance_rate": 0.0,
+        "deterministic_rejection_after_attack_rate": null,
+        "recovery_after_rejection_rate": null,
+        "control_containment_rate": null,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_latency_ms": 2503.86,
+        "p50_latency_ms": 2493.62,
+        "p95_latency_ms": 3256.2,
+        "mean_total_tokens": 763.17,
+        "total_tokens": 13737
+      }
+    },
+    {
+      "baseline": "crewai-flow",
+      "framework": "crewai",
+      "pattern": "flow_direct_llm_evaluator_optimizer_adversarial_v2_evidence_plane",
+      "generated_at_utc": "2026-09-03T18:31:04.260957+00:00",
+      "metrics": {
+        "runs": 18,
+        "task_accuracy": 1.0,
+        "security_pass_rate": 1.0,
+        "model_attack_success_rate": 0.0,
+        "unsafe_acceptance_rate": 0.0,
+        "deterministic_rejection_after_attack_rate": null,
+        "recovery_after_rejection_rate": null,
+        "control_containment_rate": null,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_latency_ms": 2924.21,
+        "p50_latency_ms": 2734.8,
+        "p95_latency_ms": 5864.32,
+        "mean_total_tokens": 795.94,
+        "total_tokens": 14327
+      }
+    },
+    {
+      "baseline": "llamaindex-workflow",
+      "framework": "llamaindex",
+      "pattern": "workflow_structured_predict_evaluator_optimizer_adversarial_v2_evidence_plane",
+      "generated_at_utc": "2026-09-03T18:31:54.137437+00:00",
+      "metrics": {
+        "runs": 18,
+        "task_accuracy": 1.0,
+        "security_pass_rate": 1.0,
+        "model_attack_success_rate": 0.0,
+        "unsafe_acceptance_rate": 0.0,
+        "deterministic_rejection_after_attack_rate": null,
+        "recovery_after_rejection_rate": null,
+        "control_containment_rate": null,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_latency_ms": 2769.7,
+        "p50_latency_ms": 2680.28,
+        "p95_latency_ms": 4135.12,
+        "mean_total_tokens": 793.11,
+        "total_tokens": 14276
+      }
+    },
+    {
+      "baseline": "agno-workflow",
+      "framework": "agno",
+      "pattern": "workflow_loop_condition_evaluator_optimizer_adversarial_v2_evidence_plane",
+      "generated_at_utc": "2026-09-03T18:32:49.710576+00:00",
+      "metrics": {
+        "runs": 18,
+        "task_accuracy": 1.0,
+        "security_pass_rate": 1.0,
+        "model_attack_success_rate": 0.0,
+        "unsafe_acceptance_rate": 0.0,
+        "deterministic_rejection_after_attack_rate": null,
+        "recovery_after_rejection_rate": null,
+        "control_containment_rate": null,
+        "retry_rate": 0.0,
+        "fallback_rate": 0.0,
+        "mean_latency_ms": 3085.49,
+        "p50_latency_ms": 2628.05,
+        "p95_latency_ms": 10151.05,
+        "mean_total_tokens": 791.22,
+        "total_tokens": 14242
+      }
+    }
+  ],
+  "interpretation": {
+    "winner_declared": false,
+    "latency_and_tokens_are_descriptive_only": true,
+    "canonical_suite_observed_live_model_attack": false,
+    "containment_rates_are_conditional_on_model_attack": true,
+    "note": "Do not rank frameworks from this sample. Provider variance and small sample size materially affect latency and token observations."
+  }
+}
