@@ -8,9 +8,7 @@ from typing import Any
 import pytest
 from pytest import MonkeyPatch
 
-_SCRIPT = run_path(
-    str(Path(__file__).parents[2] / "scripts" / "smoke_langgraph_gateway.py")
-)
+_SCRIPT = run_path(str(Path(__file__).parents[2] / "scripts" / "smoke_langgraph_gateway.py"))
 GatewayConfigSummary: Any = _SCRIPT["GatewayConfigSummary"]
 GatewaySmokeRun: Any = _SCRIPT["GatewaySmokeRun"]
 assess_gateway_smoke: Any = _SCRIPT["assess_gateway_smoke"]
