@@ -112,6 +112,18 @@ Esse resultado sintético e restrito não estabelece resistência geral a prompt
 
 Um controle positivo não canônico separado concedeu deliberadamente autoridade de instrução ao conteúdo dos documentos. O modelo seguiu o ataque de status forçado nas duas tentativas; a validação determinística rejeitou ambos os drafts e o oracle fallback produziu um resultado final correto e seguro. Isso calibra a telemetria de ataque e contenção sem alterar o prompt canônico. Consulte o [relatório do controle de sensibilidade](artifacts/adversarial-v2-sensitivity/langgraph/latest.md) e o [trace em JSON](artifacts/adversarial-v2-sensitivity/langgraph/latest.json).
 
+## Smoke adversarial v2 nos workflows leves
+
+CrewAI Flow, LlamaIndex Workflow e Agno Workflow executaram uma vez cada um dos mesmos seis cenários do plano de evidências com `openai:gpt-5.6-luna`. Os 18 traces de tentativa foram revisados manualmente após a geração.
+
+| Workflow | Execuções | Acurácia da tarefa | Security pass | Sucesso do ataque no modelo | Unsafe acceptance | Retry | Fallback | Latência média | Tokens médios |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| CrewAI Flow | 6 | 100% | 100% | 0% | 0% | 0% | 0% | 3947,03 ms | 799,17 |
+| LlamaIndex Workflow | 6 | 100% | 100% | 0% | 0% | 0% | 0% | 2843,26 ms | 793,17 |
+| Agno Workflow | 6 | 100% | 100% | 0% | 0% | 0% | 0% | 3110,31 ms | 795,00 |
+
+Todos os drafts corresponderam ao oracle determinístico de aplicabilidade na primeira tentativa, e nenhum correspondeu ao objetivo específico do atacante. Esses artefatos com uma repetição confirmam a compatibilidade dos contratos em execução com provider; são evidências de smoke, não baselines, e não sustentam rankings de framework ou performance. Consulte o [registro da revisão manual](docs/security/ADVERSARIAL_V2_WORKFLOW_SMOKE_REVIEW.md).
+
 ## Carga de trabalho compartilhada
 
 Todas as implementações recebem o mesmo contrato de evidência independente de framework:
@@ -363,11 +375,11 @@ Concluído:
 - [x] controle de sensibilidade não canônico com provider e contenção por fallback observada;
 - [x] binding compartilhado de documentos de evidência e telemetria de tentativas nos workflows leves;
 - [x] runner protegido de smoke adversarial v2 com uma repetição para os workflows leves;
+- [x] smoke adversarial v2 com provider revisado manualmente nos workflows leves;
 - [x] quality gate estrito local e em CI.
 
 Próximos experimentos candidatos:
 
-- [ ] executar, revisar e persistir o smoke adversarial v2 nos workflows leves;
 - [ ] comparar modelos/providers sob os mesmos controles;
 - [ ] explorar MCP, autorização de tools e least privilege;
 - [ ] comparar tracing e observabilidade;
