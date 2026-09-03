@@ -324,10 +324,10 @@ echo
 export LITELLM_MASTER_KEY
 ```
 
-Install the proxy as a `uv` tool, outside the project dependency graph, and start it with the committed configuration:
+Install the pinned proxy as a `uv` tool, outside the project dependency graph, and start it with the committed configuration:
 
 ```bash
-uv tool install 'litellm[proxy]'
+uv tool install 'litellm[proxy]==1.98.0'
 litellm --config config/litellm/config.yaml
 ```
 
