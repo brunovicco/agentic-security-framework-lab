@@ -17,6 +17,7 @@ from agentic_lab.application.contracts import AnalysisResult, LLMAnalysisDraft
 from agentic_lab.application.evidence import (
     AnalysisEvidenceBundle,
     AssetInventoryItem,
+    EvidenceDocument,
     SecurityPolicy,
     VulnerabilityEvidence,
 )
@@ -24,6 +25,7 @@ from agentic_lab.application.oracle import assess_assets_deterministically
 from agentic_lab.application.validated_analysis import (
     DEFAULT_MAX_ANALYSIS_ATTEMPTS,
     FALLBACK_RECOMMENDATION,
+    AnalysisAttemptEvidence,
     AnalysisSource,
     ValidatedAnalysisOutput,
     build_analysis_result,
@@ -65,6 +67,7 @@ class CrewAIValidatedFlowState(BaseModel):
     vulnerability: VulnerabilityEvidence
     assets: tuple[AssetInventoryItem, ...]
     policy: SecurityPolicy
+    documents: tuple[EvidenceDocument, ...] = ()
     max_attempts: int = Field(default=DEFAULT_MAX_ANALYSIS_ATTEMPTS, ge=1)
     analysis_attempts: int = 0
     draft: LLMAnalysisDraft | None = None
@@ -73,6 +76,7 @@ class CrewAIValidatedFlowState(BaseModel):
     validation_reason: str = ""
     analysis_source: AnalysisSource | None = None
     result: AnalysisResult | None = None
+    attempt_trace: tuple[AnalysisAttemptEvidence, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +112,7 @@ class CrewAIValidatedAnalysisFlow(Flow[CrewAIValidatedFlowState]):
             vulnerability=self.state.vulnerability,
             assets=self.state.assets,
             feedback=self.state.feedback,
+            documents=self.state.documents,
         )
         messages = [
             {
@@ -126,10 +131,23 @@ class CrewAIValidatedAnalysisFlow(Flow[CrewAIValidatedFlowState]):
         return LLMAnalysisDraft.model_validate(raw_output)
 
     def _route_current_draft(self) -> str:
+        draft = self._require_draft()
+        input_feedback = self.state.feedback
         validation = validate_analysis_draft(
             vulnerability=self.state.vulnerability,
             assets=self.state.assets,
-            draft=self._require_draft(),
+            draft=draft,
+        )
+        self.state.attempt_trace = (
+            *self.state.attempt_trace,
+            AnalysisAttemptEvidence(
+                attempt=self.state.analysis_attempts,
+                input_feedback=input_feedback,
+                draft=draft,
+                validation_passed=validation.passed,
+                validation_reason=validation.reason,
+                validation_feedback=validation.feedback,
+            ),
         )
         self.state.validation_passed = validation.passed
         self.state.validation_reason = validation.reason
@@ -236,6 +254,7 @@ class CrewAIFlowRuntime:
                 vulnerability=evidence_bundle["vulnerability"],
                 assets=evidence_bundle["assets"],
                 policy=evidence_bundle["policy"],
+                documents=evidence_bundle.get("documents", ()),
                 max_attempts=max_attempts,
             )
         )
@@ -252,6 +271,7 @@ class CrewAIFlowRuntime:
             validation_passed=flow.state.validation_passed,
             validation_reason=flow.state.validation_reason,
             analysis_attempts=flow.state.analysis_attempts,
+            attempt_trace=flow.state.attempt_trace,
         )
         metrics = cast(_FlowUsageMetrics, flow.usage_metrics)
         usage = CrewAIUsage(

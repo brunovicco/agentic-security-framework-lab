@@ -361,6 +361,7 @@ Concluído:
 - [x] fronteira explícita de proveniência e autoridade de instrução para documentos de evidência;
 - [x] baseline oficial LangGraph adversarial v2 com 18 execuções;
 - [x] controle de sensibilidade não canônico com provider e contenção por fallback observada;
+- [x] binding compartilhado de documentos de evidência e telemetria de tentativas nos workflows leves;
 - [x] quality gate estrito local e em CI.
 
 Próximos experimentos candidatos:

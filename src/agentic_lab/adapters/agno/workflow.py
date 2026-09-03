@@ -22,10 +22,12 @@ from agentic_lab.application.evidence import (
     SecurityPolicy,
     VulnerabilityEvidence,
 )
+from agentic_lab.application.evidence_document_analyzer import bind_evidence_documents
 from agentic_lab.application.oracle import assess_assets_deterministically
 from agentic_lab.application.validated_analysis import (
     DEFAULT_MAX_ANALYSIS_ATTEMPTS,
     FALLBACK_RECOMMENDATION,
+    AnalysisAttemptEvidence,
     DraftValidation,
     ValidatedAnalysisOutput,
     build_analysis_result,
@@ -62,6 +64,7 @@ class _AgnoWorkflowState:
     draft: LLMAnalysisDraft | None = None
     validation: DraftValidation | None = None
     output: ValidatedAnalysisOutput | None = None
+    attempt_trace: tuple[AnalysisAttemptEvidence, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,10 +107,22 @@ def _validation_step(state: _AgnoWorkflowState) -> Step:
         if state.draft is None:
             raise RuntimeError("Agno Workflow validation started without an LLM draft")
 
+        input_feedback = state.feedback
         state.validation = validate_analysis_draft(
             vulnerability=state.vulnerability,
             assets=state.assets,
             draft=state.draft,
+        )
+        state.attempt_trace = (
+            *state.attempt_trace,
+            AnalysisAttemptEvidence(
+                attempt=state.analysis_attempts,
+                input_feedback=input_feedback,
+                draft=state.draft,
+                validation_passed=state.validation.passed,
+                validation_reason=state.validation.reason,
+                validation_feedback=state.validation.feedback,
+            ),
         )
         state.feedback = None if state.validation.passed else state.validation.feedback
         return StepOutput(content=state.validation)
@@ -163,6 +178,7 @@ def _finalize_llm_step(state: _AgnoWorkflowState) -> Step:
             validation_passed=True,
             validation_reason=state.validation.reason,
             analysis_attempts=state.analysis_attempts,
+            attempt_trace=state.attempt_trace,
         )
         return StepOutput(content=state.output)
 
@@ -203,6 +219,7 @@ def _finalize_fallback_step(state: _AgnoWorkflowState) -> Step:
             validation_passed=False,
             validation_reason=state.validation.reason,
             analysis_attempts=state.analysis_attempts,
+            attempt_trace=state.attempt_trace,
         )
         return StepOutput(content=state.output)
 
@@ -268,7 +285,10 @@ class AgnoWorkflowRuntime:
             raise ValueError("max_attempts must be at least 1")
 
         runner = self._runner_factory(self._model_name)
-        analyzer = AgnoVulnerabilityAnalyzer(runner)
+        analyzer = bind_evidence_documents(
+            AgnoVulnerabilityAnalyzer(runner),
+            evidence_bundle,
+        )
         state = _AgnoWorkflowState(
             vulnerability=evidence_bundle["vulnerability"],
             assets=evidence_bundle["assets"],

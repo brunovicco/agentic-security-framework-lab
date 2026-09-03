@@ -23,10 +23,12 @@ from agentic_lab.application.evidence import (
     SecurityPolicy,
     VulnerabilityEvidence,
 )
+from agentic_lab.application.evidence_document_analyzer import bind_evidence_documents
 from agentic_lab.application.oracle import assess_assets_deterministically
 from agentic_lab.application.validated_analysis import (
     DEFAULT_MAX_ANALYSIS_ATTEMPTS,
     FALLBACK_RECOMMENDATION,
+    AnalysisAttemptEvidence,
     ValidatedAnalysisOutput,
     build_analysis_result,
     evaluate_human_review_policy,
@@ -62,6 +64,8 @@ class AnalysisDraftEvent(Event):
     policy: SecurityPolicy
     max_attempts: int
     analysis_attempts: int
+    input_feedback: str | None
+    attempt_trace: tuple[AnalysisAttemptEvidence, ...]
     draft: LLMAnalysisDraft
 
 
@@ -74,6 +78,7 @@ class RetryAnalysisEvent(Event):
     max_attempts: int
     analysis_attempts: int
     feedback: str
+    attempt_trace: tuple[AnalysisAttemptEvidence, ...]
 
 
 class AcceptedAnalysisEvent(Event):
@@ -84,6 +89,7 @@ class AcceptedAnalysisEvent(Event):
     policy: SecurityPolicy
     analysis_attempts: int
     validation_reason: str
+    attempt_trace: tuple[AnalysisAttemptEvidence, ...]
     draft: LLMAnalysisDraft
 
 
@@ -95,6 +101,7 @@ class FallbackAnalysisEvent(Event):
     policy: SecurityPolicy
     analysis_attempts: int
     validation_reason: str
+    attempt_trace: tuple[AnalysisAttemptEvidence, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +139,8 @@ class LlamaIndexValidatedAnalysisWorkflow(Workflow):
             policy=ev.policy,
             max_attempts=ev.max_attempts,
             analysis_attempts=1,
+            input_feedback=None,
+            attempt_trace=(),
             draft=draft,
         )
 
@@ -146,6 +155,17 @@ class LlamaIndexValidatedAnalysisWorkflow(Workflow):
             assets=ev.assets,
             draft=ev.draft,
         )
+        attempt_trace = (
+            *ev.attempt_trace,
+            AnalysisAttemptEvidence(
+                attempt=ev.analysis_attempts,
+                input_feedback=ev.input_feedback,
+                draft=ev.draft,
+                validation_passed=validation.passed,
+                validation_reason=validation.reason,
+                validation_feedback=validation.feedback,
+            ),
+        )
 
         if validation.passed:
             return AcceptedAnalysisEvent(
@@ -154,6 +174,7 @@ class LlamaIndexValidatedAnalysisWorkflow(Workflow):
                 policy=ev.policy,
                 analysis_attempts=ev.analysis_attempts,
                 validation_reason=validation.reason,
+                attempt_trace=attempt_trace,
                 draft=ev.draft,
             )
 
@@ -165,6 +186,7 @@ class LlamaIndexValidatedAnalysisWorkflow(Workflow):
                 max_attempts=ev.max_attempts,
                 analysis_attempts=ev.analysis_attempts,
                 feedback=validation.feedback,
+                attempt_trace=attempt_trace,
             )
 
         return FallbackAnalysisEvent(
@@ -173,6 +195,7 @@ class LlamaIndexValidatedAnalysisWorkflow(Workflow):
             policy=ev.policy,
             analysis_attempts=ev.analysis_attempts,
             validation_reason=validation.reason,
+            attempt_trace=attempt_trace,
         )
 
     @step
@@ -190,6 +213,8 @@ class LlamaIndexValidatedAnalysisWorkflow(Workflow):
             policy=ev.policy,
             max_attempts=ev.max_attempts,
             analysis_attempts=next_attempt,
+            input_feedback=ev.feedback,
+            attempt_trace=ev.attempt_trace,
             draft=draft,
         )
 
@@ -216,6 +241,7 @@ class LlamaIndexValidatedAnalysisWorkflow(Workflow):
                 validation_passed=True,
                 validation_reason=ev.validation_reason,
                 analysis_attempts=ev.analysis_attempts,
+                attempt_trace=ev.attempt_trace,
             )
         )
 
@@ -246,6 +272,7 @@ class LlamaIndexValidatedAnalysisWorkflow(Workflow):
                 validation_passed=False,
                 validation_reason=ev.validation_reason,
                 analysis_attempts=ev.analysis_attempts,
+                attempt_trace=ev.attempt_trace,
             )
         )
 
@@ -272,7 +299,10 @@ class LlamaIndexWorkflowRuntime:
             raise ValueError("max_attempts must be at least 1")
 
         runner = self._runner_factory(self._model_name)
-        analyzer = LlamaIndexVulnerabilityAnalyzer(runner)
+        analyzer = bind_evidence_documents(
+            LlamaIndexVulnerabilityAnalyzer(runner),
+            evidence_bundle,
+        )
         workflow = LlamaIndexValidatedAnalysisWorkflow(analyzer)
         raw_output = cast(
             object,

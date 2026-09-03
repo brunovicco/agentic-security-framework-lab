@@ -456,6 +456,15 @@ This observed control closes the instrumentation gap left by the zero-attack can
 
 Only after the LangGraph v2 baseline is understood should CrewAI Flow, LlamaIndex Workflow, and Agno Workflow consume the same v2 scenarios and the same framework-neutral security metrics.
 
+The runtime-contract checkpoint is complete:
+
+- CrewAI Flow carries the immutable evidence-document set in Flow state and includes it in every analysis attempt;
+- LlamaIndex and Agno analyzers implement the evidence-document extension, while their runtime boundaries bind documents without widening the canonical analyzer port;
+- all three lightweight runtimes emit the shared attempt-level evidence trace required by the adversarial trajectory evaluator;
+- offline adapter and workflow tests cover accepted, recovered, and fallback paths without provider calls.
+
+Provider-backed cross-framework smoke runs, manual trace review, and repeated comparative artifacts remain pending. No cross-framework security or performance conclusion is claimed by this checkpoint.
+
 ## Explicit non-claims
 
 Adversarial v2 does not establish:
