@@ -332,10 +332,10 @@ echo
 export LITELLM_MASTER_KEY
 ```
 
-Instale o proxy como uma ferramenta do `uv`, fora do grafo de dependências do projeto, e inicie-o usando a configuração versionada:
+Instale a versão fixada do proxy como uma ferramenta do `uv`, fora do grafo de dependências do projeto, e inicie-o usando a configuração versionada:
 
 ```bash
-uv tool install 'litellm[proxy]'
+uv tool install 'litellm[proxy]==1.98.0'
 litellm --config config/litellm/config.yaml
 ```
 
