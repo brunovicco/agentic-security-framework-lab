@@ -31,7 +31,9 @@ def _require_exact_keys(payload: dict[str, Any], expected: set[str], *, context:
             details.append(f"missing={','.join(missing)}")
         if unexpected:
             details.append(f"unexpected={','.join(unexpected)}")
-        raise ValueError(f"{context} keys do not match the accepted foundation: {'; '.join(details)}")
+        raise ValueError(
+            f"{context} keys do not match the accepted foundation: {'; '.join(details)}"
+        )
 
 
 def _require_environment_reference(value: object, *, context: str) -> str:
