@@ -8,9 +8,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, cast
 
-_REVIEW_MANIFEST = Path(
-    "docs/security/adversarial_v2_cross_framework_baseline_review.json"
-)
+_REVIEW_MANIFEST = Path("docs/security/adversarial_v2_cross_framework_baseline_review.json")
 _CANDIDATE_ROOT = Path("artifacts/adversarial-v2-candidates")
 _BASELINE_ROOT = Path("artifacts/adversarial-v2")
 _EXPECTED_SUITE_VERSION = "2"
@@ -91,9 +89,7 @@ def validate_candidate(
         "generated_at_utc": record.get("generated_at_utc"),
     }
     mismatches = [
-        key
-        for key, expected in expected_metadata.items()
-        if candidate.get(key) != expected
+        key for key, expected in expected_metadata.items() if candidate.get(key) != expected
     ]
     if mismatches:
         joined = ", ".join(mismatches)
@@ -193,9 +189,7 @@ def promote_workflow(
         "source_candidate_sha256": candidate_hash,
         "source_candidate_path": str(candidate_json_path),
         "review_record": manifest["review_record"],
-        "reviewed_against_repository_commit": manifest[
-            "reviewed_against_repository_commit"
-        ],
+        "reviewed_against_repository_commit": manifest["reviewed_against_repository_commit"],
         "scenario_fixture_blob_sha": manifest["scenario_fixture_blob_sha"],
         "adversarial_evaluator_blob_sha": manifest["adversarial_evaluator_blob_sha"],
     }
