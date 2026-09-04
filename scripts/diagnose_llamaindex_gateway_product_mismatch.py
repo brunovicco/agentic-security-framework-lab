@@ -36,9 +36,7 @@ class AttemptDiagnostic:
 def load_product_mismatch_scenario() -> EvaluationScenario:
     """Return the single canonical product-mismatch scenario or fail closed."""
     matches = tuple(
-        scenario
-        for scenario in load_evaluation_scenarios()
-        if scenario.scenario_id == _SCENARIO_ID
+        scenario for scenario in load_evaluation_scenarios() if scenario.scenario_id == _SCENARIO_ID
     )
     if len(matches) != 1:
         raise RuntimeError(f"Expected exactly one {_SCENARIO_ID!r} evaluation scenario")
@@ -95,8 +93,7 @@ async def diagnose() -> None:
         )
 
     expected = [
-        {"asset_id": item.asset_id, "status": item.status}
-        for item in scenario.expected_assets
+        {"asset_id": item.asset_id, "status": item.status} for item in scenario.expected_assets
     ]
     usage = execution.usage
     output = execution.output
