@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 from typing import Protocol, cast
 
-from crewai import LLM
 from crewai.flow.flow import Flow, listen, router, start
 from pydantic import BaseModel, Field
 
@@ -11,8 +10,8 @@ from agentic_lab.adapters.crewai.analyzer import (
     CREWAI_SECURITY_SYSTEM_PROMPT,
     CrewAIUsage,
     build_crewai_analysis_task_description,
-    normalize_crewai_model_name,
 )
+from agentic_lab.adapters.crewai.model import create_crewai_llm
 from agentic_lab.application.contracts import AnalysisResult, LLMAnalysisDraft
 from agentic_lab.application.evidence import (
     AnalysisEvidenceBundle,
@@ -87,12 +86,9 @@ class CrewAIFlowExecution:
     usage: CrewAIUsage
 
 
-def _create_structured_llm(model_name: str) -> _StructuredLLM:
-    """Create a CrewAI LLM without forcing model-specific sampling parameters."""
-    return cast(
-        _StructuredLLM,
-        LLM(model=normalize_crewai_model_name(model_name)),
-    )
+def _create_structured_llm(_model_name: str) -> _StructuredLLM:
+    """Create the CrewAI structured client through the governed gateway boundary."""
+    return cast(_StructuredLLM, create_crewai_llm())
 
 
 class CrewAIValidatedAnalysisFlow(Flow[CrewAIValidatedFlowState]):
@@ -236,7 +232,7 @@ class CrewAIFlowRuntime:
     """Execute the direct-LLM evaluator-optimizer through CrewAI Flow."""
 
     def __init__(self, model_name: str) -> None:
-        """Store the shared model identifier used by each Flow execution."""
+        """Store transitional report metadata; provider selection is gateway-owned."""
         self._model_name = model_name
 
     def run(

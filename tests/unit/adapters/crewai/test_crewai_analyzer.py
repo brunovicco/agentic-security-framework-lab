@@ -6,7 +6,6 @@ from agentic_lab.adapters.crewai.analyzer import (
     CrewAIRuntime,
     CrewAIUsage,
     CrewAIVulnerabilityAnalyzer,
-    normalize_crewai_model_name,
 )
 from agentic_lab.application.contracts import (
     AssetAssessment,
@@ -68,38 +67,24 @@ def _draft() -> LLMAnalysisDraft:
     )
 
 
-def test_normalize_crewai_model_name_translates_shared_identifier() -> None:
-    assert normalize_crewai_model_name("openai:gpt-5.6-luna") == "openai/gpt-5.6-luna"
-
-
-def test_normalize_crewai_model_name_preserves_native_identifier() -> None:
-    assert normalize_crewai_model_name("openai/gpt-5.6-luna") == "openai/gpt-5.6-luna"
-
-
-def test_normalize_crewai_model_name_rejects_incomplete_identifier() -> None:
-    try:
-        normalize_crewai_model_name("openai:")
-    except ValueError as exc:
-        assert str(exc) == "Model identifier must contain both provider and model"
-    else:
-        raise AssertionError("Expected invalid model identifier to be rejected")
-
-
-def test_crewai_runtime_delegates_temperature_to_model_default(
+def test_crewai_runtime_delegates_provider_selection_to_gateway(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    captured_kwargs: dict[str, object] = {}
+    calls = 0
 
-    class StubLLM:
-        def __init__(self, **kwargs: object) -> None:
-            captured_kwargs.update(kwargs)
+    def create_stub_llm() -> object:
+        nonlocal calls
+        calls += 1
+        return object()
 
-    monkeypatch.setattr("agentic_lab.adapters.crewai.analyzer.LLM", StubLLM)
+    monkeypatch.setattr(
+        "agentic_lab.adapters.crewai.analyzer.create_crewai_llm",
+        create_stub_llm,
+    )
 
-    CrewAIRuntime("openai:gpt-5.6-luna")
+    CrewAIRuntime("openai:legacy-direct-model-metadata")
 
-    assert captured_kwargs == {"model": "openai/gpt-5.6-luna"}
-    assert "temperature" not in captured_kwargs
+    assert calls == 1
 
 
 def test_crewai_usage_adds_attempt_telemetry() -> None:
