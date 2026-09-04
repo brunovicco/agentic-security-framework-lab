@@ -5,10 +5,10 @@ import os
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from http.client import HTTPConnection, HTTPSConnection
 from pathlib import Path
 from time import perf_counter, sleep
-from urllib.parse import urljoin
-from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
 
 from langchain_core.callbacks import get_usage_metadata_callback
 from langchain_core.messages import UsageMetadata
@@ -107,25 +107,38 @@ def wait_for_gateway_readiness(
     if delay_seconds < 0:
         raise ValueError("Gateway readiness delay must not be negative")
 
-    readiness_url = urljoin(base_url.rstrip("/") + "/", _READINESS_PATH)
-    request = Request(
-        readiness_url,
-        headers={"Authorization": f"Bearer {api_key}"},
-        method="GET",
-    )
+    parsed = urlsplit(base_url)
+    if parsed.scheme not in {"http", "https"}:
+        raise RuntimeError("Gateway base URL must use http or https")
+    if parsed.hostname is None:
+        raise RuntimeError("Gateway base URL must include a hostname")
+
+    port = parsed.port
+    if port is None:
+        port = 443 if parsed.scheme == "https" else 80
+
+    base_path = parsed.path.rstrip("/")
+    readiness_path = f"{base_path}/{_READINESS_PATH}" if base_path else f"/{_READINESS_PATH}"
+    connection_type = HTTPSConnection if parsed.scheme == "https" else HTTPConnection
+    headers = {"Authorization": f"Bearer {api_key}"}
     last_error = "no response"
 
     for attempt in range(1, attempts + 1):
+        connection = connection_type(
+            parsed.hostname,
+            port,
+            timeout=_READINESS_REQUEST_TIMEOUT_SECONDS,
+        )
         try:
-            with urlopen(
-                request,
-                timeout=_READINESS_REQUEST_TIMEOUT_SECONDS,
-            ) as response:
-                if response.status == 200:
-                    return
-                last_error = f"HTTP {response.status}"
+            connection.request("GET", readiness_path, headers=headers)
+            response = connection.getresponse()
+            if response.status == 200:
+                return
+            last_error = f"HTTP {response.status}"
         except OSError as exc:
             last_error = f"{type(exc).__name__}: {exc}"
+        finally:
+            connection.close()
 
         if attempt < attempts:
             sleep(delay_seconds)
