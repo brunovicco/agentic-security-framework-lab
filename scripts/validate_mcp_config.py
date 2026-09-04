@@ -21,7 +21,8 @@ HIGH_CONFIDENCE_SECRET = re.compile(
 )
 SHELL_COMMANDS = {"bash", "cmd", "fish", "powershell", "pwsh", "sh", "zsh"}
 EXACT_PYTHON_PACKAGE = re.compile(
-    r"^[A-Za-z0-9_.-]+==[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"
+    r"^[A-Za-z0-9_.-]+(?:\[[A-Za-z0-9_.-]+(?:,[A-Za-z0-9_.-]+)*\])?"
+    r"==[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"
 )
 
 
