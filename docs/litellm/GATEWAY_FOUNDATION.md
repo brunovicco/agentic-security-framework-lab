@@ -2,12 +2,13 @@
 
 ## Documentation Freshness Check
 
-Checked on 2026-09-03:
+Checked on 2026-09-04:
 
 - LiteLLM official Getting Started;
 - LiteLLM official Proxy / LLM Gateway guidance;
 - current official LiteLLM container package releases;
-- LangChain `ChatOpenAI` integration and current API reference for custom `base_url` proxy clients.
+- LangChain `ChatOpenAI` integration and current API reference for custom `base_url` proxy clients;
+- CrewAI v1.15.20 LLM configuration for custom OpenAI-compatible endpoints.
 
 Current pattern considered:
 
@@ -15,7 +16,8 @@ Current pattern considered:
 - the Proxy exposes an OpenAI-compatible API and centralizes provider access;
 - proxy capabilities include authentication, spend tracking, rate limiting, logging hooks, and model routing;
 - LangChain `ChatOpenAI` accepts an explicit `base_url` when the client talks to a proxy or service emulator;
-- `ChatOpenAI` targets the standard OpenAI API contract and does not preserve provider-specific response extensions;
+- CrewAI `LLM` supports `custom_openai=True` with explicit `base_url` and `api_key` for OpenAI-compatible gateways;
+- sampling controls such as `temperature` are model-specific and are intentionally not forced by migrated clients;
 - current official LiteLLM container releases include the v1.98.0 line.
 
 Decision for this lab:
@@ -29,7 +31,7 @@ Decision for this lab:
 
 ## Current boundary
 
-The first client migration routes the LangGraph workload through LangChain's standard OpenAI-compatible client:
+LangGraph is provider-backed through the gateway and has an accepted compatibility smoke:
 
 ```text
 LangGraph
@@ -43,37 +45,55 @@ LangChain ChatOpenAI
 LiteLLM Proxy
     |
     v
-openai/gpt-5.6-luna
+configured upstream provider model
 ```
 
-LangGraph orchestration, the shared `LLMAnalysisDraft` contract, deterministic validation, retry policy, fallback, and final result construction are unchanged. Only provider access moved behind the gateway boundary.
+CrewAI Agent/Crew and CrewAI Flow now use the same client-facing gateway contract in code:
 
-CrewAI, LlamaIndex, and Agno still use their direct provider integrations during this transitional increment. Their migration will be reviewed separately so framework behavior remains attributable and testable.
+```text
+CrewAI Agent/Crew or Flow
+    |
+    v
+CrewAI LLM(custom_openai=True)
+    |
+    | model = security-analysis
+    | base_url = AGENTIC_LAB_GATEWAY_BASE_URL
+    v
+LiteLLM Proxy
+    |
+    v
+configured upstream provider model
+```
 
-## Why `ChatOpenAI` instead of embedding LiteLLM in the adapter
+The CrewAI client migration is not accepted runtime evidence until a provider-backed smoke is executed and reviewed. LlamaIndex and Agno still use their direct provider integrations during this transitional phase.
 
-LangChain also offers integrations for applications that want to use LiteLLM as an in-process Python library. That is not the architecture selected by ADR 0002.
+Framework orchestration, the shared `LLMAnalysisDraft` contract, deterministic validation, retry policy, fallback, and final result construction remain application-owned and unchanged. Only provider access is moving behind the gateway boundary.
 
-This lab intentionally uses `ChatOpenAI` with the proxy's OpenAI-compatible endpoint because:
+## Why native framework clients instead of embedded LiteLLM
 
-- LiteLLM remains a central infrastructure service rather than a framework dependency;
-- provider credentials and upstream model identifiers stay outside the LangChain adapter;
-- the adapter only knows a stable model alias and transport endpoint;
-- the existing `BaseChatModel` boundary remains unchanged;
-- we do not currently depend on non-standard provider response fields.
+ADR 0002 selects LiteLLM as a central infrastructure service, not an in-process framework dependency.
 
-If a future experiment requires LiteLLM-specific in-process router behavior or provider-specific response extensions, that would be a separate architectural decision rather than an accidental dependency introduced by this migration.
+For LangChain, the lab therefore uses `ChatOpenAI` with the proxy's OpenAI-compatible endpoint. For CrewAI, the lab uses CrewAI's native `LLM` custom OpenAI-compatible endpoint support rather than installing `crewai[litellm]` and introducing a second in-process LiteLLM layer.
 
-## Client configuration
+This preserves the same architectural rule across frameworks:
 
-The LangChain client requires:
+- provider credentials and upstream model identifiers stay outside framework adapters;
+- each adapter knows only the stable gateway alias, endpoint, and client credential;
+- LiteLLM remains independently deployable infrastructure;
+- provider migration can occur behind the alias without changing domain/application code.
+
+If a future experiment requires LiteLLM-specific in-process router behavior or provider-specific response extensions, that requires a separate architectural decision.
+
+## Shared client configuration
+
+The client-facing gateway contract is centralized in `agentic_lab.adapters.gateway` and requires:
 
 ```text
 AGENTIC_LAB_GATEWAY_BASE_URL
 AGENTIC_LAB_GATEWAY_API_KEY
 ```
 
-The gateway service itself owns the provider-side configuration declared in `config/litellm/config.yaml`, including environment references for:
+The gateway service itself owns provider-side configuration declared in `config/litellm/config.yaml`, including environment references for:
 
 ```text
 OPENAI_API_KEY
@@ -82,9 +102,9 @@ LITELLM_MASTER_KEY
 
 `AGENTIC_LAB_GATEWAY_API_KEY` is deliberately named as a client credential instead of reading `LITELLM_MASTER_KEY` directly. A local environment may temporarily assign the master key value to it, but the client contract can later receive a scoped virtual key without changing application code.
 
-`AGENTIC_LAB_MODEL` no longer selects the model for the LangChain/LangGraph path. During the incremental migration it remains relevant only to framework adapters that have not yet moved behind the gateway.
+`AGENTIC_LAB_MODEL` no longer selects the model for migrated LangGraph or CrewAI provider access. LangGraph benchmark metadata has already been cleaned up to use the gateway alias. CrewAI runners still carry direct-model metadata temporarily so provider compatibility and benchmark metadata migration remain separate evidence increments; issue #48 tracks that cleanup after the CrewAI provider-backed smoke.
 
-The migrated `benchmark_langgraph*.py` runners therefore derive their runtime `model` metadata from `gateway_model_alias()` instead of requiring `AGENTIC_LAB_MODEL`. For post-migration LangGraph runs, `model=security-analysis` identifies the governed alias actually requested by the client. It is not independent attestation of the provider model selected behind the proxy. The configured upstream remains gateway configuration evidence, and historical persisted benchmark artifacts are intentionally left unchanged.
+For post-migration runs, `security-analysis` identifies the governed alias actually requested by the client. It is not independent attestation of the provider model selected behind the proxy. The configured upstream remains gateway configuration evidence, and historical persisted benchmark artifacts are intentionally left unchanged.
 
 ## Why the committed config looks like JSON
 
@@ -94,9 +114,10 @@ This keeps the foundation validation provider-free and avoids adding a YAML/runt
 
 ## Reading recommendation
 
-Read two short sections now:
+Read these short sections when reviewing the gateway boundary:
 
-1. LiteLLM Getting Started: **Proxy Server vs Python SDK**. Focus on why the proxy is a platform boundary rather than an application library.
-2. LangChain `ChatOpenAI` API reference: **client parameters**, especially `base_url` and `api_key`.
+1. LiteLLM Getting Started: **Proxy Server vs Python SDK**.
+2. LangChain `ChatOpenAI` API reference: `base_url` and `api_key`.
+3. CrewAI LLMs: **Custom OpenAI-Compatible Endpoint** and model-specific parameter guidance.
 
-You can ignore routing, virtual keys, budgets, observability callbacks, and provider-specific response extensions until their dedicated increments.
+Routing policies, virtual keys, budgets, observability callbacks, and gateway fallback remain deferred to dedicated increments.
