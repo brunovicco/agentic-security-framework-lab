@@ -7,11 +7,11 @@ from agentic_lab.application.mcp_applicability import (
     ApplicabilityAssessmentResult,
     AssetApplicabilityInput,
     VulnerabilityApplicabilityInput,
+    describe_applicability_contract,
 )
 from agentic_lab.application.mcp_applicability import (
     assess_vulnerability_applicability as assess_applicability,
 )
-from agentic_lab.application.mcp_applicability import describe_applicability_contract
 
 mcp = MCPServer("agentic-security-applicability")
 
