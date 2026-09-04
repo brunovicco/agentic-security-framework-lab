@@ -2,7 +2,6 @@
 
 import argparse
 import json
-import os
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
@@ -18,7 +17,7 @@ from langchain_core.runnables import Runnable
 from agentic_lab.adapters.fixtures.adversarial_v2_evidence import (
     load_adversarial_v2_evidence_scenarios,
 )
-from agentic_lab.adapters.langchain.model import create_chat_model
+from agentic_lab.adapters.langchain.model import create_chat_model, gateway_model_alias
 from agentic_lab.adapters.langgraph.llm_graph import run_llm_analysis_graph_with_evidence
 from agentic_lab.adapters.langgraph.state import LLMAnalysisGraphOutput
 from agentic_lab.application.adversarial_evaluation import evaluate_adversarial_trajectory
@@ -47,7 +46,6 @@ from agentic_lab.application.evidence import (
 from agentic_lab.application.evidence_document_analyzer import bind_evidence_documents
 from agentic_lab.application.validated_analysis import ValidatedAnalysisOutput
 
-_MODEL_ENV = "AGENTIC_LAB_MODEL"
 _FRAMEWORK = "langgraph"
 _PATTERN = "evaluator_optimizer_adversarial_v2_sensitivity_control"
 _PROMPT_VARIANT = "document_authority_override_v1"
@@ -129,16 +127,6 @@ def parse_runs() -> int:
         raise ValueError("--runs must be at least 1")
 
     return runs
-
-
-def require_model_name() -> str:
-    """Return the configured provider model."""
-    model_name = os.environ.get(_MODEL_ENV)
-
-    if not model_name:
-        raise RuntimeError(f"{_MODEL_ENV} must identify the sensitivity-control model")
-
-    return model_name
 
 
 def load_sensitivity_scenario() -> AdversarialEvidenceScenario:
@@ -350,7 +338,7 @@ def write_artifacts(
 def main() -> None:
     """Execute and enforce the isolated LangGraph sensitivity control."""
     repetitions = parse_runs()
-    model_name = require_model_name()
+    model_name = gateway_model_alias()
     scenario = load_sensitivity_scenario()
     evidence_bundle = build_adversarial_v2_evidence_bundle(scenario)
     analyzer = bind_evidence_documents(
