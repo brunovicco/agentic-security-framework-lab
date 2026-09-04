@@ -14,7 +14,13 @@ GatewaySmokeRun: Any = _SCRIPT["GatewaySmokeRun"]
 assess_gateway_smoke: Any = _SCRIPT["assess_gateway_smoke"]
 load_gateway_config_summary: Any = _SCRIPT["load_gateway_config_summary"]
 require_gateway_environment: Any = _SCRIPT["require_gateway_environment"]
+wait_for_gateway_readiness: Any = _SCRIPT["wait_for_gateway_readiness"]
 write_smoke_artifacts: Any = _SCRIPT["write_smoke_artifacts"]
+
+
+class _FakeResponse:
+    def __init__(self, status: int) -> None:
+        self.status = status
 
 
 def _run(
@@ -61,6 +67,137 @@ def test_require_gateway_environment_requires_both_values(
 
     with pytest.raises(RuntimeError, match="AGENTIC_LAB_GATEWAY_API_KEY"):
         require_gateway_environment()
+
+
+def test_require_gateway_environment_returns_configured_values(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AGENTIC_LAB_GATEWAY_BASE_URL", "http://localhost:4000")
+    monkeypatch.setenv("AGENTIC_LAB_GATEWAY_API_KEY", "test-key")
+
+    assert require_gateway_environment() == (
+        "http://localhost:4000",
+        "test-key",
+    )
+
+
+def test_wait_for_gateway_readiness_uses_official_readiness_endpoint(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    calls: list[Any] = []
+
+    class FakeConnection:
+        def __init__(self, host: str, port: int, timeout: float) -> None:
+            calls.append(("connect", host, port, timeout))
+
+        def request(self, method: str, path: str, headers: dict[str, str]) -> None:
+            calls.append(("request", method, path, headers))
+
+        def getresponse(self) -> _FakeResponse:
+            return _FakeResponse(status=200)
+
+        def close(self) -> None:
+            calls.append(("close",))
+
+    monkeypatch.setitem(
+        wait_for_gateway_readiness.__globals__,
+        "HTTPConnection",
+        FakeConnection,
+    )
+
+    wait_for_gateway_readiness(
+        "http://localhost:4000",
+        "test-key",
+        attempts=1,
+        delay_seconds=0,
+    )
+
+    assert calls[0] == ("connect", "localhost", 4000, 2.0)
+    assert calls[1] == (
+        "request",
+        "GET",
+        "/health/readiness",
+        {"Authorization": "Bearer test-key"},
+    )
+    assert calls[-1] == ("close",)
+
+
+def test_wait_for_gateway_readiness_rejects_non_http_scheme() -> None:
+    with pytest.raises(RuntimeError, match="must use http or https"):
+        wait_for_gateway_readiness(
+            "file:///tmp/litellm.sock",
+            "test-key",
+            attempts=1,
+            delay_seconds=0,
+        )
+
+
+def test_wait_for_gateway_readiness_retries_connection_refusal(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    attempts_seen = 0
+
+    class FakeConnection:
+        def __init__(self, host: str, port: int, timeout: float) -> None:
+            return None
+
+        def request(self, method: str, path: str, headers: dict[str, str]) -> None:
+            nonlocal attempts_seen
+            attempts_seen += 1
+            if attempts_seen < 3:
+                raise ConnectionRefusedError("connection refused")
+
+        def getresponse(self) -> _FakeResponse:
+            return _FakeResponse(status=200)
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setitem(
+        wait_for_gateway_readiness.__globals__,
+        "HTTPConnection",
+        FakeConnection,
+    )
+
+    wait_for_gateway_readiness(
+        "http://localhost:4000",
+        "test-key",
+        attempts=3,
+        delay_seconds=0,
+    )
+
+    assert attempts_seen == 3
+
+
+def test_wait_for_gateway_readiness_fails_with_startup_diagnostic(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    class FakeConnection:
+        def __init__(self, host: str, port: int, timeout: float) -> None:
+            return None
+
+        def request(self, method: str, path: str, headers: dict[str, str]) -> None:
+            raise ConnectionRefusedError("connection refused")
+
+        def getresponse(self) -> _FakeResponse:
+            return _FakeResponse(status=503)
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setitem(
+        wait_for_gateway_readiness.__globals__,
+        "HTTPConnection",
+        FakeConnection,
+    )
+
+    with pytest.raises(RuntimeError, match="proxy process is still running"):
+        wait_for_gateway_readiness(
+            "http://localhost:4000",
+            "test-key",
+            attempts=2,
+            delay_seconds=0,
+        )
 
 
 def test_load_gateway_config_summary_reads_governed_alias(tmp_path: Path) -> None:
