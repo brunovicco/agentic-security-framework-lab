@@ -214,7 +214,9 @@ def run_gateway_smoke(
 ) -> tuple[GatewaySmokeRun, ...]:
     """Run each canonical scenario exactly once through LlamaIndex Workflow."""
     if len(scenarios) != _EXPECTED_SCENARIO_COUNT:
-        raise RuntimeError(f"LlamaIndex gateway smoke expected {_EXPECTED_SCENARIO_COUNT} scenarios")
+        raise RuntimeError(
+            f"LlamaIndex gateway smoke expected {_EXPECTED_SCENARIO_COUNT} scenarios"
+        )
     return asyncio.run(_execute_gateway_smoke(scenarios, config))
 
 
@@ -282,7 +284,10 @@ def render_markdown(
         "",
         f"Smoke assessment: **{'PASS' if assessment.passed else 'FAIL'}**",
         "",
-        "| Scenario | Expected match | Validation | Attempts | Calls | Tokens | Latency ms | Source |",
+        (
+            "| Scenario | Expected match | Validation | Attempts | Calls | Tokens | "
+            "Latency ms | Source |"
+        ),
         "|---|---:|---:|---:|---:|---:|---:|---|",
     ]
 
