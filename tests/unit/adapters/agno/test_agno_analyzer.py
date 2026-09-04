@@ -7,11 +7,7 @@ from agno.run.agent import RunOutput
 from pytest import MonkeyPatch, raises
 
 from agentic_lab.adapters.agno import analyzer as agno_module
-from agentic_lab.adapters.agno.analyzer import (
-    AgnoRuntime,
-    AgnoVulnerabilityAnalyzer,
-    normalize_agno_model_name,
-)
+from agentic_lab.adapters.agno.analyzer import AgnoRuntime, AgnoVulnerabilityAnalyzer
 from agentic_lab.application.analysis_prompt import SECURITY_ANALYSIS_SYSTEM_PROMPT
 from agentic_lab.application.contracts import AssetAssessment, LLMAnalysisDraft
 from agentic_lab.application.evidence import (
@@ -126,29 +122,13 @@ def _run_output(
     )
 
 
-def test_normalize_agno_model_name_translates_shared_identifier() -> None:
-    assert normalize_agno_model_name("openai:gpt-5.6-luna") == "gpt-5.6-luna"
-
-
-def test_normalize_agno_model_name_preserves_native_identifier() -> None:
-    assert normalize_agno_model_name("gpt-5.6-luna") == "gpt-5.6-luna"
-
-
-def test_normalize_agno_model_name_rejects_non_openai_provider() -> None:
-    with raises(
-        ValueError,
-        match="Agno OpenAI adapter requires an openai:model identifier",
-    ):
-        normalize_agno_model_name("anthropic:claude-sonnet")
-
-
-def test_agno_runtime_uses_minimal_provider_default_configuration(
+def test_agno_runtime_uses_governed_gateway_model_configuration(
     monkeypatch: MonkeyPatch,
 ) -> None:
     captured_model_kwargs: dict[str, object] = {}
     captured_agent_kwargs: dict[str, object] = {}
 
-    class StubOpenAIChat:
+    class StubOpenAILike:
         def __init__(self, **kwargs: object) -> None:
             captured_model_kwargs.update(kwargs)
 
@@ -156,13 +136,20 @@ def test_agno_runtime_uses_minimal_provider_default_configuration(
         def __init__(self, **kwargs: object) -> None:
             captured_agent_kwargs.update(kwargs)
 
-    monkeypatch.setattr(agno_module, "OpenAIChat", StubOpenAIChat)
+    monkeypatch.setenv("AGENTIC_LAB_GATEWAY_BASE_URL", "http://gateway.test:4000")
+    monkeypatch.setenv("AGENTIC_LAB_GATEWAY_API_KEY", "gateway-test-key")
+    monkeypatch.setattr(agno_module, "OpenAILike", StubOpenAILike)
     monkeypatch.setattr(agno_module, "Agent", StubConfiguredAgent)
 
     AgnoRuntime("openai:gpt-5.6-luna")
 
-    assert captured_model_kwargs == {"id": "gpt-5.6-luna"}
+    assert captured_model_kwargs == {
+        "id": "security-analysis",
+        "base_url": "http://gateway.test:4000",
+        "api_key": "gateway-test-key",
+    }
     assert "temperature" not in captured_model_kwargs
+    assert "gpt-5.6-luna" not in captured_model_kwargs.values()
     assert captured_agent_kwargs["system_message"] == SECURITY_ANALYSIS_SYSTEM_PROMPT
     assert captured_agent_kwargs["output_schema"] is LLMAnalysisDraft
     assert captured_agent_kwargs["structured_outputs"] is True
