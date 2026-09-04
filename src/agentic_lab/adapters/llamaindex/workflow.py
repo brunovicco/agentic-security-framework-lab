@@ -9,6 +9,7 @@ from pydantic import Field
 from workflows import Workflow, step
 from workflows.events import Event, StartEvent, StopEvent
 
+from agentic_lab.adapters.gateway import gateway_model_alias
 from agentic_lab.adapters.llamaindex.analyzer import (
     LlamaIndexAnalysisRunner,
     LlamaIndexRuntime,
@@ -282,9 +283,13 @@ class LlamaIndexWorkflowRuntime:
 
     def __init__(
         self,
+        model_alias: str | None = None,
+        *,
         runner_factory: RunnerFactory = LlamaIndexRuntime,
     ) -> None:
-        """Store the per-execution gateway-backed runner factory."""
+        """Accept only the governed alias and store no provider model identity."""
+        if model_alias is not None and model_alias != gateway_model_alias():
+            raise ValueError("LlamaIndex Workflow accepts only the governed gateway alias")
         self._runner_factory = runner_factory
 
     async def arun(
