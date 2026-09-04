@@ -3,7 +3,6 @@
 import argparse
 import json
 import math
-import os
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from statistics import mean, median
@@ -17,12 +16,10 @@ from agentic_lab.adapters.fixtures.demo import DEMO_CVE_ID
 from agentic_lab.adapters.langchain.analyzer import (
     LangChainVulnerabilityAnalyzer,
 )
-from agentic_lab.adapters.langchain.model import create_chat_model
+from agentic_lab.adapters.langchain.model import create_chat_model, gateway_model_alias
 from agentic_lab.adapters.langgraph.llm_graph import (
     run_llm_analysis_graph,
 )
-
-_MODEL_ENV = "AGENTIC_LAB_MODEL"
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,16 +69,6 @@ def parse_runs() -> int:
     return runs
 
 
-def require_model_name() -> str:
-    """Return the configured model name."""
-    model_name = os.environ.get(_MODEL_ENV)
-
-    if not model_name:
-        raise RuntimeError(f"{_MODEL_ENV} must identify the model used by the benchmark")
-
-    return model_name
-
-
 def aggregate_usage(
     usage_by_model: Mapping[str, UsageMetadata],
 ) -> TokenUsage:
@@ -113,7 +100,7 @@ def nearest_rank_percentile(
 def main() -> None:
     """Run repeated LangGraph analyses and summarize measurements."""
     requested_runs = parse_runs()
-    model_name = require_model_name()
+    model_name = gateway_model_alias()
 
     model = create_chat_model()
     analyzer = LangChainVulnerabilityAnalyzer(model)
