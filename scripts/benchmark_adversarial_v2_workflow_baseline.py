@@ -280,11 +280,7 @@ def run_framework_baseline(
             metrics=summarize_runs(scenario_runs),
         )
         scenario_summaries.append(summary)
-        print(
-            json.dumps(
-                {"type": "scenario_summary", "workflow": spec.key, **asdict(summary)}
-            )
-        )
+        print(json.dumps({"type": "scenario_summary", "workflow": spec.key, **asdict(summary)}))
 
     overall = OverallSummary(
         framework=spec.framework,
