@@ -8,4 +8,6 @@ Read `CREWAI_GATEWAY_SMOKE.md` for the CrewAI compatibility smoke that exercises
 
 The accepted manual review of the first persisted LangGraph gateway smoke is recorded in `LANGGRAPH_GATEWAY_SMOKE_REVIEW.md`, with the machine-readable decision in `langgraph_gateway_smoke_review.json`.
 
+The accepted manual review of the corrected persisted CrewAI gateway smoke is recorded in `CREWAI_GATEWAY_SMOKE_REVIEW.md`, with the machine-readable decision in `crewai_gateway_smoke_review.json`.
+
 The architectural decision is recorded in `docs/adr/0002-centralize-llm-provider-access-behind-litellm-proxy.md`.
