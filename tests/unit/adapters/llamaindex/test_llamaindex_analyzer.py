@@ -8,10 +8,8 @@ from pytest import MonkeyPatch
 
 from agentic_lab.adapters.llamaindex import analyzer as llamaindex_module
 from agentic_lab.adapters.llamaindex.analyzer import (
-    LLAMAINDEX_PROVIDER_DEFAULT_TEMPERATURE,
     LlamaIndexRuntime,
     LlamaIndexVulnerabilityAnalyzer,
-    normalize_llamaindex_model_name,
 )
 from agentic_lab.application.analysis_prompt import SECURITY_ANALYSIS_SYSTEM_PROMPT
 from agentic_lab.application.contracts import AssetAssessment, LLMAnalysisDraft
@@ -101,39 +99,43 @@ def _document() -> EvidenceDocument:
     }
 
 
-def test_normalize_llamaindex_model_name_translates_shared_identifier() -> None:
-    assert normalize_llamaindex_model_name("openai:gpt-5.6-luna") == "gpt-5.6-luna"
-
-
-def test_normalize_llamaindex_model_name_preserves_native_identifier() -> None:
-    assert normalize_llamaindex_model_name("gpt-5.6-luna") == "gpt-5.6-luna"
-
-
-def test_normalize_llamaindex_model_name_rejects_non_openai_provider() -> None:
-    try:
-        normalize_llamaindex_model_name("anthropic:claude-sonnet")
-    except ValueError as exc:
-        assert str(exc) == "LlamaIndex OpenAI adapter requires an openai:model identifier"
-    else:
-        raise AssertionError("Expected non-OpenAI model identifier to be rejected")
-
-
-def test_llamaindex_llm_uses_provider_supported_default_temperature(
+def test_llamaindex_llm_uses_governed_gateway_alias(
     monkeypatch: MonkeyPatch,
 ) -> None:
     captured_kwargs: dict[str, object] = {}
 
-    class StubOpenAI:
+    class StubOpenAILike:
         def __init__(self, **kwargs: object) -> None:
             captured_kwargs.update(kwargs)
 
-    monkeypatch.setattr(llamaindex_module, "OpenAI", StubOpenAI)
+    monkeypatch.setenv("AGENTIC_LAB_GATEWAY_BASE_URL", "http://gateway.test:4000")
+    monkeypatch.setenv("AGENTIC_LAB_GATEWAY_API_KEY", "gateway-test-key")
+    monkeypatch.setattr(llamaindex_module, "_GatewayOpenAILike", StubOpenAILike)
 
-    LlamaIndexRuntime("openai:gpt-5.6-luna")
+    LlamaIndexRuntime("openai:legacy-direct-model")
 
-    assert captured_kwargs["model"] == "gpt-5.6-luna"
-    assert captured_kwargs["temperature"] == LLAMAINDEX_PROVIDER_DEFAULT_TEMPERATURE
+    assert captured_kwargs["model"] == "security-analysis"
+    assert captured_kwargs["api_base"] == "http://gateway.test:4000"
+    assert captured_kwargs["api_key"] == "gateway-test-key"
+    assert captured_kwargs["is_chat_model"] is True
+    assert captured_kwargs["is_function_calling_model"] is True
+    assert "temperature" not in captured_kwargs
     assert isinstance(captured_kwargs["callback_manager"], CallbackManager)
+
+
+def test_gateway_openai_like_omits_temperature_from_provider_request() -> None:
+    llm = llamaindex_module._GatewayOpenAILike(
+        model="security-analysis",
+        api_base="http://gateway.test:4000",
+        api_key="gateway-test-key",
+        is_chat_model=True,
+        is_function_calling_model=True,
+    )
+
+    model_kwargs = llm._get_model_kwargs()
+
+    assert model_kwargs["model"] == "security-analysis"
+    assert "temperature" not in model_kwargs
 
 
 def test_llamaindex_runtime_uses_separate_system_and_user_messages(
