@@ -164,12 +164,13 @@ class CrewAIRuntime:
 
         execution_output = cast(_CrewExecutionOutput, cast(_CrewKickoff, crew).kickoff())
         usage = execution_output.token_usage
-        self._latest_usage = CrewAIUsage(
+        current_usage = CrewAIUsage(
             input_tokens=usage.prompt_tokens,
             output_tokens=usage.completion_tokens,
             total_tokens=usage.total_tokens,
             model_calls=usage.successful_requests,
         )
+        self._latest_usage = self._latest_usage.plus(current_usage)
 
         task_output = cast(_OutputTask, task).output
 
