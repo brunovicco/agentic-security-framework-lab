@@ -110,9 +110,8 @@ def build_crewai_analysis_task_description(
 class CrewAIRuntime:
     """Execute structured vulnerability reasoning through CrewAI."""
 
-    def __init__(self, model_name: str) -> None:
-        """Configure CrewAI through the gateway while retaining transitional metadata input."""
-        _ = model_name
+    def __init__(self) -> None:
+        """Configure CrewAI through the governed gateway boundary."""
         self._llm = create_crewai_llm()
         self._latest_usage = CrewAIUsage()
         self._consumed_usage = CrewAIUsage()
