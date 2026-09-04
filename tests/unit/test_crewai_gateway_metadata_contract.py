@@ -41,34 +41,15 @@ def test_crewai_adapters_do_not_store_transitional_model_identity() -> None:
 
 
 @pytest.mark.parametrize("script", (_BASELINE_SCRIPT, _SMOKE_SCRIPT))
-def test_crewai_only_generic_runner_does_not_require_direct_model(
+def test_generic_runners_use_gateway_alias_for_every_migrated_workflow(
     script: dict[str, Any],
     monkeypatch: MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("AGENTIC_LAB_MODEL", raising=False)
+    monkeypatch.setenv("AGENTIC_LAB_MODEL", "openai:must-not-control-runtime")
 
-    direct_model = script["require_direct_model_name"](("crewai-flow",))
-    crewai_model = script["workflow_model_name"]("crewai-flow", direct_model)
+    workflow_model_name = script["workflow_model_name"]
 
-    assert direct_model is None
-    assert crewai_model == "security-analysis"
-
-
-@pytest.mark.parametrize("script", (_BASELINE_SCRIPT, _SMOKE_SCRIPT))
-def test_generic_runner_retains_direct_model_contract_only_for_agno(
-    script: dict[str, Any],
-    monkeypatch: MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("AGENTIC_LAB_MODEL", raising=False)
-
-    with pytest.raises(RuntimeError, match="direct-provider model"):
-        script["require_direct_model_name"](("agno-workflow",))
-
-    monkeypatch.setenv("AGENTIC_LAB_MODEL", "openai:direct-test-model")
-    direct_model = script["require_direct_model_name"](("llamaindex-workflow", "agno-workflow"))
-
-    assert direct_model == "openai:direct-test-model"
-    llamaindex_model = script["workflow_model_name"]("llamaindex-workflow", direct_model)
-    assert llamaindex_model == "security-analysis"
-    agno_model = script["workflow_model_name"]("agno-workflow", direct_model)
-    assert agno_model == "openai:direct-test-model"
+    assert workflow_model_name("crewai-flow") == "security-analysis"
+    assert workflow_model_name("llamaindex-workflow") == "security-analysis"
+    assert workflow_model_name("agno-workflow") == "security-analysis"
+    assert "require_direct_model_name" not in script
