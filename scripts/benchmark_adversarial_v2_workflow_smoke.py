@@ -33,7 +33,6 @@ from agentic_lab.application.adversarial_v2 import (
 from agentic_lab.application.evidence import AnalysisEvidenceBundle
 from agentic_lab.application.validated_analysis import ValidatedAnalysisOutput
 
-_MODEL_ENV = "AGENTIC_LAB_MODEL"
 _SAMPLING = "provider_default"
 _OUTPUT_ROOT = Path("artifacts/adversarial-v2-smoke")
 _EXPECTED_SCENARIO_COUNT = 6
@@ -43,7 +42,6 @@ WorkflowKey = Literal[
     "llamaindex-workflow",
     "agno-workflow",
 ]
-_DIRECT_PROVIDER_WORKFLOWS: frozenset[WorkflowKey] = frozenset({"agno-workflow"})
 
 
 class _RuntimeUsage(Protocol):
@@ -125,8 +123,9 @@ def _llamaindex_runtime(_model_name: str) -> _WorkflowRuntime:
     return cast(_WorkflowRuntime, LlamaIndexWorkflowRuntime())
 
 
-def _agno_runtime(model_name: str) -> _WorkflowRuntime:
-    return cast(_WorkflowRuntime, AgnoWorkflowRuntime(model_name))
+def _agno_runtime(_model_name: str) -> _WorkflowRuntime:
+    """Create migrated Agno Workflow through the gateway-owned model boundary."""
+    return cast(_WorkflowRuntime, AgnoWorkflowRuntime())
 
 
 _WORKFLOW_SPECS: dict[WorkflowKey, WorkflowSpec] = {
@@ -184,27 +183,9 @@ def parse_config(argv: Sequence[str] | None = None) -> SmokeConfig:
     return SmokeConfig(repetitions=repetitions, frameworks=frameworks)
 
 
-def require_direct_model_name(frameworks: tuple[WorkflowKey, ...]) -> str | None:
-    """Require a direct-provider model only when Agno is selected."""
-    if not any(workflow in _DIRECT_PROVIDER_WORKFLOWS for workflow in frameworks):
-        return None
-
-    model_name = os.environ.get(_MODEL_ENV)
-    if not model_name:
-        raise RuntimeError(f"{_MODEL_ENV} must identify the direct-provider model for Agno")
-    return model_name
-
-
-def workflow_model_name(
-    workflow: WorkflowKey,
-    direct_model_name: str | None,
-) -> str:
-    """Return the runtime model identity appropriate for one workflow boundary."""
-    if workflow in {"crewai-flow", "llamaindex-workflow"}:
-        return gateway_model_alias()
-    if direct_model_name is None:
-        raise RuntimeError(f"Direct-provider model is required for {workflow}")
-    return direct_model_name
+def workflow_model_name(_workflow: WorkflowKey) -> str:
+    """Return the governed gateway alias used by every migrated workflow."""
+    return gateway_model_alias()
 
 
 def configure_framework_telemetry() -> None:
@@ -347,14 +328,13 @@ def write_smoke_artifacts(
 def main() -> None:
     """Execute selected provider-backed smokes and persist non-baseline artifacts."""
     config = parse_config()
-    direct_model_name = require_direct_model_name(config.frameworks)
     configure_framework_telemetry()
     scenarios = load_adversarial_v2_evidence_scenarios()
     failed_workflows: list[str] = []
 
     for workflow_key in config.frameworks:
         spec = _WORKFLOW_SPECS[workflow_key]
-        model_name = workflow_model_name(workflow_key, direct_model_name)
+        model_name = workflow_model_name(workflow_key)
         print(json.dumps({"type": "workflow_start", "workflow": workflow_key, "model": model_name}))
         result = run_framework_smoke(
             spec=spec,
