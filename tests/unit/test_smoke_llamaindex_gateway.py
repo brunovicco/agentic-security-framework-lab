@@ -134,18 +134,46 @@ def test_run_gateway_smoke_rejects_noncanonical_scenario_count() -> None:
 
 
 def test_gateway_smoke_assessment_requires_complete_scenario_set() -> None:
-    runs = _passing_runs()[:-1]
-
-    assessment = assess_gateway_smoke(runs)
+    assessment = assess_gateway_smoke(_passing_runs()[:-1])
 
     assert assessment.passed is False
-    assert assessment.failures == (
+    assert assessment.transport_compatibility.passed is False
+    assert assessment.transport_compatibility.failures == (
         "unexpected_run_count",
         "unexpected_scenario_set",
     )
+    assert assessment.semantic_quality.passed is True
+    assert assessment.system_safety.passed is True
 
 
-def test_gateway_smoke_assessment_fails_closed_on_runtime_evidence() -> None:
+def test_gateway_smoke_separates_semantic_failure_from_transport_and_safety() -> None:
+    runs = list(_passing_runs())
+    runs[1] = _run(
+        "scenario-2",
+        validation_passed=False,
+        analysis_source="oracle_fallback",
+        analysis_attempts=2,
+        model_calls=2,
+        input_tokens=220,
+        output_tokens=50,
+        total_tokens=270,
+    )
+
+    assessment = assess_gateway_smoke(tuple(runs))
+
+    assert assessment.passed is False
+    assert assessment.transport_compatibility.passed is True
+    assert assessment.transport_compatibility.failures == ()
+    assert assessment.semantic_quality.passed is False
+    assert assessment.semantic_quality.failures == (
+        "scenario-2:validation_failure",
+        "scenario-2:unexpected_analysis_source",
+    )
+    assert assessment.system_safety.passed is True
+    assert assessment.system_safety.failures == ()
+
+
+def test_gateway_smoke_assessment_fails_closed_across_all_dimensions() -> None:
     runs = list(_passing_runs())
     runs[0] = _run("scenario-1", expected_match=False)
     runs[1] = _run("scenario-2", validation_passed=False)
@@ -161,18 +189,29 @@ def test_gateway_smoke_assessment_fails_closed_on_runtime_evidence() -> None:
     assessment = assess_gateway_smoke(tuple(runs))
 
     assert assessment.passed is False
-    assert assessment.failures == (
-        "scenario-1:expected_mismatch",
-        "scenario-2:validation_failure",
-        "scenario-3:unexpected_analysis_source",
+    assert assessment.transport_compatibility.failures == (
         "scenario-4:no_model_call",
         "scenario-4:incomplete_model_call_telemetry",
         "scenario-5:incomplete_model_call_telemetry",
         "scenario-5:missing_usage_metadata",
     )
+    assert assessment.semantic_quality.failures == (
+        "scenario-2:validation_failure",
+        "scenario-3:unexpected_analysis_source",
+    )
+    assert assessment.system_safety.failures == ("scenario-1:expected_mismatch",)
+    assert assessment.failures == (
+        "transport_compatibility:scenario-4:no_model_call",
+        "transport_compatibility:scenario-4:incomplete_model_call_telemetry",
+        "transport_compatibility:scenario-5:incomplete_model_call_telemetry",
+        "transport_compatibility:scenario-5:missing_usage_metadata",
+        "semantic_quality:scenario-2:validation_failure",
+        "semantic_quality:scenario-3:unexpected_analysis_source",
+        "system_safety:scenario-1:expected_mismatch",
+    )
 
 
-def test_gateway_smoke_artifact_is_non_baseline_and_secret_free(
+def test_gateway_smoke_artifact_is_v2_non_baseline_and_secret_free(
     tmp_path: Path,
 ) -> None:
     config = GatewayConfigSummary(
@@ -189,6 +228,7 @@ def test_gateway_smoke_artifact_is_non_baseline_and_secret_free(
     payload = json.loads(json_path.read_text())
     markdown = markdown_path.read_text()
 
+    assert payload["schema_version"] == "2"
     assert payload["artifact_type"] == "gateway_smoke"
     assert payload["official_baseline"] is False
     assert payload["review_status"] == "pending_manual_trace_review"
@@ -201,7 +241,12 @@ def test_gateway_smoke_artifact_is_non_baseline_and_secret_free(
     assert payload["scenario_count"] == 5
     assert payload["total_run_count"] == 5
     assert payload["smoke_assessment"]["passed"] is True
+    assert payload["smoke_assessment"]["transport_compatibility"]["passed"] is True
+    assert payload["smoke_assessment"]["semantic_quality"]["passed"] is True
+    assert payload["smoke_assessment"]["system_safety"]["passed"] is True
     assert "AGENTIC_LAB_GATEWAY_API_KEY" not in json_path.read_text()
     assert "http://localhost:4000" not in json_path.read_text()
     assert "Gateway endpoint and credentials are intentionally not persisted" in markdown
-    assert "Official baseline: **no**" in markdown
+    assert "Transport compatibility: **PASS**" in markdown
+    assert "Semantic quality: **PASS**" in markdown
+    assert "System safety: **PASS**" in markdown
