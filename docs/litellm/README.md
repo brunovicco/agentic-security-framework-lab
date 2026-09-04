@@ -6,6 +6,8 @@ Read `GATEWAY_SMOKE.md` for the first non-baseline LangGraph provider-backed com
 
 Read `CREWAI_GATEWAY_SMOKE.md` for the CrewAI compatibility smoke that exercises both Agent/Task/Crew and Flow through the governed LiteLLM alias.
 
+Read `LLAMAINDEX_GATEWAY_SMOKE.md` for the LlamaIndex Workflow compatibility smoke, including its async runtime path, fail-closed usage requirements, and evidence boundary.
+
 The accepted manual review of the first persisted LangGraph gateway smoke is recorded in `LANGGRAPH_GATEWAY_SMOKE_REVIEW.md`, with the machine-readable decision in `langgraph_gateway_smoke_review.json`.
 
 The accepted manual review of the corrected persisted CrewAI gateway smoke is recorded in `CREWAI_GATEWAY_SMOKE_REVIEW.md`, with the machine-readable decision in `crewai_gateway_smoke_review.json`.
