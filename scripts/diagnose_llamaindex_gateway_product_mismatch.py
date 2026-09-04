@@ -81,9 +81,7 @@ def parse_runs() -> int:
 def load_scenario(scenario_id: str) -> EvaluationScenario:
     """Return one canonical scenario by id or fail closed."""
     scenarios = load_evaluation_scenarios()
-    matches = tuple(
-        scenario for scenario in scenarios if scenario.scenario_id == scenario_id
-    )
+    matches = tuple(scenario for scenario in scenarios if scenario.scenario_id == scenario_id)
     if len(matches) != 1:
         raise RuntimeError(f"Expected exactly one {scenario_id!r} evaluation scenario")
     return matches[0]
@@ -266,9 +264,7 @@ async def diagnose(repetitions: int) -> None:
             summary.analysis_source == "llm" and summary.validation_passed
             for summary in mode_summaries
         )
-        fallbacks = sum(
-            summary.analysis_source == "oracle_fallback" for summary in mode_summaries
-        )
+        fallbacks = sum(summary.analysis_source == "oracle_fallback" for summary in mode_summaries)
         print(
             json.dumps(
                 {
