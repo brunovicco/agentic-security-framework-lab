@@ -2,3 +2,16 @@
 # Hooks live exclusively in the sibling hooks.json at this configuration layer.
 [features]
 hooks = true
+
+[mcp_servers.agentic-security-applicability]
+command = "uvx"
+args = [
+  "--from",
+  "mcp[cli]==2.1.1",
+  "mcp",
+  "run",
+  "scripts/mcp_security_server.py",
+]
+env = { PYTHONPATH = "src" }
+startup_timeout_sec = 30
+tool_timeout_sec = 30
