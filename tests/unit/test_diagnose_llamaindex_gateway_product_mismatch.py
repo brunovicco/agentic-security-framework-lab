@@ -118,7 +118,7 @@ def test_sample_summary_distinguishes_first_attempt_acceptance_from_final_source
     assert summary.total_tokens == 1250
 
 
-def test_diagnostic_script_compares_isolated_and_baseline_preceded_modes_without_artifacts() -> None:
+def test_diagnostic_script_compares_modes_without_artifacts() -> None:
     source = _SCRIPT_PATH.read_text()
 
     assert 'mode="isolated"' in source
