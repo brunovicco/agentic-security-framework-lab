@@ -49,6 +49,27 @@ class ApplicabilityAssessmentResult(BaseModel):
     assessments: tuple[AssetAssessment, ...]
 
 
+class ApplicabilityContractDescription(BaseModel):
+    """Describe the application-owned schemas exposed as MCP contract context."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    contract: str
+    vulnerability_input_schema: dict[str, object]
+    asset_input_schema: dict[str, object]
+    result_schema: dict[str, object]
+
+
+def describe_applicability_contract() -> ApplicabilityContractDescription:
+    """Build contract metadata from the authoritative Pydantic application models."""
+    return ApplicabilityContractDescription(
+        contract="assess_vulnerability_applicability",
+        vulnerability_input_schema=VulnerabilityApplicabilityInput.model_json_schema(),
+        asset_input_schema=AssetApplicabilityInput.model_json_schema(),
+        result_schema=ApplicabilityAssessmentResult.model_json_schema(),
+    )
+
+
 def assess_vulnerability_applicability(
     vulnerability: VulnerabilityApplicabilityInput,
     assets: tuple[AssetApplicabilityInput, ...],
