@@ -9,9 +9,8 @@ Checked on 2026-09-04:
 - current official LiteLLM container package releases;
 - LangChain `ChatOpenAI` integration and current API reference for custom `base_url` proxy clients;
 - CrewAI v1.15.x LLM configuration for custom OpenAI-compatible endpoints;
-- LlamaIndex `OpenAILike` integration for third-party OpenAI-compatible APIs;
-- LlamaIndex structured prediction program selection based on function-calling metadata;
-- PyPI dependency metadata for `llama-index-llms-openai-like==0.7.2`.
+- LlamaIndex OpenAI LLM support for custom `api_base` endpoints;
+- LlamaIndex structured prediction program selection based on function-calling metadata.
 
 Current pattern considered:
 
@@ -20,7 +19,7 @@ Current pattern considered:
 - proxy capabilities include authentication, spend tracking, rate limiting, logging hooks, and model routing;
 - LangChain `ChatOpenAI` accepts an explicit `base_url` when the client talks to a proxy or service emulator;
 - CrewAI `LLM` supports `custom_openai=True` with explicit `base_url` and `api_key` for OpenAI-compatible gateways;
-- LlamaIndex provides `OpenAILike` specifically for third-party OpenAI-compatible APIs and explicit model capability metadata;
+- LlamaIndex's typed OpenAI integration accepts explicit `api_base` and `api_key` values for an OpenAI-compatible endpoint;
 - LlamaIndex default structured prediction uses function calling when the LLM metadata advertises that capability;
 - sampling controls such as `temperature` are model-specific and are intentionally not forced by migrated clients;
 - current official LiteLLM container releases include the v1.98.0 line.
@@ -70,18 +69,18 @@ LiteLLM Proxy
 configured upstream provider model
 ```
 
-The current LlamaIndex client-migration increment uses its OpenAI-compatible integration while preserving the existing structured-prediction behavior:
+The current LlamaIndex client-migration increment uses its typed OpenAI transport with explicit gateway metadata while preserving the existing structured-prediction behavior:
 
 ```text
 LlamaIndex Runtime / Workflow
     |
     v
-LlamaIndex OpenAILike
+LlamaIndex OpenAI transport
     |
     | model = security-analysis
     | api_base = AGENTIC_LAB_GATEWAY_BASE_URL
-    | chat = true
-    | function calling = true
+    | chat capability = true
+    | function calling capability = true
     v
 LiteLLM Proxy
     |
@@ -97,7 +96,7 @@ Framework orchestration, the shared `LLMAnalysisDraft` contract, deterministic v
 
 ADR 0002 selects LiteLLM as a central infrastructure service, not an in-process framework dependency.
 
-For LangChain, the lab therefore uses `ChatOpenAI` with the proxy's OpenAI-compatible endpoint. For CrewAI, the lab uses CrewAI's native `LLM` custom OpenAI-compatible endpoint support rather than installing `crewai[litellm]` and introducing a second in-process LiteLLM layer. LlamaIndex uses its `OpenAILike` integration because the stable gateway alias is intentionally not an OpenAI provider model identifier.
+For LangChain, the lab uses `ChatOpenAI` with the proxy's OpenAI-compatible endpoint. For CrewAI, the lab uses CrewAI's native `LLM` custom OpenAI-compatible endpoint support rather than installing `crewai[litellm]` and introducing a second in-process LiteLLM layer. For LlamaIndex, the lab reuses its already installed and typed OpenAI transport with a custom `api_base` and a narrow gateway subclass for alias capability metadata and request normalization.
 
 This preserves the same architectural rule across frameworks:
 
@@ -108,13 +107,13 @@ This preserves the same architectural rule across frameworks:
 
 If a future experiment requires LiteLLM-specific in-process router behavior or provider-specific response extensions, that requires a separate architectural decision.
 
-## LlamaIndex sampling and structured output
+## LlamaIndex alias metadata and sampling
 
-`OpenAILike` has its own default `temperature`, and its inherited OpenAI transport normally forwards that value with each request. The gateway adapter removes only that request parameter so sampling remains provider-owned, matching the existing LangGraph and CrewAI gateway policy.
+The LlamaIndex OpenAI integration normally infers model capabilities and context information from a provider-native OpenAI model name. The gateway alias `security-analysis` is intentionally not such an identifier, so the gateway subclass declares only the framework capabilities required by the existing workload: chat and function calling. It uses the LlamaIndex default context-window metadata rather than copying the configured upstream model's provider-specific limit into the adapter.
 
-The adapter explicitly advertises `is_chat_model=True` and `is_function_calling_model=True`. LlamaIndex uses the latter metadata when choosing the default Pydantic structured-prediction program, so this preserves the existing function-calling structured-output path instead of silently switching to text parsing.
+LlamaIndex also normally includes its client `temperature` value in every OpenAI request. The gateway subclass removes only that request parameter so sampling remains provider-owned, matching the existing LangGraph and CrewAI gateway policy.
 
-The lab does not hard-code the configured upstream model's context window into the framework adapter. The current workload is intentionally small, and provider-specific capability policy belongs behind the governed alias rather than in domain/application code.
+The explicit function-calling metadata matters because LlamaIndex uses it when choosing the default Pydantic structured-prediction program. This preserves the existing function-calling structured-output path instead of silently switching to text parsing.
 
 ## Shared client configuration
 
@@ -151,7 +150,7 @@ Read these short sections when reviewing the gateway boundary:
 1. LiteLLM Getting Started: **Proxy Server vs Python SDK**.
 2. LangChain `ChatOpenAI` API reference: `base_url` and `api_key`.
 3. CrewAI LLMs: **Custom OpenAI-Compatible Endpoint** and model-specific parameter guidance.
-4. LlamaIndex `OpenAILike`: OpenAI-compatible API configuration and capability metadata.
+4. LlamaIndex OpenAI LLM configuration for custom API base URLs.
 5. LlamaIndex program utilities: default structured-prediction selection from `is_function_calling_model`.
 
 Routing policies, virtual keys, budgets, observability callbacks, and gateway fallback remain deferred to dedicated increments.
