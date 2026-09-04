@@ -143,6 +143,71 @@ def test_crewai_usage_rejects_decreasing_cumulative_counters() -> None:
         raise AssertionError("Expected decreasing CrewAI usage counters to fail closed")
 
 
+def test_crewai_runtime_accumulates_usage_across_kickoffs(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    usages = iter(
+        (
+            CrewAIUsage(input_tokens=100, output_tokens=20, total_tokens=120, model_calls=1),
+            CrewAIUsage(input_tokens=80, output_tokens=15, total_tokens=95, model_calls=1),
+        )
+    )
+
+    class StubUsageMetrics:
+        def __init__(self, usage: CrewAIUsage) -> None:
+            self.prompt_tokens = usage.input_tokens
+            self.completion_tokens = usage.output_tokens
+            self.total_tokens = usage.total_tokens
+            self.successful_requests = usage.model_calls
+
+    class StubCrewOutput:
+        def __init__(self, usage: CrewAIUsage) -> None:
+            self.token_usage = StubUsageMetrics(usage)
+
+    class StubTaskOutput:
+        def __init__(self) -> None:
+            self.pydantic: object | None = _draft()
+
+    class StubTask:
+        def __init__(self) -> None:
+            self.output: StubTaskOutput | None = StubTaskOutput()
+
+    class StubCrew:
+        def __init__(self, **kwargs: object) -> None:
+            _ = kwargs
+
+        def kickoff(self) -> StubCrewOutput:
+            return StubCrewOutput(next(usages))
+
+    def create_stub_agent(**kwargs: object) -> object:
+        _ = kwargs
+        return object()
+
+    def create_stub_task(**kwargs: object) -> StubTask:
+        _ = kwargs
+        return StubTask()
+
+    monkeypatch.setattr(
+        "agentic_lab.adapters.crewai.analyzer.create_crewai_llm",
+        lambda: object(),
+    )
+    monkeypatch.setattr("agentic_lab.adapters.crewai.analyzer.Agent", create_stub_agent)
+    monkeypatch.setattr("agentic_lab.adapters.crewai.analyzer.Task", create_stub_task)
+    monkeypatch.setattr("agentic_lab.adapters.crewai.analyzer.Crew", StubCrew)
+
+    runtime = CrewAIRuntime("security-analysis")
+    runtime.run("first")
+    runtime.run("second")
+
+    assert runtime.consume_usage() == CrewAIUsage(
+        input_tokens=180,
+        output_tokens=35,
+        total_tokens=215,
+        model_calls=2,
+    )
+    assert runtime.consume_usage() == CrewAIUsage()
+
+
 def test_crewai_analyzer_frames_evidence_as_untrusted_data() -> None:
     runner = StubCrewAIAnalysisRunner(_draft())
     analyzer = CrewAIVulnerabilityAnalyzer(runner)
