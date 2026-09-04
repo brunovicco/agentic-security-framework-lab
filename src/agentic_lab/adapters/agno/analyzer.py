@@ -5,8 +5,13 @@ from typing import Literal, Protocol, cast
 
 from agno.agent import Agent, RunOutput
 from agno.metrics import RunMetrics
-from agno.models.openai import OpenAIChat
+from agno.models.openai.like import OpenAILike
 
+from agentic_lab.adapters.gateway import (
+    gateway_api_key,
+    gateway_base_url,
+    gateway_model_alias,
+)
 from agentic_lab.application.analysis_prompt import (
     SECURITY_ANALYSIS_SYSTEM_PROMPT,
     build_security_analysis_user_prompt,
@@ -50,30 +55,21 @@ class _StructuredAgnoAgent(Protocol):
         ...
 
 
-def normalize_agno_model_name(model_name: str) -> str:
-    """Translate the shared provider:model identifier to Agno OpenAI syntax."""
-    provider, separator, model = model_name.partition(":")
-
-    if not separator:
-        return model_name
-
-    if provider != "openai" or not model:
-        raise ValueError("Agno OpenAI adapter requires an openai:model identifier")
-
-    return model
+def _create_model() -> OpenAILike:
+    """Create Agno's OpenAI-compatible model through the governed gateway alias."""
+    return OpenAILike(
+        id=gateway_model_alias(),
+        base_url=gateway_base_url(),
+        api_key=gateway_api_key(),
+    )
 
 
-def _create_model(model_name: str) -> OpenAIChat:
-    """Create Agno's OpenAI model without overriding provider-default sampling."""
-    return OpenAIChat(id=normalize_agno_model_name(model_name))
-
-
-def _create_agent(model_name: str, system_prompt: str) -> _StructuredAgnoAgent:
-    """Create a minimal structured Agno Agent for vulnerability reasoning."""
+def _create_agent(_model_name: str, system_prompt: str) -> _StructuredAgnoAgent:
+    """Create a minimal structured Agno Agent through the gateway-owned model boundary."""
     return cast(
         _StructuredAgnoAgent,
         Agent(
-            model=_create_model(model_name),
+            model=_create_model(),
             system_message=system_prompt,
             output_schema=LLMAnalysisDraft,
             structured_outputs=True,
@@ -127,10 +123,10 @@ class AgnoRuntime:
         model_name: str,
         system_prompt: str = SECURITY_ANALYSIS_SYSTEM_PROMPT,
     ) -> None:
-        """Create an isolated Agno agent and empty benchmark usage accumulator."""
+        """Create an isolated gateway-backed Agno agent and empty usage accumulator."""
         self._system_prompt = system_prompt
         self._agent = _create_agent(
-            model_name=model_name,
+            model_name,
             system_prompt=system_prompt,
         )
         self._usage = AgnoUsage()
