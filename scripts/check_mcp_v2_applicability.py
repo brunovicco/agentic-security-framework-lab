@@ -4,7 +4,6 @@ import asyncio
 import json
 
 from mcp import Client
-
 from mcp_security_server import mcp
 
 _TOOL_NAME = "assess_vulnerability_applicability"
