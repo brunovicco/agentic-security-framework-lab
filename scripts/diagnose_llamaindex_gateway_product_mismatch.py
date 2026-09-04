@@ -80,10 +80,9 @@ def parse_runs() -> int:
 
 def load_scenario(scenario_id: str) -> EvaluationScenario:
     """Return one canonical scenario by id or fail closed."""
+    scenarios = load_evaluation_scenarios()
     matches = tuple(
-        scenario
-        for scenario in load_evaluation_scenarios()
-        if scenario.scenario_id == scenario_id
+        scenario for scenario in scenarios if scenario.scenario_id == scenario_id
     )
     if len(matches) != 1:
         raise RuntimeError(f"Expected exactly one {scenario_id!r} evaluation scenario")
@@ -139,9 +138,8 @@ def summarize_execution(
     """Build a status-level summary for one target execution."""
     output = execution.output
     usage = execution.usage
-    first_attempt_passed = bool(
-        output.attempt_trace and output.attempt_trace[0].validation_passed
-    )
+    first_attempt = output.attempt_trace[0] if output.attempt_trace else None
+    first_attempt_passed = bool(first_attempt and first_attempt.validation_passed)
     return DiagnosticSampleSummary(
         mode=mode,
         sample=sample,
@@ -261,24 +259,25 @@ async def diagnose(repetitions: int) -> None:
 
     for mode in ("isolated", "after_baseline"):
         mode_summaries = [summary for summary in summaries if summary.mode == mode]
+        first_attempt_accepts = sum(
+            summary.first_attempt_validation_passed for summary in mode_summaries
+        )
+        llm_final_accepts = sum(
+            summary.analysis_source == "llm" and summary.validation_passed
+            for summary in mode_summaries
+        )
+        fallbacks = sum(
+            summary.analysis_source == "oracle_fallback" for summary in mode_summaries
+        )
         print(
             json.dumps(
                 {
                     "type": "llamaindex_gateway_diagnostic_matrix_summary",
                     "mode": mode,
                     "samples": len(mode_summaries),
-                    "first_attempt_accepts": sum(
-                        summary.first_attempt_validation_passed
-                        for summary in mode_summaries
-                    ),
-                    "llm_final_accepts": sum(
-                        summary.analysis_source == "llm" and summary.validation_passed
-                        for summary in mode_summaries
-                    ),
-                    "fallbacks": sum(
-                        summary.analysis_source == "oracle_fallback"
-                        for summary in mode_summaries
-                    ),
+                    "first_attempt_accepts": first_attempt_accepts,
+                    "llm_final_accepts": llm_final_accepts,
+                    "fallbacks": fallbacks,
                 }
             )
         )
