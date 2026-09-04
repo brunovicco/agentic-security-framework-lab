@@ -43,11 +43,10 @@ class StubAgent:
         return self.outputs.pop(0)
 
 
-def _factory_for(stub: StubAgent) -> Callable[[str, str], StubAgent]:
+def _factory_for(stub: StubAgent) -> Callable[[str], StubAgent]:
     """Return a typed Agno agent factory for strict monkeypatch tests."""
 
-    def factory(model_name: str, system_prompt: str) -> StubAgent:
-        assert model_name == "openai:gpt-5.6-luna"
+    def factory(system_prompt: str) -> StubAgent:
         assert system_prompt == SECURITY_ANALYSIS_SYSTEM_PROMPT
         return stub
 
@@ -141,7 +140,7 @@ def test_agno_runtime_uses_governed_gateway_model_configuration(
     monkeypatch.setattr(agno_module, "OpenAILike", StubOpenAILike)
     monkeypatch.setattr(agno_module, "Agent", StubConfiguredAgent)
 
-    AgnoRuntime("openai:gpt-5.6-luna")
+    AgnoRuntime()
 
     assert captured_model_kwargs == {
         "id": "security-analysis",
@@ -168,15 +167,14 @@ def test_agno_runtime_uses_separate_system_and_user_boundaries(
     stub = StubAgent([_run_output()])
     captured_system_prompt = ""
 
-    def factory(model_name: str, system_prompt: str) -> StubAgent:
+    def factory(system_prompt: str) -> StubAgent:
         nonlocal captured_system_prompt
-        assert model_name == "openai:gpt-5.6-luna"
         captured_system_prompt = system_prompt
         return stub
 
     monkeypatch.setattr(agno_module, "_create_agent", factory)
 
-    runtime = AgnoRuntime("openai:gpt-5.6-luna")
+    runtime = AgnoRuntime()
     result = runtime.run(
         system_prompt=SECURITY_ANALYSIS_SYSTEM_PROMPT,
         user_prompt="Evidence JSON: untrusted test data",
@@ -192,7 +190,7 @@ def test_agno_runtime_rejects_system_prompt_boundary_change(
 ) -> None:
     stub = StubAgent([_run_output()])
     monkeypatch.setattr(agno_module, "_create_agent", _factory_for(stub))
-    runtime = AgnoRuntime("openai:gpt-5.6-luna")
+    runtime = AgnoRuntime()
 
     with raises(ValueError, match="system prompt does not match"):
         runtime.run(
@@ -213,7 +211,7 @@ def test_agno_runtime_usage_accumulates_attempts_then_resets(
         ]
     )
     monkeypatch.setattr(agno_module, "_create_agent", _factory_for(stub))
-    runtime = AgnoRuntime("openai:gpt-5.6-luna")
+    runtime = AgnoRuntime()
 
     runtime.run(SECURITY_ANALYSIS_SYSTEM_PROMPT, "first")
     runtime.run(SECURITY_ANALYSIS_SYSTEM_PROMPT, "second")
@@ -235,7 +233,7 @@ def test_agno_runtime_usage_accumulates_attempts_then_resets(
 def test_agno_runtime_fails_closed_without_metrics(monkeypatch: MonkeyPatch) -> None:
     stub = StubAgent([RunOutput(content=_draft(), metrics=None)])
     monkeypatch.setattr(agno_module, "_create_agent", _factory_for(stub))
-    runtime = AgnoRuntime("openai:gpt-5.6-luna")
+    runtime = AgnoRuntime()
 
     with raises(RuntimeError, match="did not provide token metrics"):
         runtime.run(SECURITY_ANALYSIS_SYSTEM_PROMPT, "evidence")
@@ -246,7 +244,7 @@ def test_agno_runtime_fails_closed_without_metrics(monkeypatch: MonkeyPatch) -> 
 def test_agno_runtime_fails_closed_on_incomplete_metrics(monkeypatch: MonkeyPatch) -> None:
     stub = StubAgent([_run_output(output_tokens=0, total_tokens=100)])
     monkeypatch.setattr(agno_module, "_create_agent", _factory_for(stub))
-    runtime = AgnoRuntime("openai:gpt-5.6-luna")
+    runtime = AgnoRuntime()
 
     with raises(RuntimeError, match="reported no output tokens"):
         runtime.run(SECURITY_ANALYSIS_SYSTEM_PROMPT, "evidence")
@@ -259,7 +257,7 @@ def test_agno_runtime_fails_closed_on_non_structured_content(
 ) -> None:
     stub = StubAgent([_run_output(draft="not structured")])
     monkeypatch.setattr(agno_module, "_create_agent", _factory_for(stub))
-    runtime = AgnoRuntime("openai:gpt-5.6-luna")
+    runtime = AgnoRuntime()
 
     with raises(RuntimeError, match="did not return LLMAnalysisDraft"):
         runtime.run(SECURITY_ANALYSIS_SYSTEM_PROMPT, "evidence")
