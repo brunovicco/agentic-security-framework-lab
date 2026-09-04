@@ -66,6 +66,9 @@ def test_mcp_server_is_a_thin_closed_world_protocol_adapter() -> None:
 
     assert "from mcp.server import MCPServer" in source
     assert "from mcp.types import ToolAnnotations" in source
+    assert "@mcp.prompt()" in source
+    assert "def review_vulnerability_applicability()" in source
+    assert '@mcp.resource(\n    "security://contracts/applicability"' in source
     assert "read_only_hint=True" in source
     assert "destructive_hint=False" in source
     assert "idempotent_hint=True" in source
