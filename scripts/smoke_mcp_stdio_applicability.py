@@ -123,9 +123,7 @@ async def _smoke() -> dict[str, object]:
 
         resource = await session.read_resource(_RESOURCE_URI)
         if len(resource.contents) != 1:
-            raise RuntimeError(
-                "MCP applicability resource must return exactly one content item"
-            )
+            raise RuntimeError("MCP applicability resource must return exactly one content item")
 
         tools = await session.list_tools()
         tool_names = {tool.name for tool in tools.tools}
