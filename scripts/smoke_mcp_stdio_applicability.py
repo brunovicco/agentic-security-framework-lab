@@ -101,51 +101,55 @@ async def _smoke() -> dict[str, object]:
     """Launch the configured server and exercise MCP primitives through STDIO."""
     server_parameters = _load_server_parameters()
 
-    async with stdio_client(server_parameters) as (read_stream, write_stream):
-        async with ClientSession(read_stream, write_stream) as session:
-            initialization = await session.initialize()
+    async with (
+        stdio_client(server_parameters) as (read_stream, write_stream),
+        ClientSession(read_stream, write_stream) as session,
+    ):
+        initialization = await session.initialize()
 
-            prompts = await session.list_prompts()
-            prompt_names = {prompt.name for prompt in prompts.prompts}
-            if prompt_names != {_PROMPT_NAME}:
-                raise RuntimeError(f"Unexpected MCP prompt catalog: {sorted(prompt_names)}")
+        prompts = await session.list_prompts()
+        prompt_names = {prompt.name for prompt in prompts.prompts}
+        if prompt_names != {_PROMPT_NAME}:
+            raise RuntimeError(f"Unexpected MCP prompt catalog: {sorted(prompt_names)}")
 
-            prompt = await session.get_prompt(_PROMPT_NAME)
-            if len(prompt.messages) != 1 or prompt.messages[0].role != "user":
-                raise RuntimeError("MCP review prompt must return exactly one user message")
+        prompt = await session.get_prompt(_PROMPT_NAME)
+        if len(prompt.messages) != 1 or prompt.messages[0].role != "user":
+            raise RuntimeError("MCP review prompt must return exactly one user message")
 
-            resources = await session.list_resources()
-            resource_uris = {str(resource.uri) for resource in resources.resources}
-            if resource_uris != {_RESOURCE_URI}:
-                raise RuntimeError(f"Unexpected MCP resource catalog: {sorted(resource_uris)}")
+        resources = await session.list_resources()
+        resource_uris = {str(resource.uri) for resource in resources.resources}
+        if resource_uris != {_RESOURCE_URI}:
+            raise RuntimeError(f"Unexpected MCP resource catalog: {sorted(resource_uris)}")
 
-            resource = await session.read_resource(_RESOURCE_URI)
-            if len(resource.contents) != 1:
-                raise RuntimeError("MCP applicability resource must return exactly one content item")
+        resource = await session.read_resource(_RESOURCE_URI)
+        if len(resource.contents) != 1:
+            raise RuntimeError(
+                "MCP applicability resource must return exactly one content item"
+            )
 
-            tools = await session.list_tools()
-            tool_names = {tool.name for tool in tools.tools}
-            if tool_names != {_TOOL_NAME}:
-                raise RuntimeError(f"Unexpected MCP tool catalog: {sorted(tool_names)}")
+        tools = await session.list_tools()
+        tool_names = {tool.name for tool in tools.tools}
+        if tool_names != {_TOOL_NAME}:
+            raise RuntimeError(f"Unexpected MCP tool catalog: {sorted(tool_names)}")
 
-            result = await session.call_tool(_TOOL_NAME, _tool_arguments())
-            if result.is_error:
-                raise RuntimeError(f"MCP applicability tool returned an error: {result.content}")
-            if result.structured_content != _expected_tool_output():
-                raise RuntimeError(
-                    "MCP STDIO structured output did not match deterministic application truth"
-                )
+        result = await session.call_tool(_TOOL_NAME, _tool_arguments())
+        if result.is_error:
+            raise RuntimeError(f"MCP applicability tool returned an error: {result.content}")
+        if result.structured_content != _expected_tool_output():
+            raise RuntimeError(
+                "MCP STDIO structured output did not match deterministic application truth"
+            )
 
-            return {
-                "type": "mcp_stdio_host_client_smoke",
-                "server": _SERVER_NAME,
-                "server_name": initialization.server_info.name,
-                "transport": "stdio",
-                "prompt": _PROMPT_NAME,
-                "resource": _RESOURCE_URI,
-                "tool": _TOOL_NAME,
-                "structured_output_match": True,
-            }
+        return {
+            "type": "mcp_stdio_host_client_smoke",
+            "server": _SERVER_NAME,
+            "server_name": initialization.server_info.name,
+            "transport": "stdio",
+            "prompt": _PROMPT_NAME,
+            "resource": _RESOURCE_URI,
+            "tool": _TOOL_NAME,
+            "structured_output_match": True,
+        }
 
 
 def main() -> None:
