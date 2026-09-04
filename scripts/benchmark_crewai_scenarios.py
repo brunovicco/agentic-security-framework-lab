@@ -3,7 +3,6 @@
 import argparse
 import json
 import math
-import os
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,12 +15,12 @@ from agentic_lab.adapters.crewai.analyzer import (
     CrewAIVulnerabilityAnalyzer,
 )
 from agentic_lab.adapters.fixtures.evaluation import load_evaluation_scenarios
+from agentic_lab.adapters.gateway import gateway_model_alias
 from agentic_lab.application.contracts import AssetAssessment
 from agentic_lab.application.evaluation import EvaluationScenario
 from agentic_lab.application.evidence import AnalysisEvidenceBundle
 from agentic_lab.application.validated_analysis import run_validated_analysis
 
-_MODEL_ENV = "AGENTIC_LAB_MODEL"
 _FRAMEWORK = "crewai"
 _PATTERN = "single_agent_external_evaluator_optimizer"
 
@@ -110,16 +109,6 @@ def parse_runs() -> int:
         raise ValueError("--runs must be at least 1")
 
     return runs
-
-
-def require_model_name() -> str:
-    """Return the model configured for the benchmark."""
-    model_name = os.environ.get(_MODEL_ENV)
-
-    if not model_name:
-        raise RuntimeError(f"{_MODEL_ENV} must identify the benchmark model")
-
-    return model_name
 
 
 def nearest_rank_percentile(values: list[float], percentile: float) -> float:
@@ -383,9 +372,9 @@ def write_benchmark_artifacts(
 def main() -> None:
     """Execute every scenario and print per-run and aggregate CrewAI results."""
     repetitions = parse_runs()
-    model_name = require_model_name()
+    model_name = gateway_model_alias()
     scenarios = load_evaluation_scenarios()
-    runtime = CrewAIRuntime(model_name)
+    runtime = CrewAIRuntime()
     analyzer = CrewAIVulnerabilityAnalyzer(runtime)
     all_runs: list[ScenarioRun] = []
     scenario_summaries: list[ScenarioSummary] = []
