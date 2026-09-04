@@ -99,7 +99,6 @@ def _flow(
     scenario = _scenario()
     return CrewAIValidatedAnalysisFlow(
         initial_state=CrewAIValidatedFlowState(
-            model_name="openai:gpt-5.6-luna",
             vulnerability=scenario.vulnerability,
             assets=scenario.assets,
             policy=scenario.policy,

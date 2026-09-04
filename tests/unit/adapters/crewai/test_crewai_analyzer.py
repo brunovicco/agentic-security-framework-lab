@@ -82,7 +82,7 @@ def test_crewai_runtime_delegates_provider_selection_to_gateway(
         create_stub_llm,
     )
 
-    CrewAIRuntime("openai:legacy-direct-model-metadata")
+    CrewAIRuntime()
 
     assert calls == 1
 
@@ -173,7 +173,7 @@ def test_crewai_runtime_deltas_cumulative_usage_snapshots(
     monkeypatch.setattr("agentic_lab.adapters.crewai.analyzer.Task", create_stub_task)
     monkeypatch.setattr("agentic_lab.adapters.crewai.analyzer.Crew", StubCrew)
 
-    runtime = CrewAIRuntime("security-analysis")
+    runtime = CrewAIRuntime()
 
     runtime.run("first")
     assert runtime.consume_usage() == CrewAIUsage(

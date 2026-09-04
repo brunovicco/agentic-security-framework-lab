@@ -140,9 +140,7 @@ def wait_for_gateway_readiness(
     )
 
 
-def load_gateway_config_summary(
-    path: Path = _GATEWAY_CONFIG_PATH,
-) -> GatewayConfigSummary:
+def load_gateway_config_summary(path: Path = _GATEWAY_CONFIG_PATH) -> GatewayConfigSummary:
     """Read the committed alias-to-upstream mapping used by the smoke."""
     payload = json.loads(path.read_text())
     model_list = payload.get("model_list")
@@ -231,7 +229,7 @@ def run_agent_crew_smoke(
     config: GatewayConfigSummary,
 ) -> tuple[GatewaySmokeRun, ...]:
     """Run canonical scenarios through CrewAI Agent/Task/Crew and the gateway."""
-    runtime = CrewAIRuntime(config.model_alias)
+    runtime = CrewAIRuntime()
     analyzer = CrewAIVulnerabilityAnalyzer(runtime)
     runs: list[GatewaySmokeRun] = []
 
@@ -266,7 +264,7 @@ def run_flow_smoke(
     config: GatewayConfigSummary,
 ) -> tuple[GatewaySmokeRun, ...]:
     """Run canonical scenarios through CrewAI Flow and the gateway."""
-    runtime = CrewAIFlowRuntime(config.model_alias)
+    runtime = CrewAIFlowRuntime()
     runs: list[GatewaySmokeRun] = []
 
     for scenario in scenarios:
