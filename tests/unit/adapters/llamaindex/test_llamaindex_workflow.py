@@ -236,14 +236,10 @@ def test_workflow_respects_single_attempt_limit() -> None:
 def test_runtime_returns_workflow_output_with_isolated_usage() -> None:
     runner = StubUsageRunner([_wrong_draft(), _correct_draft()])
 
-    def runner_factory(model_name: str) -> StubUsageRunner:
-        assert model_name == "openai:gpt-5.6-luna"
+    def runner_factory() -> StubUsageRunner:
         return runner
 
-    runtime = LlamaIndexWorkflowRuntime(
-        "openai:gpt-5.6-luna",
-        runner_factory=runner_factory,
-    )
+    runtime = LlamaIndexWorkflowRuntime(runner_factory=runner_factory)
 
     execution = runtime.run(_evidence_bundle())
 
@@ -260,16 +256,12 @@ def test_runtime_returns_workflow_output_with_isolated_usage() -> None:
 def test_runtime_binds_evidence_documents_to_every_attempt() -> None:
     runner = StubUsageRunner([_wrong_draft(), _correct_draft()])
 
-    def runner_factory(model_name: str) -> StubUsageRunner:
-        assert model_name == "openai:gpt-5.6-luna"
+    def runner_factory() -> StubUsageRunner:
         return runner
 
     bundle = _evidence_bundle()
     bundle["documents"] = (_document(),)
-    runtime = LlamaIndexWorkflowRuntime(
-        "openai:gpt-5.6-luna",
-        runner_factory=runner_factory,
-    )
+    runtime = LlamaIndexWorkflowRuntime(runner_factory=runner_factory)
 
     execution = runtime.run(bundle)
 
@@ -280,16 +272,14 @@ def test_runtime_binds_evidence_documents_to_every_attempt() -> None:
 
 
 def test_runtime_rejects_invalid_attempt_limit_before_creating_runner() -> None:
-    calls: list[str] = []
+    runner_factory_calls = 0
 
-    def runner_factory(model_name: str) -> StubUsageRunner:
-        calls.append(model_name)
+    def runner_factory() -> StubUsageRunner:
+        nonlocal runner_factory_calls
+        runner_factory_calls += 1
         return StubUsageRunner([_correct_draft()])
 
-    runtime = LlamaIndexWorkflowRuntime(
-        "openai:gpt-5.6-luna",
-        runner_factory=runner_factory,
-    )
+    runtime = LlamaIndexWorkflowRuntime(runner_factory=runner_factory)
 
     try:
         runtime.run(_evidence_bundle(), max_attempts=0)
@@ -298,4 +288,4 @@ def test_runtime_rejects_invalid_attempt_limit_before_creating_runner() -> None:
     else:
         raise AssertionError("Expected max_attempts=0 to be rejected")
 
-    assert calls == []
+    assert runner_factory_calls == 0

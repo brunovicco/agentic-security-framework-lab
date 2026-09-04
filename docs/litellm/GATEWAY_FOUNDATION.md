@@ -69,7 +69,7 @@ LiteLLM Proxy
 configured upstream provider model
 ```
 
-The current LlamaIndex client-migration increment uses its typed OpenAI transport with explicit gateway metadata while preserving the existing structured-prediction behavior:
+LlamaIndex uses its typed OpenAI transport with explicit gateway metadata and has accepted schema-v2 compatibility-smoke evidence:
 
 ```text
 LlamaIndex Runtime / Workflow
@@ -88,7 +88,7 @@ LiteLLM Proxy
 configured upstream provider model
 ```
 
-LlamaIndex migration code is not accepted runtime evidence until a dedicated provider-backed gateway smoke is executed and reviewed. Agno remains on its direct provider integration during this transitional phase.
+The accepted LlamaIndex review separates transport compatibility, semantic quality, and system safety and preserves the controlled `product-mismatch` semantic-variability finding. Agno remains on its direct provider integration during this transitional phase.
 
 Framework orchestration, the shared `LLMAnalysisDraft` contract, deterministic validation, retry policy, fallback, and final result construction remain application-owned and unchanged. Only provider access is moving behind the gateway boundary.
 
@@ -133,7 +133,7 @@ LITELLM_MASTER_KEY
 
 `AGENTIC_LAB_GATEWAY_API_KEY` is deliberately named as a client credential instead of reading `LITELLM_MASTER_KEY` directly. A local environment may temporarily assign the master key value to it, but the client contract can later receive a scoped virtual key without changing application code.
 
-`AGENTIC_LAB_MODEL` no longer selects provider access for migrated LangGraph or CrewAI. Their post-migration runner metadata cleanup is complete. During the first LlamaIndex client-migration increment, historical direct-model inputs remain temporarily in runners/runtime construction even though the gateway alias selects provider access; issue #55 tracks their removal only after a provider-backed LlamaIndex smoke is accepted. Agno still uses `AGENTIC_LAB_MODEL` for direct provider selection until its own migration.
+`AGENTIC_LAB_MODEL` no longer selects provider access for migrated LangGraph, CrewAI, or LlamaIndex. Their post-migration runtime and runner metadata use the governed `security-analysis` alias. LlamaIndex may accept that alias as a narrow compatibility input for existing dedicated scripts, but rejects provider-native direct-model identifiers and does not store model identity in its Workflow runtime. Agno is now the only workflow that still uses `AGENTIC_LAB_MODEL` for direct provider selection until its own migration.
 
 For post-migration runs, `security-analysis` identifies the governed alias actually requested by the client. It is not independent attestation of the provider model selected behind the proxy. The configured upstream remains gateway configuration evidence, and historical persisted benchmark artifacts are intentionally left unchanged.
 

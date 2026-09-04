@@ -7,6 +7,7 @@ from runpy import run_path
 from typing import Any
 
 import pytest
+from pytest import MonkeyPatch
 
 from agentic_lab.adapters.fixtures.adversarial_v2_evidence import (
     load_adversarial_v2_evidence_scenarios,
@@ -29,7 +30,9 @@ _SCRIPT = run_path(
 WorkflowSpec: Any = _SCRIPT["WorkflowSpec"]
 assess_framework_baseline: Any = _SCRIPT["assess_framework_baseline"]
 parse_config: Any = _SCRIPT["parse_config"]
+require_direct_model_name: Any = _SCRIPT["require_direct_model_name"]
 run_framework_baseline: Any = _SCRIPT["run_framework_baseline"]
+workflow_model_name: Any = _SCRIPT["workflow_model_name"]
 write_baseline_candidate_artifacts: Any = _SCRIPT["write_baseline_candidate_artifacts"]
 
 
@@ -150,6 +153,22 @@ def test_parse_config_deduplicates_explicit_workflow_selection() -> None:
 def test_parse_config_rejects_smoke_sized_execution() -> None:
     with pytest.raises(ValueError, match="at least two"):
         parse_config(["--runs", "1"])
+
+
+def test_llamaindex_baseline_uses_gateway_alias_without_direct_model_env(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("AGENTIC_LAB_MODEL", raising=False)
+
+    assert require_direct_model_name(("llamaindex-workflow",)) is None
+    assert workflow_model_name("llamaindex-workflow", None) == "security-analysis"
+
+
+def test_agno_baseline_still_requires_direct_model_env(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.delenv("AGENTIC_LAB_MODEL", raising=False)
+
+    with pytest.raises(RuntimeError, match="direct-provider model for Agno"):
+        require_direct_model_name(("agno-workflow",))
 
 
 def test_baseline_repeats_every_v2_scenario_and_preserves_iteration_identity() -> None:

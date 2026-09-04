@@ -45,9 +45,7 @@ WorkflowKey = Literal[
     "llamaindex-workflow",
     "agno-workflow",
 ]
-_DIRECT_PROVIDER_WORKFLOWS: frozenset[WorkflowKey] = frozenset(
-    {"llamaindex-workflow", "agno-workflow"}
-)
+_DIRECT_PROVIDER_WORKFLOWS: frozenset[WorkflowKey] = frozenset({"agno-workflow"})
 
 
 class _RuntimeUsage(Protocol):
@@ -125,8 +123,9 @@ def _crewai_runtime(_model_name: str) -> _WorkflowRuntime:
     return cast(_WorkflowRuntime, CrewAIFlowRuntime())
 
 
-def _llamaindex_runtime(model_name: str) -> _WorkflowRuntime:
-    return cast(_WorkflowRuntime, LlamaIndexWorkflowRuntime(model_name))
+def _llamaindex_runtime(_model_name: str) -> _WorkflowRuntime:
+    """Create migrated LlamaIndex Workflow through the gateway-owned model boundary."""
+    return cast(_WorkflowRuntime, LlamaIndexWorkflowRuntime())
 
 
 def _agno_runtime(model_name: str) -> _WorkflowRuntime:
@@ -197,15 +196,13 @@ def parse_config(argv: Sequence[str] | None = None) -> BaselineConfig:
 
 
 def require_direct_model_name(frameworks: tuple[WorkflowKey, ...]) -> str | None:
-    """Require a direct-provider model only when a selected workflow still needs one."""
+    """Require a direct-provider model only when Agno is selected."""
     if not any(workflow in _DIRECT_PROVIDER_WORKFLOWS for workflow in frameworks):
         return None
 
     model_name = os.environ.get(_MODEL_ENV)
     if not model_name:
-        raise RuntimeError(
-            f"{_MODEL_ENV} must identify the direct-provider model for LlamaIndex/Agno"
-        )
+        raise RuntimeError(f"{_MODEL_ENV} must identify the direct-provider model for Agno")
     return model_name
 
 
@@ -214,7 +211,7 @@ def workflow_model_name(
     direct_model_name: str | None,
 ) -> str:
     """Return the runtime model identity appropriate for one workflow boundary."""
-    if workflow == "crewai-flow":
+    if workflow in {"crewai-flow", "llamaindex-workflow"}:
         return gateway_model_alias()
     if direct_model_name is None:
         raise RuntimeError(f"Direct-provider model is required for {workflow}")

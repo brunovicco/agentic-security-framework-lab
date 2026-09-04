@@ -106,10 +106,7 @@ class LlamaIndexGatewayLLM(OpenAI):
         return model_kwargs
 
 
-def _create_llm(
-    _model_name: str,
-    callback_manager: CallbackManager,
-) -> _StructuredPredictLLM:
+def _create_llm(callback_manager: CallbackManager) -> _StructuredPredictLLM:
     """Create a structured LlamaIndex client through the governed gateway alias."""
     return cast(
         _StructuredPredictLLM,
@@ -127,18 +124,14 @@ class LlamaIndexRuntime:
 
     def __init__(
         self,
-        model_name: str,
         token_counter: TokenCountingHandler | None = None,
     ) -> None:
-        """Create gateway-backed LlamaIndex LLM while retaining transitional metadata input."""
+        """Create a gateway-backed LlamaIndex LLM and isolated usage counter."""
         handler = token_counter or TokenCountingHandler(verbose=False)
         callback_manager = CallbackManager([handler])
 
         self._token_counter = cast(_TokenCounter, handler)
-        self._llm = _create_llm(
-            model_name,
-            callback_manager=callback_manager,
-        )
+        self._llm = _create_llm(callback_manager=callback_manager)
 
     def consume_usage(self) -> LlamaIndexUsage:
         """Return accumulated usage and reset counters for the next benchmark run."""
