@@ -12,4 +12,6 @@ The accepted manual review of the first persisted LangGraph gateway smoke is rec
 
 The accepted manual review of the corrected persisted CrewAI gateway smoke is recorded in `CREWAI_GATEWAY_SMOKE_REVIEW.md`, with the machine-readable decision in `crewai_gateway_smoke_review.json`.
 
+The accepted manual review of the persisted LlamaIndex schema-v2 gateway smoke is recorded in `LLAMAINDEX_GATEWAY_SMOKE_REVIEW.md`, with the machine-readable decision in `llamaindex_gateway_smoke_review.json`. The review preserves the earlier controlled `product-mismatch` semantic-variability finding instead of treating the accepted 5/5 run as proof of semantic determinism.
+
 The architectural decision is recorded in `docs/adr/0002-centralize-llm-provider-access-behind-litellm-proxy.md`.
