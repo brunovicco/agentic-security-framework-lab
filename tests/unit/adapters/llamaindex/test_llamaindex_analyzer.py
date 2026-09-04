@@ -122,7 +122,7 @@ def test_llamaindex_llm_uses_governed_gateway_alias(
     monkeypatch.setenv("AGENTIC_LAB_GATEWAY_API_KEY", "gateway-test-key")
     monkeypatch.setattr(llamaindex_module, "LlamaIndexGatewayLLM", StubGatewayLLM)
 
-    LlamaIndexRuntime("openai:legacy-direct-model")
+    LlamaIndexRuntime()
 
     assert captured_kwargs["model"] == "security-analysis"
     assert captured_kwargs["api_base"] == "http://gateway.test:4000"
@@ -152,17 +152,13 @@ def test_llamaindex_runtime_uses_separate_system_and_user_messages(
 ) -> None:
     stub = StubStructuredLLM(_draft())
 
-    def factory(
-        model_name: str,
-        callback_manager: CallbackManager,
-    ) -> StubStructuredLLM:
-        assert model_name == "openai:gpt-5.6-luna"
+    def factory(callback_manager: CallbackManager) -> StubStructuredLLM:
         assert isinstance(callback_manager, CallbackManager)
         return stub
 
     monkeypatch.setattr(llamaindex_module, "_create_llm", factory)
 
-    runtime = LlamaIndexRuntime("openai:gpt-5.6-luna")
+    runtime = LlamaIndexRuntime()
     result = runtime.run(
         system_prompt=SECURITY_ANALYSIS_SYSTEM_PROMPT,
         user_prompt="Evidence JSON: untrusted test data",
@@ -185,11 +181,7 @@ def test_llamaindex_runtime_usage_is_consumed_and_reset(
 ) -> None:
     stub = StubStructuredLLM(_draft())
 
-    def factory(
-        model_name: str,
-        callback_manager: CallbackManager,
-    ) -> StubStructuredLLM:
-        assert model_name == "openai:gpt-5.6-luna"
+    def factory(callback_manager: CallbackManager) -> StubStructuredLLM:
         assert isinstance(callback_manager, CallbackManager)
         return stub
 
@@ -212,10 +204,7 @@ def test_llamaindex_runtime_usage_is_consumed_and_reset(
             ),
         ]
     )
-    runtime = LlamaIndexRuntime(
-        "openai:gpt-5.6-luna",
-        token_counter=token_counter,
-    )
+    runtime = LlamaIndexRuntime(token_counter=token_counter)
 
     usage = runtime.consume_usage()
 
