@@ -47,7 +47,9 @@ async def _check() -> dict[str, object]:
 
         resource_result = await client.read_resource(_RESOURCE_URI)
         if len(resource_result.contents) != 1:
-            raise RuntimeError("Applicability contract resource must return exactly one content item")
+            raise RuntimeError(
+                "Applicability contract resource must return exactly one content item"
+            )
         resource_text = getattr(resource_result.contents[0], "text", None)
         if not isinstance(resource_text, str):
             raise RuntimeError("Applicability contract resource must return text JSON content")
