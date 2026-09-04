@@ -1,5 +1,7 @@
 """Tests for the LlamaIndex vulnerability-analysis adapter."""
 
+from typing import Any
+
 from llama_index.core.callbacks import CallbackManager, TokenCountingHandler
 from llama_index.core.callbacks.token_counting import TokenCountingEvent
 from llama_index.core.prompts import ChatPromptTemplate
@@ -8,6 +10,7 @@ from pytest import MonkeyPatch
 
 from agentic_lab.adapters.llamaindex import analyzer as llamaindex_module
 from agentic_lab.adapters.llamaindex.analyzer import (
+    LlamaIndexGatewayLLM,
     LlamaIndexRuntime,
     LlamaIndexVulnerabilityAnalyzer,
 )
@@ -47,6 +50,13 @@ class StubStructuredLLM:
         assert output_cls is LLMAnalysisDraft
         self.prompts.append(prompt)
         return self.draft
+
+
+class InspectableGatewayLLM(LlamaIndexGatewayLLM):
+    """Expose protected transport kwargs for provider-free contract tests."""
+
+    def request_model_kwargs(self) -> dict[str, Any]:
+        return self._get_model_kwargs()
 
 
 def _vulnerability() -> VulnerabilityEvidence:
@@ -104,36 +114,35 @@ def test_llamaindex_llm_uses_governed_gateway_alias(
 ) -> None:
     captured_kwargs: dict[str, object] = {}
 
-    class StubOpenAILike:
+    class StubGatewayLLM:
         def __init__(self, **kwargs: object) -> None:
             captured_kwargs.update(kwargs)
 
     monkeypatch.setenv("AGENTIC_LAB_GATEWAY_BASE_URL", "http://gateway.test:4000")
     monkeypatch.setenv("AGENTIC_LAB_GATEWAY_API_KEY", "gateway-test-key")
-    monkeypatch.setattr(llamaindex_module, "_GatewayOpenAILike", StubOpenAILike)
+    monkeypatch.setattr(llamaindex_module, "LlamaIndexGatewayLLM", StubGatewayLLM)
 
     LlamaIndexRuntime("openai:legacy-direct-model")
 
     assert captured_kwargs["model"] == "security-analysis"
     assert captured_kwargs["api_base"] == "http://gateway.test:4000"
     assert captured_kwargs["api_key"] == "gateway-test-key"
-    assert captured_kwargs["is_chat_model"] is True
-    assert captured_kwargs["is_function_calling_model"] is True
     assert "temperature" not in captured_kwargs
     assert isinstance(captured_kwargs["callback_manager"], CallbackManager)
 
 
-def test_gateway_openai_like_omits_temperature_from_provider_request() -> None:
-    llm = llamaindex_module._GatewayOpenAILike(
+def test_gateway_llm_declares_capabilities_without_forwarding_temperature() -> None:
+    llm = InspectableGatewayLLM(
         model="security-analysis",
         api_base="http://gateway.test:4000",
         api_key="gateway-test-key",
-        is_chat_model=True,
-        is_function_calling_model=True,
     )
 
-    model_kwargs = llm._get_model_kwargs()
+    model_kwargs = llm.request_model_kwargs()
 
+    assert llm.metadata.model_name == "security-analysis"
+    assert llm.metadata.is_chat_model is True
+    assert llm.metadata.is_function_calling_model is True
     assert model_kwargs["model"] == "security-analysis"
     assert "temperature" not in model_kwargs
 
@@ -239,7 +248,7 @@ def test_llamaindex_analyzer_frames_evidence_as_untrusted_data() -> None:
     assert '"asset_id": "api-prod-01"' in user_prompt
 
 
-def test_llamaindex_analyzer_includes_deterministic_feedback() -> None:
+def test_llamaindex_analyzer_includes_deterministic_evaluator_feedback() -> None:
     runner = StubLlamaIndexAnalysisRunner(_draft())
     analyzer = LlamaIndexVulnerabilityAnalyzer(runner)
 
