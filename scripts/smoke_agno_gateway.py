@@ -289,6 +289,7 @@ def render_markdown(
     assessment: SmokeAssessment,
 ) -> str:
     """Render the human-readable non-baseline Agno gateway smoke report."""
+    transport_status = "PASS" if assessment.transport_compatibility.passed else "FAIL"
     lines = [
         "# Agno LiteLLM Gateway Smoke",
         "",
@@ -312,7 +313,7 @@ def render_markdown(
         "Gateway endpoint and credentials are intentionally not persisted in this artifact.",
         "",
         f"Overall assessment: **{'PASS' if assessment.passed else 'FAIL'}**",
-        f"Transport compatibility: **{'PASS' if assessment.transport_compatibility.passed else 'FAIL'}**",
+        f"Transport compatibility: **{transport_status}**",
         f"Semantic quality: **{'PASS' if assessment.semantic_quality.passed else 'FAIL'}**",
         f"System safety: **{'PASS' if assessment.system_safety.passed else 'FAIL'}**",
         "",
