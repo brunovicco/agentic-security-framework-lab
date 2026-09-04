@@ -16,6 +16,6 @@ The accepted manual review of the corrected persisted CrewAI gateway smoke is re
 
 The accepted manual review of the persisted LlamaIndex schema-v2 gateway smoke is recorded in `LLAMAINDEX_GATEWAY_SMOKE_REVIEW.md`, with the machine-readable decision in `llamaindex_gateway_smoke_review.json`. The review preserves the earlier controlled `product-mismatch` semantic-variability finding instead of treating the accepted 5/5 run as proof of semantic determinism.
 
-Agno gateway smoke evidence remains pending provider-backed execution and separate manual review.
+The accepted manual review of the persisted Agno schema-v2 gateway smoke is recorded in `AGNO_GATEWAY_SMOKE_REVIEW.md`, with the machine-readable decision in `agno_gateway_smoke_review.json`.
 
 The architectural decision is recorded in `docs/adr/0002-centralize-llm-provider-access-behind-litellm-proxy.md`.

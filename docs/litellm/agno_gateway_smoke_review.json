@@ -1,0 +1,48 @@
+{
+  "schema_version": "1",
+  "review_id": "agno-litellm-gateway-smoke-2026-09-04",
+  "review_status": "accepted_manual_trace_review",
+  "reviewed_at_utc": "2026-09-04T22:32:14+00:00",
+  "review_record": "docs/litellm/AGNO_GATEWAY_SMOKE_REVIEW.md",
+  "reviewed_against_repository_commit": "91d2702588330efbca8272ad7cc104487fafb108",
+  "artifact": {
+    "json_path": "artifacts/gateway-smoke/agno/latest.json",
+    "json_blob_sha": "f68fb113f4fde67409fafd3881f174054ac4530b",
+    "markdown_path": "artifacts/gateway-smoke/agno/latest.md",
+    "markdown_blob_sha": "30d09e813150e92f4f19883219ae2f7ae8967420",
+    "generated_at_utc": "2026-09-04T22:25:15.489941+00:00",
+    "artifact_type": "gateway_smoke",
+    "artifact_schema_version": "2",
+    "official_baseline": false,
+    "framework": "agno",
+    "pattern": "workflow_loop_condition_evaluator_optimizer_via_litellm_proxy",
+    "model_alias": "security-analysis",
+    "configured_upstream_model": "openai/gpt-5.6-luna",
+    "configured_upstream_evidence": "committed_litellm_config",
+    "repetitions_per_scenario": 1,
+    "scenario_count": 5
+  },
+  "decision": {
+    "approved": true,
+    "overall_passed": true,
+    "transport_compatibility_passed": true,
+    "semantic_quality_passed": true,
+    "system_safety_passed": true,
+    "expected_match_runs": 5,
+    "validation_passed_runs": 5,
+    "llm_source_runs": 5,
+    "single_attempt_runs": 5,
+    "single_model_call_runs": 5,
+    "nonzero_token_runs": 5,
+    "fallback_runs": 0,
+    "credential_or_endpoint_leakage_found": false
+  },
+  "interpretation": {
+    "proves_gateway_compatibility": true,
+    "proves_system_safety_for_reviewed_run": true,
+    "proves_semantic_determinism": false,
+    "proves_statistical_quality_stability": false,
+    "proves_performance_baseline": false,
+    "proves_provider_response_attestation": false
+  }
+}
