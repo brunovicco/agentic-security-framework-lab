@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from runpy import run_path
 from typing import Any
+from urllib.error import URLError
 
 import pytest
 from pytest import MonkeyPatch
@@ -14,7 +15,19 @@ GatewaySmokeRun: Any = _SCRIPT["GatewaySmokeRun"]
 assess_gateway_smoke: Any = _SCRIPT["assess_gateway_smoke"]
 load_gateway_config_summary: Any = _SCRIPT["load_gateway_config_summary"]
 require_gateway_environment: Any = _SCRIPT["require_gateway_environment"]
+wait_for_gateway_readiness: Any = _SCRIPT["wait_for_gateway_readiness"]
 write_smoke_artifacts: Any = _SCRIPT["write_smoke_artifacts"]
+
+
+class _FakeResponse:
+    def __init__(self, status: int) -> None:
+        self.status = status
+
+    def __enter__(self) -> "_FakeResponse":
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        return None
 
 
 def _run(
@@ -61,6 +74,95 @@ def test_require_gateway_environment_requires_both_values(
 
     with pytest.raises(RuntimeError, match="AGENTIC_LAB_GATEWAY_API_KEY"):
         require_gateway_environment()
+
+
+def test_require_gateway_environment_returns_configured_values(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AGENTIC_LAB_GATEWAY_BASE_URL", "http://localhost:4000")
+    monkeypatch.setenv("AGENTIC_LAB_GATEWAY_API_KEY", "test-key")
+
+    assert require_gateway_environment() == (
+        "http://localhost:4000",
+        "test-key",
+    )
+
+
+def test_wait_for_gateway_readiness_uses_official_readiness_endpoint(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    requests: list[Any] = []
+
+    def fake_urlopen(request: Any, timeout: float) -> _FakeResponse:
+        requests.append((request, timeout))
+        return _FakeResponse(status=200)
+
+    monkeypatch.setitem(
+        wait_for_gateway_readiness.__globals__,
+        "urlopen",
+        fake_urlopen,
+    )
+
+    wait_for_gateway_readiness(
+        "http://localhost:4000",
+        "test-key",
+        attempts=1,
+        delay_seconds=0,
+    )
+
+    request, timeout = requests[0]
+    assert request.full_url == "http://localhost:4000/health/readiness"
+    assert request.get_header("Authorization") == "Bearer test-key"
+    assert timeout == 2.0
+
+
+def test_wait_for_gateway_readiness_retries_connection_refusal(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def fake_urlopen(request: Any, timeout: float) -> _FakeResponse:
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise URLError("connection refused")
+        return _FakeResponse(status=200)
+
+    monkeypatch.setitem(
+        wait_for_gateway_readiness.__globals__,
+        "urlopen",
+        fake_urlopen,
+    )
+
+    wait_for_gateway_readiness(
+        "http://localhost:4000",
+        "test-key",
+        attempts=3,
+        delay_seconds=0,
+    )
+
+    assert calls == 3
+
+
+def test_wait_for_gateway_readiness_fails_with_startup_diagnostic(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def fake_urlopen(request: Any, timeout: float) -> _FakeResponse:
+        raise URLError("connection refused")
+
+    monkeypatch.setitem(
+        wait_for_gateway_readiness.__globals__,
+        "urlopen",
+        fake_urlopen,
+    )
+
+    with pytest.raises(RuntimeError, match="proxy process is still running"):
+        wait_for_gateway_readiness(
+            "http://localhost:4000",
+            "test-key",
+            attempts=2,
+            delay_seconds=0,
+        )
 
 
 def test_load_gateway_config_summary_reads_governed_alias(tmp_path: Path) -> None:
