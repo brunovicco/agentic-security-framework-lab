@@ -59,12 +59,23 @@ class GatewaySmokeRun:
 
 
 @dataclass(frozen=True, slots=True)
+class EvidenceAssessment:
+    """Capture one independently reviewable evidence dimension."""
+
+    passed: bool
+    failures: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class SmokeAssessment:
-    """Fail closed when LlamaIndex does not preserve required gateway behavior."""
+    """Preserve a fail-closed overall gate while separating evidence dimensions."""
 
     passed: bool
     runs: int
     failures: tuple[str, ...]
+    transport_compatibility: EvidenceAssessment
+    semantic_quality: EvidenceAssessment
+    system_safety: EvidenceAssessment
 
 
 def wait_for_gateway_readiness(
@@ -220,37 +231,65 @@ def run_gateway_smoke(
     return asyncio.run(_execute_gateway_smoke(scenarios, config))
 
 
+def _build_assessment(failures: list[str]) -> EvidenceAssessment:
+    """Create one immutable evidence assessment from collected failures."""
+    return EvidenceAssessment(
+        passed=not failures,
+        failures=tuple(failures),
+    )
+
+
 def assess_gateway_smoke(runs: tuple[GatewaySmokeRun, ...]) -> SmokeAssessment:
-    """Require correct final behavior plus observable provider usage for every run."""
-    failures: list[str] = []
+    """Assess transport, semantic quality, system safety, and fail-closed overall state."""
+    transport_failures: list[str] = []
+    semantic_failures: list[str] = []
+    safety_failures: list[str] = []
 
     if len(runs) != _EXPECTED_SCENARIO_COUNT:
-        failures.append("unexpected_run_count")
+        transport_failures.append("unexpected_run_count")
     if len({run.scenario_id for run in runs}) != _EXPECTED_SCENARIO_COUNT:
-        failures.append("unexpected_scenario_set")
+        transport_failures.append("unexpected_scenario_set")
 
     for run in runs:
         prefix = run.scenario_id
-        if not run.expected_match:
-            failures.append(f"{prefix}:expected_mismatch")
-        if not run.validation_passed:
-            failures.append(f"{prefix}:validation_failure")
-        if run.analysis_source != "llm":
-            failures.append(f"{prefix}:unexpected_analysis_source")
         if run.analysis_attempts < 1:
-            failures.append(f"{prefix}:no_analysis_attempt")
+            transport_failures.append(f"{prefix}:no_analysis_attempt")
         if run.model_calls < 1:
-            failures.append(f"{prefix}:no_model_call")
+            transport_failures.append(f"{prefix}:no_model_call")
         if run.model_calls < run.analysis_attempts:
-            failures.append(f"{prefix}:incomplete_model_call_telemetry")
+            transport_failures.append(f"{prefix}:incomplete_model_call_telemetry")
         if run.input_tokens < 1 or run.output_tokens < 1 or run.total_tokens < 1:
-            failures.append(f"{prefix}:missing_usage_metadata")
+            transport_failures.append(f"{prefix}:missing_usage_metadata")
+
+        if not run.validation_passed:
+            semantic_failures.append(f"{prefix}:validation_failure")
+        if run.analysis_source != "llm":
+            semantic_failures.append(f"{prefix}:unexpected_analysis_source")
+
+        if not run.expected_match:
+            safety_failures.append(f"{prefix}:expected_mismatch")
+
+    transport = _build_assessment(transport_failures)
+    semantic = _build_assessment(semantic_failures)
+    safety = _build_assessment(safety_failures)
+    failures = (
+        *(f"transport_compatibility:{failure}" for failure in transport.failures),
+        *(f"semantic_quality:{failure}" for failure in semantic.failures),
+        *(f"system_safety:{failure}" for failure in safety.failures),
+    )
 
     return SmokeAssessment(
-        passed=not failures,
+        passed=transport.passed and semantic.passed and safety.passed,
         runs=len(runs),
-        failures=tuple(failures),
+        failures=failures,
+        transport_compatibility=transport,
+        semantic_quality=semantic,
+        system_safety=safety,
     )
+
+
+def _format_assessment(assessment: EvidenceAssessment) -> str:
+    return "PASS" if assessment.passed else "FAIL"
 
 
 def render_markdown(
@@ -282,7 +321,22 @@ def render_markdown(
         "",
         "Gateway endpoint and credentials are intentionally not persisted in this artifact.",
         "",
-        f"Smoke assessment: **{'PASS' if assessment.passed else 'FAIL'}**",
+        f"Overall assessment: **{'PASS' if assessment.passed else 'FAIL'}**",
+        "",
+        "## Evidence dimensions",
+        "",
+        (
+            "- Transport compatibility: "
+            f"**{_format_assessment(assessment.transport_compatibility)}**"
+        ),
+        f"- Semantic quality: **{_format_assessment(assessment.semantic_quality)}**",
+        f"- System safety: **{_format_assessment(assessment.system_safety)}**",
+        "",
+        (
+            "A failed overall assessment can still contain valid transport-compatibility "
+            "evidence. It must not be described as semantic LLM success when semantic "
+            "quality fails."
+        ),
         "",
         (
             "| Scenario | Expected match | Validation | Attempts | Calls | Tokens | "
@@ -310,20 +364,28 @@ def render_markdown(
             "## Interpretation",
             "",
             (
-                "This smoke verifies the native LlamaIndex Workflow path with "
-                "`structured_predict()` reasoning through the governed LiteLLM alias. "
-                "Expected truth and deterministic validation remain framework-neutral."
+                "Transport compatibility proves that the LlamaIndex Workflow reached the "
+                "gateway-backed provider path with complete observable usage."
             ),
             "",
             (
-                "Each Workflow execution creates an isolated LlamaIndex analysis runner. "
-                "`TokenCountingHandler` must observe at least one model call and complete "
-                "prompt/completion/total token usage for every accepted smoke run."
+                "Semantic quality separately records whether probabilistic LLM output passed "
+                "the deterministic evaluator without requiring oracle fallback."
             ),
             "",
             (
-                "The smoke performs one execution per canonical scenario. It is compatibility "
-                "evidence and must not be used as a performance baseline or framework ranking."
+                "System safety records whether the final governed result matches external "
+                "framework-neutral truth, including when deterministic fallback is required."
+            ),
+            "",
+            (
+                "The overall process remains fail closed: all three evidence dimensions must "
+                "pass for the smoke command to exit successfully."
+            ),
+            "",
+            (
+                "The smoke performs one execution per canonical scenario. It is not a "
+                "performance baseline, framework ranking, or statistical quality benchmark."
             ),
             "",
         ]
@@ -342,7 +404,7 @@ def write_smoke_artifacts(
     output_root.mkdir(parents=True, exist_ok=True)
 
     payload = {
-        "schema_version": "1",
+        "schema_version": "2",
         "artifact_type": "gateway_smoke",
         "official_baseline": False,
         "review_status": "pending_manual_trace_review",

@@ -6,13 +6,7 @@ This is a provider-backed compatibility smoke for the LlamaIndex migration to th
 
 It is **not** an official benchmark and must not be used to compare latency, token efficiency, or framework quality with historical results.
 
-The smoke answers a narrower question:
-
-> Can the migrated LlamaIndex Workflow execute the canonical workload through the governed `security-analysis` alias while preserving external expected truth, deterministic validation, structured prediction, and observable LLM usage?
-
-## Runtime surface
-
-The smoke exercises the native LlamaIndex Workflow path used by the framework benchmark:
+The smoke exercises the native LlamaIndex Workflow path:
 
 ```text
 LlamaIndex Workflow
@@ -26,21 +20,75 @@ LlamaIndex Workflow
 
 The same five framework-neutral canonical scenarios are executed exactly once.
 
-The runner uses one process-level event loop and calls the async-first Workflow path for each scenario. Each Workflow execution creates an isolated LlamaIndex analysis runner and token counter through the existing runtime factory.
+## Evidence model
+
+The smoke records four related assessments rather than collapsing different questions into one result.
+
+### Transport compatibility
+
+`transport_compatibility` asks whether the migrated framework path actually exercised the gateway-backed provider boundary with observable telemetry.
+
+It requires:
+
+1. the complete canonical scenario set;
+2. at least one analysis attempt per run;
+3. at least one observed model call per run;
+4. `model_calls >= analysis_attempts`;
+5. positive prompt, completion, and total token usage.
+
+This dimension does **not** claim that the LLM produced the correct semantic answer.
+
+### Semantic quality
+
+`semantic_quality` asks whether probabilistic LLM reasoning itself satisfied the shared deterministic evaluator.
+
+It requires for every run:
+
+1. deterministic validation passes;
+2. final `analysis_source` is `llm`, not deterministic oracle fallback.
+
+A correct final answer rescued by fallback is therefore a semantic-quality failure. The repository continues to preserve the principle:
+
+> correct final system result != LLM succeeded
+
+### System safety
+
+`system_safety` asks whether the final governed result matches framework-neutral external expected truth.
+
+A run can therefore have:
+
+```text
+transport_compatibility = PASS
+semantic_quality = FAIL
+system_safety = PASS
+```
+
+when the provider path works, probabilistic reasoning exhausts bounded retries, and deterministic fallback preserves the correct final result.
+
+### Overall gate
+
+`overall` remains fail closed and passes only when all three evidence dimensions pass.
+
+The smoke command therefore continues to exit non-zero when semantic quality fails. Splitting the evidence model does not weaken the existing process gate; it prevents a semantic model failure from being misreported as a gateway transport failure.
+
+## Why the dimensions are separate
+
+Provider-backed investigation of the canonical `product-mismatch` scenario showed reproducible model-output variability around the distinction between `not_affected` and `not_applicable`.
+
+A controlled matrix produced identical results in isolated and `baseline-mixed -> product-mismatch` modes:
+
+```text
+samples per mode:       3
+first-attempt accepts:  1
+final LLM accepts:      2
+oracle fallbacks:       1
+```
+
+That evidence does not support sequence/state contamination. It supports separating transport compatibility from probabilistic semantic quality instead of repeating a one-shot smoke until a favorable sample appears.
+
+The smoke itself remains one execution per canonical scenario. It is compatibility evidence, not a statistical model-quality benchmark.
 
 ## Evidence boundary
-
-Every run must satisfy all of the following:
-
-1. final asset applicability matches the framework-neutral expected truth;
-2. deterministic validation accepts the LLM draft;
-3. the final analysis source is `llm`, not deterministic fallback;
-4. at least one analysis attempt occurred;
-5. at least one model call was reported;
-6. reported model calls are not fewer than application analysis attempts;
-7. prompt, completion, and total token usage are all greater than zero.
-
-A correct final answer produced by deterministic fallback is therefore a smoke failure. The purpose is to prove that the migrated LlamaIndex-to-LiteLLM path itself executed successfully, not merely that the overall system remained safe.
 
 The persisted artifact records the committed upstream model mapping as **configuration evidence**. It is not independent provider-response attestation.
 
@@ -49,17 +97,40 @@ The artifact never persists:
 - `AGENTIC_LAB_GATEWAY_API_KEY`;
 - `LITELLM_MASTER_KEY`;
 - `OPENAI_API_KEY`;
-- the gateway endpoint URL.
+- the gateway endpoint URL;
+- prompts, rationales, recommendations, or evaluator feedback text.
 
-The smoke does not require `AGENTIC_LAB_MODEL`. The transitional `model_name` constructor input is populated with the governed gateway alias and does not select provider access. Issue #55 tracks removal of that historical metadata contract only after this provider-backed smoke is accepted.
+The smoke does not require `AGENTIC_LAB_MODEL`. The transitional `model_name` constructor input is populated with the governed gateway alias and does not select provider access. Issue #55 tracks removal of that historical metadata contract after transport compatibility evidence is explicitly reviewed.
+
+## Artifact schema
+
+The split evidence structure is persisted as gateway-smoke schema version `2`.
+
+Generated evidence keeps:
+
+```text
+official_baseline = false
+review_status = pending_manual_trace_review
+```
+
+The JSON artifact contains a top-level `smoke_assessment` with:
+
+```text
+passed
+runs
+failures
+transport_compatibility
+semantic_quality
+system_safety
+```
+
+The top-level `passed` value is the fail-closed overall gate.
 
 ## LlamaIndex usage semantics
 
 `LlamaIndexWorkflowRuntime.arun()` creates a fresh `LlamaIndexRuntime` for each Workflow execution. The runtime owns a `TokenCountingHandler`, and `consume_usage()` returns prompt, completion, total token counts, and the number of observed LLM callback events for that execution.
 
-The smoke therefore treats positive request/token telemetry as part of compatibility evidence rather than relying only on the final system result.
-
-If provider-backed execution reveals different telemetry semantics for the pinned LlamaIndex version, treat the observation as runtime evidence and diagnose it before changing acceptance criteria.
+Positive request/token telemetry is transport-compatibility evidence rather than proof of semantic correctness.
 
 ## Gateway readiness
 
@@ -83,28 +154,7 @@ git checkout main
 git pull --ff-only
 ```
 
-Configure provider and gateway secrets without printing them:
-
-```bash
-read -s "OPENAI_API_KEY?OpenAI API key: "
-echo
-export OPENAI_API_KEY
-
-export LITELLM_MASTER_KEY="sk-local-$(openssl rand -hex 24)"
-```
-
-Install and start the pinned gateway tool if needed:
-
-```bash
-uv tool install 'litellm[proxy]==1.98.0'
-
-: > /tmp/agentic-lab-litellm.log
-litellm --config config/litellm/config.yaml \
-  > /tmp/agentic-lab-litellm.log 2>&1 &
-export LITELLM_PID=$!
-```
-
-Configure the client boundary:
+Configure provider and gateway secrets without printing them, then start the pinned LiteLLM proxy and configure:
 
 ```bash
 export AGENTIC_LAB_GATEWAY_BASE_URL="http://localhost:4000"
@@ -112,17 +162,13 @@ export AGENTIC_LAB_GATEWAY_API_KEY="$LITELLM_MASTER_KEY"
 unset AGENTIC_LAB_MODEL
 ```
 
-Run the LlamaIndex smoke:
+Run:
 
 ```bash
 uv run python scripts/smoke_llamaindex_gateway.py
 ```
 
-A successful execution prints five `gateway_smoke_run` records and finishes with:
-
-```text
-{"type": "gateway_smoke_assessment", "passed": true, "runs": 5, "failures": []}
-```
+The runner prints five `gateway_smoke_run` records followed by one `gateway_smoke_assessment` containing the overall and dimensional results.
 
 It writes reviewable, non-baseline evidence to:
 
@@ -130,6 +176,8 @@ It writes reviewable, non-baseline evidence to:
 artifacts/gateway-smoke/llamaindex/latest.json
 artifacts/gateway-smoke/llamaindex/latest.md
 ```
+
+A failed overall run still writes the candidate artifact so the independently valid dimensions can be reviewed. It must not be described as semantic LLM success when `semantic_quality` fails.
 
 ## Failure investigation
 
@@ -140,17 +188,16 @@ ps -p "$LITELLM_PID"
 tail -n 150 /tmp/agentic-lab-litellm.log
 ```
 
-If readiness succeeds but a LlamaIndex call fails, capture the exception and final proxy-log lines. Do not paste API keys or gateway credentials.
+If transport compatibility fails after readiness, diagnose the framework/client/proxy/provider boundary before changing acceptance criteria.
 
-A failure after readiness should be treated as runtime compatibility evidence. Do not add retries, fallbacks, alternate providers, or gateway policy merely to make the smoke pass; diagnose the failed boundary first.
+If transport compatibility passes but semantic quality fails, treat that as model-quality evidence. Do not add gateway retries, alternate providers, or weaken deterministic validation merely to obtain a passing sample.
+
+If system safety fails, treat it as the highest-priority governed-system failure because the final result no longer matches external expected truth.
 
 ## Review status
 
-Successful generated artifacts start with:
+Provider-backed execution is necessary but not sufficient for acceptance.
 
-```text
-review_status = pending_manual_trace_review
-official_baseline = false
-```
+Manual review must state exactly which evidence dimensions are accepted. A reviewer may accept transport compatibility while recording semantic-quality variability; that does not convert a fallback-rescued run into LLM success.
 
-Provider-backed execution is necessary but not sufficient for acceptance. Generated evidence must be reviewed before any result is committed as accepted compatibility evidence or before Issue #55 is closed.
+Issue #55 may proceed only after transport compatibility is explicitly reviewed. Historical benchmark artifacts remain unchanged.
