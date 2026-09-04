@@ -72,4 +72,7 @@ def test_generic_runner_retains_direct_model_contract_for_unmigrated_workflows(
         script["workflow_model_name"]("llamaindex-workflow", direct_model)
         == "openai:direct-test-model"
     )
-    assert script["workflow_model_name"]("agno-workflow", direct_model) == "openai:direct-test-model"
+    assert (
+        script["workflow_model_name"]("agno-workflow", direct_model)
+        == "openai:direct-test-model"
+    )
