@@ -369,11 +369,12 @@ def main() -> None:
             result=result,
             model_name=model_name,
         )
-        print(
-            json.dumps(
-                {"type": "smoke_assessment", "workflow": workflow_key, **asdict(assessment)}
-            )
-        )
+        assessment_payload = {
+            "type": "smoke_assessment",
+            "workflow": workflow_key,
+            **asdict(assessment),
+        }
+        print(json.dumps(assessment_payload))
         print(f"artifact_json: {json_path}")
         print(f"artifact_markdown: {markdown_path}")
 
