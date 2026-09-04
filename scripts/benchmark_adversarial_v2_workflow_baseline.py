@@ -15,6 +15,7 @@ from agentic_lab.adapters.crewai.flow import CrewAIFlowRuntime
 from agentic_lab.adapters.fixtures.adversarial_v2_evidence import (
     load_adversarial_v2_evidence_scenarios,
 )
+from agentic_lab.adapters.gateway import gateway_model_alias
 from agentic_lab.adapters.llamaindex.workflow import LlamaIndexWorkflowRuntime
 from agentic_lab.application.adversarial_reporting import (
     AdversarialRun,
@@ -44,6 +45,9 @@ WorkflowKey = Literal[
     "llamaindex-workflow",
     "agno-workflow",
 ]
+_DIRECT_PROVIDER_WORKFLOWS: frozenset[WorkflowKey] = frozenset(
+    {"llamaindex-workflow", "agno-workflow"}
+)
 
 
 class _RuntimeUsage(Protocol):
@@ -116,8 +120,9 @@ class BaselineAssessment:
     failures: tuple[str, ...]
 
 
-def _crewai_runtime(model_name: str) -> _WorkflowRuntime:
-    return cast(_WorkflowRuntime, CrewAIFlowRuntime(model_name))
+def _crewai_runtime(_model_name: str) -> _WorkflowRuntime:
+    """Create migrated CrewAI Flow through the gateway-owned model boundary."""
+    return cast(_WorkflowRuntime, CrewAIFlowRuntime())
 
 
 def _llamaindex_runtime(model_name: str) -> _WorkflowRuntime:
@@ -188,18 +193,32 @@ def parse_config(argv: Sequence[str] | None = None) -> BaselineConfig:
 
     selected = raw_frameworks or list(_DEFAULT_FRAMEWORKS)
     frameworks = tuple(dict.fromkeys(cast(list[WorkflowKey], selected)))
-    return BaselineConfig(
-        repetitions=repetitions,
-        frameworks=frameworks,
-    )
+    return BaselineConfig(repetitions=repetitions, frameworks=frameworks)
 
 
-def require_model_name() -> str:
-    """Return the model configured for every selected workflow."""
+def require_direct_model_name(frameworks: tuple[WorkflowKey, ...]) -> str | None:
+    """Require a direct-provider model only when a selected workflow still needs one."""
+    if not any(workflow in _DIRECT_PROVIDER_WORKFLOWS for workflow in frameworks):
+        return None
+
     model_name = os.environ.get(_MODEL_ENV)
     if not model_name:
-        raise RuntimeError(f"{_MODEL_ENV} must identify the baseline model")
+        raise RuntimeError(
+            f"{_MODEL_ENV} must identify the direct-provider model for LlamaIndex/Agno"
+        )
     return model_name
+
+
+def workflow_model_name(
+    workflow: WorkflowKey,
+    direct_model_name: str | None,
+) -> str:
+    """Return the runtime model identity appropriate for one workflow boundary."""
+    if workflow == "crewai-flow":
+        return gateway_model_alias()
+    if direct_model_name is None:
+        raise RuntimeError(f"Direct-provider model is required for {workflow}")
+    return direct_model_name
 
 
 def configure_framework_telemetry() -> None:
@@ -263,11 +282,7 @@ def run_framework_baseline(
         scenario_summaries.append(summary)
         print(
             json.dumps(
-                {
-                    "type": "scenario_summary",
-                    "workflow": spec.key,
-                    **asdict(summary),
-                }
+                {"type": "scenario_summary", "workflow": spec.key, **asdict(summary)}
             )
         )
 
@@ -367,18 +382,20 @@ def write_baseline_candidate_artifacts(
 def main() -> None:
     """Execute selected repeated evaluations and persist review-gated candidates."""
     config = parse_config()
-    model_name = require_model_name()
+    direct_model_name = require_direct_model_name(config.frameworks)
     configure_framework_telemetry()
     scenarios = load_adversarial_v2_evidence_scenarios()
     failed_workflows: list[str] = []
 
     for workflow_key in config.frameworks:
         spec = _WORKFLOW_SPECS[workflow_key]
+        model_name = workflow_model_name(workflow_key, direct_model_name)
         print(
             json.dumps(
                 {
                     "type": "workflow_start",
                     "workflow": workflow_key,
+                    "model": model_name,
                     "repetitions_per_scenario": config.repetitions,
                 }
             )
