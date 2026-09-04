@@ -27,11 +27,13 @@ The domain model, evidence contract, expected truth, deterministic evaluator, re
 
 ## Documentation freshness check
 
-Checked on 2026-09-04 against the current LiteLLM Getting Started guidance and the current official LiteLLM Helm configuration.
+Checked on 2026-09-04 against the current LiteLLM Getting Started guidance, the current official LiteLLM Helm configuration, and the current OpenAI model catalog for `gpt-5.6-luna`.
 
 The official guidance continues to describe the Proxy Server as a central LLM Gateway and demonstrates OpenAI-compatible clients using a proxy `base_url` plus a model name configured on the gateway.
 
-The current LiteLLM Helm configuration uses `GET /health/readiness` for readiness and `GET /health/liveliness` for liveness. The smoke now waits for the readiness endpoint before starting LangGraph execution.
+The current LiteLLM Helm configuration uses `GET /health/readiness` for readiness and `GET /health/liveliness` for liveness. The smoke waits for the readiness endpoint before starting LangGraph execution.
+
+The current OpenAI catalog lists `gpt-5.6-luna` as a reasoning-capable GPT-5.6 model. Provider-backed smoke execution also established that this upstream model rejects an explicit `temperature=0` and accepts only its default sampling value. The migrated client therefore does not force a temperature value through the gateway contract.
 
 That is the pattern used by this lab. The application does not embed the LiteLLM Python SDK.
 
@@ -66,6 +68,16 @@ Before constructing the LangGraph workload, the smoke now:
 The credential is used only in the readiness request and the normal OpenAI-compatible client path. It is never written to the smoke artifact.
 
 This readiness loop is orchestration hygiene, not an application-level LLM retry policy. Provider retries and gateway fallback policies remain separate experiments.
+
+## Provider parameter compatibility
+
+The gateway alias is the application-facing model contract. The client should therefore avoid hard-coding provider-specific sampling controls unless the gateway contract explicitly guarantees them across every upstream model that may satisfy the alias.
+
+The initial migrated client forced `temperature=0`. The first authenticated provider-backed request demonstrated that the configured `gpt-5.6-luna` upstream rejects that value and supports only its default temperature behavior.
+
+The client now omits `temperature` entirely. This is intentionally different from setting `temperature=1`: omission delegates model-specific defaults to the provider/gateway boundary and keeps the client compatible with future upstream changes behind the same alias.
+
+This does not weaken the smoke's correctness criteria. Experimental acceptance remains based on external expected truth and deterministic application validation, rather than assuming that LLM sampling itself is deterministic.
 
 ## Fail-closed acceptance criteria
 
