@@ -14,6 +14,7 @@ from agentic_lab.adapters.agno.analyzer import (
     AgnoUsage,
     AgnoVulnerabilityAnalyzer,
 )
+from agentic_lab.adapters.gateway import gateway_model_alias
 from agentic_lab.application.analyzer import VulnerabilityAnalyzer
 from agentic_lab.application.contracts import LLMAnalysisDraft
 from agentic_lab.application.evidence import (
@@ -47,7 +48,7 @@ class _UsageAwareAgnoRunner(AgnoAnalysisRunner, Protocol):
         ...
 
 
-RunnerFactory = Callable[[str], _UsageAwareAgnoRunner]
+RunnerFactory = Callable[[], _UsageAwareAgnoRunner]
 
 
 @dataclass(slots=True)
@@ -268,11 +269,12 @@ class AgnoWorkflowRuntime:
 
     def __init__(
         self,
-        model_name: str,
+        model_alias: str | None = None,
         runner_factory: RunnerFactory = AgnoRuntime,
     ) -> None:
-        """Store shared model identifier and per-execution runner factory."""
-        self._model_name = model_name
+        """Accept only the governed alias as a compatibility input and store no model state."""
+        if model_alias is not None and model_alias != gateway_model_alias():
+            raise ValueError("Agno Workflow accepts only the governed gateway model alias")
         self._runner_factory = runner_factory
 
     def run(
@@ -284,7 +286,7 @@ class AgnoWorkflowRuntime:
         if max_attempts < 1:
             raise ValueError("max_attempts must be at least 1")
 
-        runner = self._runner_factory(self._model_name)
+        runner = self._runner_factory()
         analyzer = bind_evidence_documents(
             AgnoVulnerabilityAnalyzer(runner),
             evidence_bundle,

@@ -32,7 +32,6 @@ WorkflowSpec: Any = _SCRIPT["WorkflowSpec"]
 assess_framework_smoke: Any = _SCRIPT["assess_framework_smoke"]
 configure_framework_telemetry: Any = _SCRIPT["configure_framework_telemetry"]
 parse_config: Any = _SCRIPT["parse_config"]
-require_direct_model_name: Any = _SCRIPT["require_direct_model_name"]
 run_framework_smoke: Any = _SCRIPT["run_framework_smoke"]
 workflow_model_name: Any = _SCRIPT["workflow_model_name"]
 write_smoke_artifacts: Any = _SCRIPT["write_smoke_artifacts"]
@@ -145,20 +144,14 @@ def test_parse_config_rejects_repeated_baseline_like_execution() -> None:
         parse_config(["--runs", "3"])
 
 
-def test_llamaindex_smoke_uses_gateway_alias_without_direct_model_env(
+def test_all_smoke_workflows_use_gateway_alias_without_direct_model_env(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("AGENTIC_LAB_MODEL", raising=False)
+    monkeypatch.setenv("AGENTIC_LAB_MODEL", "openai:must-not-control-runtime")
 
-    assert require_direct_model_name(("llamaindex-workflow",)) is None
-    assert workflow_model_name("llamaindex-workflow", None) == "security-analysis"
-
-
-def test_agno_smoke_still_requires_direct_model_env(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.delenv("AGENTIC_LAB_MODEL", raising=False)
-
-    with pytest.raises(RuntimeError, match="direct-provider model for Agno"):
-        require_direct_model_name(("agno-workflow",))
+    assert workflow_model_name("crewai-flow") == "security-analysis"
+    assert workflow_model_name("llamaindex-workflow") == "security-analysis"
+    assert workflow_model_name("agno-workflow") == "security-analysis"
 
 
 def test_configure_framework_telemetry_disables_crewai_tracing(

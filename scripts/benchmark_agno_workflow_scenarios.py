@@ -3,7 +3,6 @@
 import argparse
 import json
 import math
-import os
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,11 +12,11 @@ from typing import Literal, cast
 
 from agentic_lab.adapters.agno.workflow import AgnoWorkflowRuntime
 from agentic_lab.adapters.fixtures.evaluation import load_evaluation_scenarios
+from agentic_lab.adapters.gateway import gateway_model_alias
 from agentic_lab.application.contracts import AssetAssessment
 from agentic_lab.application.evaluation import EvaluationScenario
 from agentic_lab.application.evidence import AnalysisEvidenceBundle
 
-_MODEL_ENV = "AGENTIC_LAB_MODEL"
 _FRAMEWORK = "agno"
 _PATTERN = "workflow_loop_condition_evaluator_optimizer"
 
@@ -106,11 +105,8 @@ def parse_runs() -> int:
 
 
 def require_model_name() -> str:
-    """Return the model configured for the benchmark."""
-    model_name = os.environ.get(_MODEL_ENV)
-    if not model_name:
-        raise RuntimeError(f"{_MODEL_ENV} must identify the benchmark model")
-    return model_name
+    """Return the governed gateway alias used by the benchmark runtime."""
+    return gateway_model_alias()
 
 
 def nearest_rank_percentile(values: list[float], percentile: float) -> float:
@@ -319,9 +315,14 @@ def render_markdown_report(
             ),
             "",
             (
-                "Sampling uses the OpenAI provider defaults because the Agno adapter "
+                "Sampling uses the upstream provider defaults because the Agno adapter "
                 "does not override temperature or other sampling parameters. Results "
                 "must not be described as deterministic sampling."
+            ),
+            "",
+            (
+                "The model label in post-migration runs is the governed gateway alias, "
+                "not independent attestation of the upstream provider model."
             ),
             "",
             (

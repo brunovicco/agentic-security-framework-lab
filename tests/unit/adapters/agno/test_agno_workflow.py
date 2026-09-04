@@ -101,15 +101,11 @@ def _runtime_with(
 ) -> tuple[AgnoWorkflowRuntime, StubUsageRunner]:
     runner = StubUsageRunner(drafts)
 
-    def runner_factory(model_name: str) -> StubUsageRunner:
-        assert model_name == "openai:gpt-5.6-luna"
+    def runner_factory() -> StubUsageRunner:
         return runner
 
     return (
-        AgnoWorkflowRuntime(
-            "openai:gpt-5.6-luna",
-            runner_factory=runner_factory,
-        ),
+        AgnoWorkflowRuntime(runner_factory=runner_factory),
         runner,
     )
 
@@ -210,16 +206,13 @@ def test_runtime_binds_evidence_documents_to_every_attempt() -> None:
 
 
 def test_runtime_rejects_invalid_attempt_limit_before_creating_runner() -> None:
-    calls: list[str] = []
+    calls: list[bool] = []
 
-    def runner_factory(model_name: str) -> StubUsageRunner:
-        calls.append(model_name)
+    def runner_factory() -> StubUsageRunner:
+        calls.append(True)
         return StubUsageRunner([_correct_draft()])
 
-    runtime = AgnoWorkflowRuntime(
-        "openai:gpt-5.6-luna",
-        runner_factory=runner_factory,
-    )
+    runtime = AgnoWorkflowRuntime(runner_factory=runner_factory)
 
     try:
         runtime.run(_evidence_bundle(), max_attempts=0)

@@ -64,7 +64,7 @@ def _create_model() -> OpenAILike:
     )
 
 
-def _create_agent(_model_name: str, system_prompt: str) -> _StructuredAgnoAgent:
+def _create_agent(system_prompt: str) -> _StructuredAgnoAgent:
     """Create a minimal structured Agno Agent through the gateway-owned model boundary."""
     return cast(
         _StructuredAgnoAgent,
@@ -120,15 +120,11 @@ class AgnoRuntime:
 
     def __init__(
         self,
-        model_name: str,
         system_prompt: str = SECURITY_ANALYSIS_SYSTEM_PROMPT,
     ) -> None:
         """Create an isolated gateway-backed Agno agent and empty usage accumulator."""
         self._system_prompt = system_prompt
-        self._agent = _create_agent(
-            model_name,
-            system_prompt=system_prompt,
-        )
+        self._agent = _create_agent(system_prompt=system_prompt)
         self._usage = AgnoUsage()
 
     def consume_usage(self) -> AgnoUsage:
