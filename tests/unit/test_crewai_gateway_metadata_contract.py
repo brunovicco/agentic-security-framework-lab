@@ -33,9 +33,7 @@ def test_crewai_adapters_do_not_store_transitional_model_identity() -> None:
     analyzer_source = (
         _ROOT / "src" / "agentic_lab" / "adapters" / "crewai" / "analyzer.py"
     ).read_text()
-    flow_source = (
-        _ROOT / "src" / "agentic_lab" / "adapters" / "crewai" / "flow.py"
-    ).read_text()
+    flow_source = (_ROOT / "src" / "agentic_lab" / "adapters" / "crewai" / "flow.py").read_text()
 
     assert "def __init__(self, model_name" not in analyzer_source
     assert "model_name:" not in flow_source
@@ -67,16 +65,11 @@ def test_generic_runner_retains_direct_model_contract_for_unmigrated_workflows(
         script["require_direct_model_name"](("agno-workflow",))
 
     monkeypatch.setenv("AGENTIC_LAB_MODEL", "openai:direct-test-model")
-    direct_model = script["require_direct_model_name"](
-        ("llamaindex-workflow", "agno-workflow")
-    )
+    direct_model = script["require_direct_model_name"](("llamaindex-workflow", "agno-workflow"))
 
     assert direct_model == "openai:direct-test-model"
     assert (
         script["workflow_model_name"]("llamaindex-workflow", direct_model)
         == "openai:direct-test-model"
     )
-    assert (
-        script["workflow_model_name"]("agno-workflow", direct_model)
-        == "openai:direct-test-model"
-    )
+    assert script["workflow_model_name"]("agno-workflow", direct_model) == "openai:direct-test-model"
