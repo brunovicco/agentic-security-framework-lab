@@ -84,6 +84,8 @@ LITELLM_MASTER_KEY
 
 `AGENTIC_LAB_MODEL` no longer selects the model for the LangChain/LangGraph path. During the incremental migration it remains relevant only to framework adapters that have not yet moved behind the gateway.
 
+The migrated `benchmark_langgraph*.py` runners therefore derive their runtime `model` metadata from `gateway_model_alias()` instead of requiring `AGENTIC_LAB_MODEL`. For post-migration LangGraph runs, `model=security-analysis` identifies the governed alias actually requested by the client. It is not independent attestation of the provider model selected behind the proxy. The configured upstream remains gateway configuration evidence, and historical persisted benchmark artifacts are intentionally left unchanged.
+
 ## Why the committed config looks like JSON
 
 `config/litellm/config.yaml` uses JSON syntax intentionally. JSON is valid YAML syntax, so the proxy configuration remains YAML-compatible while the repository can validate the initial security invariants with Python's standard library only.
