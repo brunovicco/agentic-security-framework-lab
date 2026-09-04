@@ -1,0 +1,47 @@
+{
+  "schema_version": "1",
+  "review_id": "crewai-litellm-gateway-smoke-2026-09-04",
+  "review_status": "accepted_manual_trace_review",
+  "reviewed_at_utc": "2026-09-04T14:53:19+00:00",
+  "review_record": "docs/litellm/CREWAI_GATEWAY_SMOKE_REVIEW.md",
+  "reviewed_against_repository_commit": "bb7ec5bfeee1f08d08b413639315c9bffde7ae60",
+  "artifact": {
+    "json_path": "artifacts/gateway-smoke/crewai/latest.json",
+    "json_blob_sha": "26c13ad2895e43e7322d7f5ab11ea27b7116dcd2",
+    "markdown_path": "artifacts/gateway-smoke/crewai/latest.md",
+    "markdown_blob_sha": "6ec45ffde41b621b9e499b92b1656c5fab8fbc46",
+    "generated_at_utc": "2026-09-04T14:47:42.718603+00:00",
+    "artifact_type": "gateway_smoke",
+    "official_baseline": false,
+    "framework": "crewai",
+    "model_alias": "security-analysis",
+    "configured_upstream_model": "openai/gpt-5.6-luna",
+    "configured_upstream_evidence": "committed_litellm_config",
+    "runtime_count": 2,
+    "scenario_count_per_runtime": 5,
+    "total_run_count": 10,
+    "repetitions_per_scenario_per_runtime": 1
+  },
+  "decision": {
+    "approved": true,
+    "smoke_assessment_passed": true,
+    "expected_match_runs": 10,
+    "validation_passed_runs": 10,
+    "llm_source_runs": 10,
+    "single_attempt_runs": 10,
+    "single_model_call_runs": 10,
+    "nonzero_token_runs": 10,
+    "fallback_runs": 0,
+    "agent_crew_runs": 5,
+    "flow_runs": 5,
+    "total_tokens": 8853,
+    "credential_or_endpoint_leakage_found": false
+  },
+  "interpretation": {
+    "proves_gateway_compatibility": true,
+    "proves_agent_crew_compatibility": true,
+    "proves_flow_compatibility": true,
+    "proves_performance_baseline": false,
+    "proves_provider_response_attestation": false
+  }
+}
