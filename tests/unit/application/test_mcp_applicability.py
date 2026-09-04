@@ -7,6 +7,7 @@ from agentic_lab.application.mcp_applicability import (
     AssetApplicabilityInput,
     VulnerabilityApplicabilityInput,
     assess_vulnerability_applicability,
+    describe_applicability_contract,
 )
 
 
@@ -35,6 +36,20 @@ def _asset(
         environment="production",
         network_exposure="internet-exposed",
     )
+
+
+def test_describe_applicability_contract_derives_strict_pydantic_schemas() -> None:
+    description = describe_applicability_contract()
+
+    assert description.contract == "assess_vulnerability_applicability"
+    for schema in (
+        description.vulnerability_input_schema,
+        description.asset_input_schema,
+        description.result_schema,
+    ):
+        assert schema.get("type") == "object"
+        assert schema.get("additionalProperties") is False
+        assert "properties" in schema
 
 
 def test_assess_vulnerability_applicability_reuses_deterministic_oracle() -> None:
