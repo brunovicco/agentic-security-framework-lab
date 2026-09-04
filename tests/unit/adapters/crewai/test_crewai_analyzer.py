@@ -87,28 +87,6 @@ def test_crewai_runtime_delegates_provider_selection_to_gateway(
     assert calls == 1
 
 
-def test_crewai_usage_adds_attempt_telemetry() -> None:
-    first = CrewAIUsage(
-        input_tokens=100,
-        output_tokens=25,
-        total_tokens=125,
-        model_calls=1,
-    )
-    second = CrewAIUsage(
-        input_tokens=120,
-        output_tokens=30,
-        total_tokens=150,
-        model_calls=2,
-    )
-
-    assert first.plus(second) == CrewAIUsage(
-        input_tokens=220,
-        output_tokens=55,
-        total_tokens=275,
-        model_calls=3,
-    )
-
-
 def test_crewai_usage_reports_delta_from_cumulative_baseline() -> None:
     baseline = CrewAIUsage(
         input_tokens=965,
@@ -143,13 +121,13 @@ def test_crewai_usage_rejects_decreasing_cumulative_counters() -> None:
         raise AssertionError("Expected decreasing CrewAI usage counters to fail closed")
 
 
-def test_crewai_runtime_accumulates_usage_across_kickoffs(
+def test_crewai_runtime_deltas_cumulative_usage_snapshots(
     monkeypatch: MonkeyPatch,
 ) -> None:
     usages = iter(
         (
             CrewAIUsage(input_tokens=100, output_tokens=20, total_tokens=120, model_calls=1),
-            CrewAIUsage(input_tokens=80, output_tokens=15, total_tokens=95, model_calls=1),
+            CrewAIUsage(input_tokens=180, output_tokens=35, total_tokens=215, model_calls=2),
         )
     )
 
@@ -196,14 +174,21 @@ def test_crewai_runtime_accumulates_usage_across_kickoffs(
     monkeypatch.setattr("agentic_lab.adapters.crewai.analyzer.Crew", StubCrew)
 
     runtime = CrewAIRuntime("security-analysis")
-    runtime.run("first")
-    runtime.run("second")
 
+    runtime.run("first")
     assert runtime.consume_usage() == CrewAIUsage(
-        input_tokens=180,
-        output_tokens=35,
-        total_tokens=215,
-        model_calls=2,
+        input_tokens=100,
+        output_tokens=20,
+        total_tokens=120,
+        model_calls=1,
+    )
+
+    runtime.run("second")
+    assert runtime.consume_usage() == CrewAIUsage(
+        input_tokens=80,
+        output_tokens=15,
+        total_tokens=95,
+        model_calls=1,
     )
     assert runtime.consume_usage() == CrewAIUsage()
 
