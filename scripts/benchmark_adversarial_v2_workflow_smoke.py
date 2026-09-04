@@ -260,11 +260,7 @@ def run_framework_smoke(
             metrics=summarize_runs([run]),
         )
         scenario_summaries.append(summary)
-        print(
-            json.dumps(
-                {"type": "scenario_summary", "workflow": spec.key, **asdict(summary)}
-            )
-        )
+        print(json.dumps({"type": "scenario_summary", "workflow": spec.key, **asdict(summary)}))
 
     overall = OverallSummary(
         framework=spec.framework,
@@ -362,11 +358,7 @@ def main() -> None:
     for workflow_key in config.frameworks:
         spec = _WORKFLOW_SPECS[workflow_key]
         model_name = workflow_model_name(workflow_key, direct_model_name)
-        print(
-            json.dumps(
-                {"type": "workflow_start", "workflow": workflow_key, "model": model_name}
-            )
-        )
+        print(json.dumps({"type": "workflow_start", "workflow": workflow_key, "model": model_name}))
         result = run_framework_smoke(
             spec=spec,
             scenarios=scenarios,
@@ -377,11 +369,7 @@ def main() -> None:
             result=result,
             model_name=model_name,
         )
-        print(
-            json.dumps(
-                {"type": "smoke_assessment", "workflow": workflow_key, **asdict(assessment)}
-            )
-        )
+        print(json.dumps({"type": "smoke_assessment", "workflow": workflow_key, **asdict(assessment)}))
         print(f"artifact_json: {json_path}")
         print(f"artifact_markdown: {markdown_path}")
 
