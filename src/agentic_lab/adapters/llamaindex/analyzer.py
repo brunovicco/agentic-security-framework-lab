@@ -3,10 +3,11 @@
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 
-from llama_index.core.base.llms.types import ChatMessage, MessageRole
+from llama_index.core.base.llms.types import ChatMessage, LLMMetadata, MessageRole
 from llama_index.core.callbacks import CallbackManager, TokenCountingHandler
+from llama_index.core.constants import DEFAULT_CONTEXT_WINDOW
 from llama_index.core.prompts import ChatPromptTemplate
-from llama_index.llms.openai_like import OpenAILike
+from llama_index.llms.openai import OpenAI
 from pydantic import BaseModel
 
 from agentic_lab.adapters.gateway import (
@@ -84,11 +85,22 @@ class _TokenCounter(Protocol):
         ...
 
 
-class _GatewayOpenAILike(OpenAILike):
-    """Use LlamaIndex OpenAI compatibility without imposing provider sampling settings."""
+class LlamaIndexGatewayLLM(OpenAI):
+    """Use the typed LlamaIndex OpenAI transport for the governed gateway alias."""
+
+    @property
+    def metadata(self) -> LLMMetadata:
+        """Declare gateway capabilities without inferring them from the alias name."""
+        return LLMMetadata(
+            context_window=DEFAULT_CONTEXT_WINDOW,
+            num_output=self.max_tokens or -1,
+            is_chat_model=True,
+            is_function_calling_model=True,
+            model_name=self.model,
+        )
 
     def _get_model_kwargs(self, **kwargs: Any) -> dict[str, Any]:
-        """Remove OpenAILike's default temperature before sending a gateway request."""
+        """Remove the client sampling default before sending a gateway request."""
         model_kwargs = super()._get_model_kwargs(**kwargs)
         model_kwargs.pop("temperature", None)
         return model_kwargs
@@ -101,12 +113,10 @@ def _create_llm(
     """Create a structured LlamaIndex client through the governed gateway alias."""
     return cast(
         _StructuredPredictLLM,
-        _GatewayOpenAILike(
+        LlamaIndexGatewayLLM(
             model=gateway_model_alias(),
             api_base=gateway_base_url(),
             api_key=gateway_api_key(),
-            is_chat_model=True,
-            is_function_calling_model=True,
             callback_manager=callback_manager,
         ),
     )
