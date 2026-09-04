@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from runpy import run_path
 from typing import Any
-from urllib.error import URLError
 
 import pytest
 from pytest import MonkeyPatch
@@ -22,12 +21,6 @@ write_smoke_artifacts: Any = _SCRIPT["write_smoke_artifacts"]
 class _FakeResponse:
     def __init__(self, status: int) -> None:
         self.status = status
-
-    def __enter__(self) -> "_FakeResponse":
-        return self
-
-    def __exit__(self, *args: Any) -> None:
-        return None
 
 
 def _run(
@@ -91,16 +84,25 @@ def test_require_gateway_environment_returns_configured_values(
 def test_wait_for_gateway_readiness_uses_official_readiness_endpoint(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    requests: list[Any] = []
+    calls: list[Any] = []
 
-    def fake_urlopen(request: Any, timeout: float) -> _FakeResponse:
-        requests.append((request, timeout))
-        return _FakeResponse(status=200)
+    class FakeConnection:
+        def __init__(self, host: str, port: int, timeout: float) -> None:
+            calls.append(("connect", host, port, timeout))
+
+        def request(self, method: str, path: str, headers: dict[str, str]) -> None:
+            calls.append(("request", method, path, headers))
+
+        def getresponse(self) -> _FakeResponse:
+            return _FakeResponse(status=200)
+
+        def close(self) -> None:
+            calls.append(("close",))
 
     monkeypatch.setitem(
         wait_for_gateway_readiness.__globals__,
-        "urlopen",
-        fake_urlopen,
+        "HTTPConnection",
+        FakeConnection,
     )
 
     wait_for_gateway_readiness(
@@ -110,28 +112,51 @@ def test_wait_for_gateway_readiness_uses_official_readiness_endpoint(
         delay_seconds=0,
     )
 
-    request, timeout = requests[0]
-    assert request.full_url == "http://localhost:4000/health/readiness"
-    assert request.get_header("Authorization") == "Bearer test-key"
-    assert timeout == 2.0
+    assert calls[0] == ("connect", "localhost", 4000, 2.0)
+    assert calls[1] == (
+        "request",
+        "GET",
+        "/health/readiness",
+        {"Authorization": "Bearer test-key"},
+    )
+    assert calls[-1] == ("close",)
+
+
+def test_wait_for_gateway_readiness_rejects_non_http_scheme() -> None:
+    with pytest.raises(RuntimeError, match="must use http or https"):
+        wait_for_gateway_readiness(
+            "file:///tmp/litellm.sock",
+            "test-key",
+            attempts=1,
+            delay_seconds=0,
+        )
 
 
 def test_wait_for_gateway_readiness_retries_connection_refusal(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    calls = 0
+    attempts_seen = 0
 
-    def fake_urlopen(request: Any, timeout: float) -> _FakeResponse:
-        nonlocal calls
-        calls += 1
-        if calls < 3:
-            raise URLError("connection refused")
-        return _FakeResponse(status=200)
+    class FakeConnection:
+        def __init__(self, host: str, port: int, timeout: float) -> None:
+            return None
+
+        def request(self, method: str, path: str, headers: dict[str, str]) -> None:
+            nonlocal attempts_seen
+            attempts_seen += 1
+            if attempts_seen < 3:
+                raise ConnectionRefusedError("connection refused")
+
+        def getresponse(self) -> _FakeResponse:
+            return _FakeResponse(status=200)
+
+        def close(self) -> None:
+            return None
 
     monkeypatch.setitem(
         wait_for_gateway_readiness.__globals__,
-        "urlopen",
-        fake_urlopen,
+        "HTTPConnection",
+        FakeConnection,
     )
 
     wait_for_gateway_readiness(
@@ -141,19 +166,29 @@ def test_wait_for_gateway_readiness_retries_connection_refusal(
         delay_seconds=0,
     )
 
-    assert calls == 3
+    assert attempts_seen == 3
 
 
 def test_wait_for_gateway_readiness_fails_with_startup_diagnostic(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    def fake_urlopen(request: Any, timeout: float) -> _FakeResponse:
-        raise URLError("connection refused")
+    class FakeConnection:
+        def __init__(self, host: str, port: int, timeout: float) -> None:
+            return None
+
+        def request(self, method: str, path: str, headers: dict[str, str]) -> None:
+            raise ConnectionRefusedError("connection refused")
+
+        def getresponse(self) -> _FakeResponse:
+            return _FakeResponse(status=503)
+
+        def close(self) -> None:
+            return None
 
     monkeypatch.setitem(
         wait_for_gateway_readiness.__globals__,
-        "urlopen",
-        fake_urlopen,
+        "HTTPConnection",
+        FakeConnection,
     )
 
     with pytest.raises(RuntimeError, match="proxy process is still running"):
