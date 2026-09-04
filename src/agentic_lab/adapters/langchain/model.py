@@ -30,6 +30,5 @@ def create_chat_model() -> BaseChatModel:
         model=gateway_model_alias(),
         base_url=_required_environment_value(_GATEWAY_BASE_URL_ENV),
         api_key=SecretStr(_required_environment_value(_GATEWAY_API_KEY_ENV)),
-        temperature=0,
         max_retries=2,
     )

@@ -44,5 +44,5 @@ def test_create_chat_model_uses_governed_gateway_alias(
     assert model.openai_api_base == "http://localhost:4000"
     assert isinstance(model.openai_api_key, SecretStr)
     assert model.openai_api_key.get_secret_value() == "test-gateway-key"
-    assert model.temperature == 0
+    assert model.temperature is None
     assert model.max_retries == 2
