@@ -10,16 +10,20 @@ _SCRIPT_PATH = (
 )
 _SCRIPT = run_path(str(_SCRIPT_PATH))
 build_attempt_diagnostics: Any = _SCRIPT["build_attempt_diagnostics"]
+load_baseline_scenario: Any = _SCRIPT["load_baseline_scenario"]
 load_product_mismatch_scenario: Any = _SCRIPT["load_product_mismatch_scenario"]
+summarize_execution: Any = _SCRIPT["summarize_execution"]
 
 
-def test_diagnostic_targets_single_canonical_product_mismatch_scenario() -> None:
-    scenario = load_product_mismatch_scenario()
+def test_diagnostic_targets_canonical_product_mismatch_and_baseline_scenarios() -> None:
+    target = load_product_mismatch_scenario()
+    baseline = load_baseline_scenario()
 
-    assert scenario.scenario_id == "product-mismatch"
-    assert len(scenario.expected_assets) == 1
-    assert scenario.expected_assets[0].asset_id == "api-prod-03"
-    assert scenario.expected_assets[0].status == "not_applicable"
+    assert target.scenario_id == "product-mismatch"
+    assert len(target.expected_assets) == 1
+    assert target.expected_assets[0].asset_id == "api-prod-03"
+    assert target.expected_assets[0].status == "not_applicable"
+    assert baseline.scenario_id == "baseline-mixed"
 
 
 def test_attempt_diagnostics_expose_only_status_level_trace() -> None:
@@ -83,9 +87,42 @@ def test_attempt_diagnostics_expose_only_status_level_trace() -> None:
     assert "do not emit recommendation" not in serialized
 
 
-def test_diagnostic_script_does_not_write_gateway_smoke_artifacts() -> None:
+def test_sample_summary_distinguishes_first_attempt_acceptance_from_final_source() -> None:
+    execution = SimpleNamespace(
+        output=SimpleNamespace(
+            analysis_source="oracle_fallback",
+            validation_passed=False,
+            analysis_attempts=2,
+            attempt_trace=(
+                SimpleNamespace(validation_passed=False),
+                SimpleNamespace(validation_passed=False),
+            ),
+        ),
+        usage=SimpleNamespace(
+            model_calls=2,
+            input_tokens=1000,
+            output_tokens=250,
+            total_tokens=1250,
+        ),
+    )
+
+    summary = summarize_execution("after_baseline", 2, execution)
+
+    assert summary.mode == "after_baseline"
+    assert summary.sample == 2
+    assert summary.first_attempt_validation_passed is False
+    assert summary.analysis_source == "oracle_fallback"
+    assert summary.validation_passed is False
+    assert summary.analysis_attempts == 2
+    assert summary.model_calls == 2
+    assert summary.total_tokens == 1250
+
+
+def test_diagnostic_script_compares_modes_without_artifacts() -> None:
     source = _SCRIPT_PATH.read_text()
 
+    assert 'mode="isolated"' in source
+    assert 'mode="after_baseline"' in source
     assert "write_smoke_artifacts" not in source
     assert "artifacts/gateway-smoke" not in source
     assert "AGENTIC_LAB_MODEL" not in source
