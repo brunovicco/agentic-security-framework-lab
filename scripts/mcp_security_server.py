@@ -1,14 +1,15 @@
 """Expose deterministic vulnerability applicability through an isolated MCP v2 server."""
 
-from mcp.server import MCPServer
-from mcp.types import ToolAnnotations
-
 from agentic_lab.application.mcp_applicability import (
     ApplicabilityAssessmentResult,
     AssetApplicabilityInput,
     VulnerabilityApplicabilityInput,
+)
+from agentic_lab.application.mcp_applicability import (
     assess_vulnerability_applicability as assess_applicability,
 )
+from mcp.server import MCPServer
+from mcp.types import ToolAnnotations
 
 mcp = MCPServer("agentic-security-applicability")
 
