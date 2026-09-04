@@ -22,21 +22,12 @@ CREWAI_SECURITY_SYSTEM_PROMPT = SECURITY_ANALYSIS_SYSTEM_PROMPT
 
 @dataclass(frozen=True, slots=True)
 class CrewAIUsage:
-    """Capture framework-reported LLM usage across CrewAI analysis attempts."""
+    """Capture framework-reported cumulative LLM usage."""
 
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
     model_calls: int = 0
-
-    def plus(self, other: "CrewAIUsage") -> "CrewAIUsage":
-        """Return the field-wise sum of two usage observations."""
-        return CrewAIUsage(
-            input_tokens=self.input_tokens + other.input_tokens,
-            output_tokens=self.output_tokens + other.output_tokens,
-            total_tokens=self.total_tokens + other.total_tokens,
-            model_calls=self.model_calls + other.model_calls,
-        )
 
     def delta_since(self, baseline: "CrewAIUsage") -> "CrewAIUsage":
         """Return usage accumulated since a previously observed cumulative baseline."""
@@ -164,13 +155,12 @@ class CrewAIRuntime:
 
         execution_output = cast(_CrewExecutionOutput, cast(_CrewKickoff, crew).kickoff())
         usage = execution_output.token_usage
-        current_usage = CrewAIUsage(
+        self._latest_usage = CrewAIUsage(
             input_tokens=usage.prompt_tokens,
             output_tokens=usage.completion_tokens,
             total_tokens=usage.total_tokens,
             model_calls=usage.successful_requests,
         )
-        self._latest_usage = self._latest_usage.plus(current_usage)
 
         task_output = cast(_OutputTask, task).output
 

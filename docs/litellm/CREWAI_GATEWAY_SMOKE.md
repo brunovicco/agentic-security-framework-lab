@@ -64,27 +64,27 @@ The smoke does not require `AGENTIC_LAB_MODEL`. CrewAI receives the governed `se
 
 ## CrewAI usage semantics
 
-Documentation was rechecked on 2026-09-04 before adding this smoke.
+The first provider-backed CrewAI gateway execution on 2026-09-04 established an important runtime behavior for the pinned CrewAI 1.15.18 integration: `CrewOutput.token_usage` behaved as a **cumulative snapshot across successive Crew kickoffs in the same process**.
 
-CrewAI usage metrics aggregate model calls within one execution boundary. `Flow.usage_metrics` aggregates calls made during one Flow kickoff and resets for the next kickoff. A `CrewOutput.token_usage` observation belongs to that Crew execution rather than acting as a process-wide cumulative counter across independent Crew kickoffs.
+The observed Agent/Crew smoke sequence reported model-call snapshots `1, 2, 3, 4, 5` even though every canonical scenario completed with one application analysis attempt. Token counters increased in the same cumulative shape. That first generated artifact was therefore treated as diagnostic evidence only and must not be persisted as accepted smoke evidence.
 
-Because the application-owned evaluator may invoke the Agent/Crew path more than once, `CrewAIRuntime` accumulates each kickoff's usage before `consume_usage()` calculates the benchmark/smoke delta. This prevents retries from being under-counted or interpreted as decreasing cumulative counters.
+`CrewAIRuntime` stores the latest cumulative snapshot and `consume_usage()` calculates the delta from the previously consumed snapshot. This produces per-scenario usage while still allowing multiple model calls inside one application analysis execution to be observed correctly.
 
-Flow already exposes one aggregated usage observation for each `flow.kickoff()` through `flow.usage_metrics`.
+`Flow.usage_metrics` is consumed directly from each Flow execution. The provider-backed run observed one model call per canonical Flow scenario.
+
+This runtime observation takes precedence over assumptions derived from documentation when interpreting the pinned version's telemetry behavior.
 
 ## Gateway readiness
 
 A background process ID is not proof that the LiteLLM service is ready to accept traffic.
 
-Before the first CrewAI execution, the runner polls the LiteLLM readiness endpoint:
+Before the first CrewAI execution, the runner polls:
 
 ```text
 GET /health/readiness
 ```
 
-The check is bounded and uses the configured gateway client credential. It retries connection-level startup failures such as `ConnectionRefusedError`, but it does not introduce an application-level LLM retry or provider fallback policy.
-
-If readiness never succeeds, the smoke fails before running the CrewAI workload and directs the operator to inspect the proxy process and startup log.
+The check is bounded and uses the configured gateway client credential. It retries connection-level startup failures, but it does not introduce application-level LLM retry or provider fallback policy.
 
 ## Local execution
 
@@ -96,7 +96,7 @@ git checkout main
 git pull --ff-only
 ```
 
-Configure the provider and gateway secrets without printing them:
+Configure provider and gateway secrets without printing them:
 
 ```bash
 read -s "OPENAI_API_KEY?OpenAI API key: "
@@ -122,6 +122,7 @@ Configure the client boundary:
 ```bash
 export AGENTIC_LAB_GATEWAY_BASE_URL="http://localhost:4000"
 export AGENTIC_LAB_GATEWAY_API_KEY="$LITELLM_MASTER_KEY"
+unset AGENTIC_LAB_MODEL
 ```
 
 Run the CrewAI smoke:
@@ -132,14 +133,7 @@ uv run python scripts/smoke_crewai_gateway.py
 
 The runner disables optional CrewAI tracing for this controlled headless execution.
 
-A successful execution prints ten records shaped like:
-
-```text
-{"type": "gateway_smoke_run", "runtime": "agent_crew", ...}
-{"type": "gateway_smoke_run", "runtime": "flow", ...}
-```
-
-and finishes with:
+A successful execution prints ten `gateway_smoke_run` records and finishes with:
 
 ```text
 {"type": "gateway_smoke_assessment", "passed": true, "runs": 10, "failures": []}
@@ -161,15 +155,9 @@ ps -p "$LITELLM_PID"
 tail -n 150 /tmp/agentic-lab-litellm.log
 ```
 
-If readiness succeeds but a CrewAI call fails, capture:
+If readiness succeeds but a CrewAI call fails, capture the exception, final proxy-log lines, and which runtime was executing. Do not paste API keys or gateway credentials.
 
-- the exception and stack trace from `smoke_crewai_gateway.py`;
-- the corresponding final lines of `/tmp/agentic-lab-litellm.log`;
-- which runtime was executing (`agent_crew` or `flow`).
-
-Do not paste API keys or gateway credentials.
-
-A failure after readiness should be treated as runtime compatibility evidence. It may indicate a structured-output, OpenAI-compatible transport, provider-access, or CrewAI-specific behavior issue. Do not add retries, fallbacks, alternate providers, or gateway policy merely to make the smoke pass; diagnose the failed boundary first.
+A failure after readiness should be treated as runtime compatibility evidence. Do not add retries, fallbacks, alternate providers, or gateway policy merely to make the smoke pass; diagnose the failed boundary first.
 
 ## Review status
 
@@ -180,4 +168,4 @@ review_status = pending_manual_trace_review
 official_baseline = false
 ```
 
-Provider-backed execution is necessary but not sufficient for promotion. The generated evidence must be reviewed before any result is committed as accepted compatibility evidence.
+Provider-backed execution is necessary but not sufficient for promotion. Generated evidence must be reviewed before any result is committed as accepted compatibility evidence.
