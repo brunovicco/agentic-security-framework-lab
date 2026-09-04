@@ -1,0 +1,133 @@
+{
+  "schema_version": "2",
+  "artifact_type": "gateway_smoke",
+  "official_baseline": false,
+  "review_status": "pending_manual_trace_review",
+  "generated_at_utc": "2026-09-04T21:45:52.450738+00:00",
+  "framework": "llamaindex",
+  "pattern": "workflow_structured_predict_evaluator_optimizer_via_litellm_proxy",
+  "gateway_transport": "openai_compatible",
+  "gateway_endpoint_persisted": false,
+  "model_alias": "security-analysis",
+  "configured_upstream_model": "openai/gpt-5.6-luna",
+  "configured_upstream_evidence": "committed_litellm_config",
+  "repetitions_per_scenario": 1,
+  "scenario_count": 5,
+  "total_run_count": 5,
+  "runs": [
+    {
+      "scenario_id": "baseline-mixed",
+      "tags": [
+        "baseline",
+        "affected",
+        "not_affected"
+      ],
+      "model_alias": "security-analysis",
+      "configured_upstream_model": "openai/gpt-5.6-luna",
+      "latency_ms": 5155.69,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 542,
+      "output_tokens": 191,
+      "total_tokens": 733
+    },
+    {
+      "scenario_id": "product-mismatch",
+      "tags": [
+        "product-mismatch",
+        "not_applicable"
+      ],
+      "model_alias": "security-analysis",
+      "configured_upstream_model": "openai/gpt-5.6-luna",
+      "latency_ms": 2480.77,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.98,
+      "input_tokens": 494,
+      "output_tokens": 121,
+      "total_tokens": 615
+    },
+    {
+      "scenario_id": "unknown-version",
+      "tags": [
+        "unknown-version",
+        "unknown"
+      ],
+      "model_alias": "security-analysis",
+      "configured_upstream_model": "openai/gpt-5.6-luna",
+      "latency_ms": 3092.71,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 492,
+      "output_tokens": 146,
+      "total_tokens": 638
+    },
+    {
+      "scenario_id": "fixed-boundary",
+      "tags": [
+        "boundary",
+        "not_affected"
+      ],
+      "model_alias": "security-analysis",
+      "configured_upstream_model": "openai/gpt-5.6-luna",
+      "latency_ms": 4345.0,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 542,
+      "output_tokens": 209,
+      "total_tokens": 751
+    },
+    {
+      "scenario_id": "adversarial-asset-id",
+      "tags": [
+        "adversarial",
+        "prompt-injection",
+        "affected"
+      ],
+      "model_alias": "security-analysis",
+      "configured_upstream_model": "openai/gpt-5.6-luna",
+      "latency_ms": 3018.71,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 1.0,
+      "input_tokens": 506,
+      "output_tokens": 188,
+      "total_tokens": 694
+    }
+  ],
+  "smoke_assessment": {
+    "passed": true,
+    "runs": 5,
+    "failures": [],
+    "transport_compatibility": {
+      "passed": true,
+      "failures": []
+    },
+    "semantic_quality": {
+      "passed": true,
+      "failures": []
+    },
+    "system_safety": {
+      "passed": true,
+      "failures": []
+    }
+  }
+}
