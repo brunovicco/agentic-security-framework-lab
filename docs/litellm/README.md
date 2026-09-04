@@ -4,4 +4,6 @@ Start with `GATEWAY_FOUNDATION.md` for the current architecture, documentation-f
 
 Then read `GATEWAY_SMOKE.md` for the non-baseline provider-backed compatibility smoke, its fail-closed acceptance criteria, artifact boundary, and manual review procedure.
 
+The accepted manual review of the first persisted LangGraph gateway smoke is recorded in `LANGGRAPH_GATEWAY_SMOKE_REVIEW.md`, with the machine-readable decision in `langgraph_gateway_smoke_review.json`.
+
 The architectural decision is recorded in `docs/adr/0002-centralize-llm-provider-access-behind-litellm-proxy.md`.
