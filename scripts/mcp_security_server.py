@@ -7,12 +7,23 @@ from agentic_lab.application.mcp_applicability import (
     ApplicabilityAssessmentResult,
     AssetApplicabilityInput,
     VulnerabilityApplicabilityInput,
+    describe_applicability_contract,
 )
 from agentic_lab.application.mcp_applicability import (
     assess_vulnerability_applicability as assess_applicability,
 )
 
 mcp = MCPServer("agentic-security-applicability")
+
+
+@mcp.resource(
+    "security://contracts/applicability",
+    title="Vulnerability applicability contract",
+    mime_type="application/json",
+)
+def applicability_contract() -> dict[str, object]:
+    """Return application-controlled schema metadata for the applicability capability."""
+    return describe_applicability_contract().model_dump(mode="json")
 
 
 @mcp.tool(
