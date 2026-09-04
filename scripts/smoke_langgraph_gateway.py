@@ -6,7 +6,9 @@ from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from time import perf_counter
+from time import perf_counter, sleep
+from urllib.parse import urljoin
+from urllib.request import Request, urlopen
 
 from langchain_core.callbacks import get_usage_metadata_callback
 from langchain_core.messages import UsageMetadata
@@ -24,6 +26,10 @@ _GATEWAY_API_KEY_ENV = "AGENTIC_LAB_GATEWAY_API_KEY"
 _GATEWAY_CONFIG_PATH = Path("config/litellm/config.yaml")
 _OUTPUT_ROOT = Path("artifacts/gateway-smoke/langgraph")
 _EXPECTED_SCENARIO_COUNT = 5
+_READINESS_PATH = "health/readiness"
+_READINESS_ATTEMPTS = 20
+_READINESS_DELAY_SECONDS = 1.0
+_READINESS_REQUEST_TIMEOUT_SECONDS = 2.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,12 +78,63 @@ class SmokeAssessment:
     failures: tuple[str, ...]
 
 
-def require_gateway_environment() -> None:
-    """Require the endpoint and client credential used by the LangChain adapter."""
-    for name in (_GATEWAY_BASE_URL_ENV, _GATEWAY_API_KEY_ENV):
-        value = os.environ.get(name)
-        if value is None or not value.strip():
-            raise RuntimeError(f"{name} must be configured for the gateway smoke")
+def _required_gateway_environment_value(name: str) -> str:
+    """Return one required non-blank gateway environment value."""
+    value = os.environ.get(name)
+    if value is None or not value.strip():
+        raise RuntimeError(f"{name} must be configured for the gateway smoke")
+    return value
+
+
+def require_gateway_environment() -> tuple[str, str]:
+    """Return the endpoint and client credential used by the LangChain adapter."""
+    return (
+        _required_gateway_environment_value(_GATEWAY_BASE_URL_ENV),
+        _required_gateway_environment_value(_GATEWAY_API_KEY_ENV),
+    )
+
+
+def wait_for_gateway_readiness(
+    base_url: str,
+    api_key: str,
+    *,
+    attempts: int = _READINESS_ATTEMPTS,
+    delay_seconds: float = _READINESS_DELAY_SECONDS,
+) -> None:
+    """Wait until the LiteLLM readiness endpoint accepts requests."""
+    if attempts < 1:
+        raise ValueError("Gateway readiness attempts must be at least 1")
+    if delay_seconds < 0:
+        raise ValueError("Gateway readiness delay must not be negative")
+
+    readiness_url = urljoin(base_url.rstrip("/") + "/", _READINESS_PATH)
+    request = Request(
+        readiness_url,
+        headers={"Authorization": f"Bearer {api_key}"},
+        method="GET",
+    )
+    last_error = "no response"
+
+    for attempt in range(1, attempts + 1):
+        try:
+            with urlopen(
+                request,
+                timeout=_READINESS_REQUEST_TIMEOUT_SECONDS,
+            ) as response:
+                if response.status == 200:
+                    return
+                last_error = f"HTTP {response.status}"
+        except OSError as exc:
+            last_error = f"{type(exc).__name__}: {exc}"
+
+        if attempt < attempts:
+            sleep(delay_seconds)
+
+    raise RuntimeError(
+        "LiteLLM gateway did not become ready before the smoke started. "
+        f"Last readiness error: {last_error}. "
+        "Verify that the proxy process is still running and inspect its startup logs."
+    )
 
 
 def load_gateway_config_summary(
@@ -320,7 +377,8 @@ def write_smoke_artifacts(
 
 def main() -> None:
     """Execute the provider-backed gateway smoke and persist reviewable evidence."""
-    require_gateway_environment()
+    gateway_base_url, gateway_api_key = require_gateway_environment()
+    wait_for_gateway_readiness(gateway_base_url, gateway_api_key)
     config = load_gateway_config_summary()
     scenarios = load_evaluation_scenarios()
     runs = run_gateway_smoke(scenarios=scenarios, config=config)
