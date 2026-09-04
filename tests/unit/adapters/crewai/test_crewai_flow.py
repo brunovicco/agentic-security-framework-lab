@@ -115,11 +115,10 @@ def _install_stub(
 ) -> StubStructuredLLM:
     stub = StubStructuredLLM(drafts)
 
-    def factory(model_name: str) -> StubStructuredLLM:
-        assert model_name == "openai:gpt-5.6-luna"
+    def factory() -> StubStructuredLLM:
         return stub
 
-    monkeypatch.setattr(crewai_flow_module, "_create_structured_llm", factory)
+    monkeypatch.setattr(crewai_flow_module, "create_crewai_llm", factory)
     monkeypatch.setenv("CREWAI_TRACING_ENABLED", "false")
     return stub
 
