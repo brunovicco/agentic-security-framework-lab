@@ -14,6 +14,7 @@ from agentic_lab.adapters.agno.analyzer import (
     AgnoUsage,
     AgnoVulnerabilityAnalyzer,
 )
+from agentic_lab.adapters.gateway import gateway_model_alias
 from agentic_lab.application.analyzer import VulnerabilityAnalyzer
 from agentic_lab.application.contracts import LLMAnalysisDraft
 from agentic_lab.application.evidence import (
@@ -268,9 +269,12 @@ class AgnoWorkflowRuntime:
 
     def __init__(
         self,
+        model_alias: str | None = None,
         runner_factory: RunnerFactory = AgnoRuntime,
     ) -> None:
-        """Store the per-execution gateway-backed runner factory."""
+        """Accept only the governed alias as a compatibility input and store no model state."""
+        if model_alias is not None and model_alias != gateway_model_alias():
+            raise ValueError("Agno Workflow accepts only the governed gateway model alias")
         self._runner_factory = runner_factory
 
     def run(
