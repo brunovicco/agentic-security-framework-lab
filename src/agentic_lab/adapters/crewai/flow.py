@@ -62,7 +62,6 @@ class _FlowUsageMetrics(Protocol):
 class CrewAIValidatedFlowState(BaseModel):
     """Structured mutable state for the CrewAI evaluator-optimizer Flow."""
 
-    model_name: str
     vulnerability: VulnerabilityEvidence
     assets: tuple[AssetInventoryItem, ...]
     policy: SecurityPolicy
@@ -86,7 +85,7 @@ class CrewAIFlowExecution:
     usage: CrewAIUsage
 
 
-def _create_structured_llm(_model_name: str) -> _StructuredLLM:
+def _create_structured_llm() -> _StructuredLLM:
     """Create the CrewAI structured client through the governed gateway boundary."""
     return cast(_StructuredLLM, create_crewai_llm())
 
@@ -103,7 +102,7 @@ class CrewAIValidatedAnalysisFlow(Flow[CrewAIValidatedFlowState]):
         return draft
 
     def _call_structured_llm(self) -> LLMAnalysisDraft:
-        llm = _create_structured_llm(self.state.model_name)
+        llm = _create_structured_llm()
         task_description = build_crewai_analysis_task_description(
             vulnerability=self.state.vulnerability,
             assets=self.state.assets,
@@ -231,10 +230,6 @@ class CrewAIValidatedAnalysisFlow(Flow[CrewAIValidatedFlowState]):
 class CrewAIFlowRuntime:
     """Execute the direct-LLM evaluator-optimizer through CrewAI Flow."""
 
-    def __init__(self, model_name: str) -> None:
-        """Store transitional report metadata; provider selection is gateway-owned."""
-        self._model_name = model_name
-
     def run(
         self,
         evidence_bundle: AnalysisEvidenceBundle,
@@ -246,7 +241,6 @@ class CrewAIFlowRuntime:
 
         flow = CrewAIValidatedAnalysisFlow(
             initial_state=CrewAIValidatedFlowState(
-                model_name=self._model_name,
                 vulnerability=evidence_bundle["vulnerability"],
                 assets=evidence_bundle["assets"],
                 policy=evidence_bundle["policy"],
