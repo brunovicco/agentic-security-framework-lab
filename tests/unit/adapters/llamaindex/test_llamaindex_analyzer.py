@@ -1,5 +1,7 @@
 """Tests for the LlamaIndex vulnerability-analysis adapter."""
 
+from typing import Any
+
 from llama_index.core.callbacks import CallbackManager, TokenCountingHandler
 from llama_index.core.callbacks.token_counting import TokenCountingEvent
 from llama_index.core.prompts import ChatPromptTemplate
@@ -8,10 +10,9 @@ from pytest import MonkeyPatch
 
 from agentic_lab.adapters.llamaindex import analyzer as llamaindex_module
 from agentic_lab.adapters.llamaindex.analyzer import (
-    LLAMAINDEX_PROVIDER_DEFAULT_TEMPERATURE,
+    LlamaIndexGatewayLLM,
     LlamaIndexRuntime,
     LlamaIndexVulnerabilityAnalyzer,
-    normalize_llamaindex_model_name,
 )
 from agentic_lab.application.analysis_prompt import SECURITY_ANALYSIS_SYSTEM_PROMPT
 from agentic_lab.application.contracts import AssetAssessment, LLMAnalysisDraft
@@ -49,6 +50,13 @@ class StubStructuredLLM:
         assert output_cls is LLMAnalysisDraft
         self.prompts.append(prompt)
         return self.draft
+
+
+class InspectableGatewayLLM(LlamaIndexGatewayLLM):
+    """Expose protected transport kwargs for provider-free contract tests."""
+
+    def request_model_kwargs(self) -> dict[str, Any]:
+        return self._get_model_kwargs()
 
 
 def _vulnerability() -> VulnerabilityEvidence:
@@ -101,39 +109,42 @@ def _document() -> EvidenceDocument:
     }
 
 
-def test_normalize_llamaindex_model_name_translates_shared_identifier() -> None:
-    assert normalize_llamaindex_model_name("openai:gpt-5.6-luna") == "gpt-5.6-luna"
-
-
-def test_normalize_llamaindex_model_name_preserves_native_identifier() -> None:
-    assert normalize_llamaindex_model_name("gpt-5.6-luna") == "gpt-5.6-luna"
-
-
-def test_normalize_llamaindex_model_name_rejects_non_openai_provider() -> None:
-    try:
-        normalize_llamaindex_model_name("anthropic:claude-sonnet")
-    except ValueError as exc:
-        assert str(exc) == "LlamaIndex OpenAI adapter requires an openai:model identifier"
-    else:
-        raise AssertionError("Expected non-OpenAI model identifier to be rejected")
-
-
-def test_llamaindex_llm_uses_provider_supported_default_temperature(
+def test_llamaindex_llm_uses_governed_gateway_alias(
     monkeypatch: MonkeyPatch,
 ) -> None:
     captured_kwargs: dict[str, object] = {}
 
-    class StubOpenAI:
+    class StubGatewayLLM:
         def __init__(self, **kwargs: object) -> None:
             captured_kwargs.update(kwargs)
 
-    monkeypatch.setattr(llamaindex_module, "OpenAI", StubOpenAI)
+    monkeypatch.setenv("AGENTIC_LAB_GATEWAY_BASE_URL", "http://gateway.test:4000")
+    monkeypatch.setenv("AGENTIC_LAB_GATEWAY_API_KEY", "gateway-test-key")
+    monkeypatch.setattr(llamaindex_module, "LlamaIndexGatewayLLM", StubGatewayLLM)
 
-    LlamaIndexRuntime("openai:gpt-5.6-luna")
+    LlamaIndexRuntime("openai:legacy-direct-model")
 
-    assert captured_kwargs["model"] == "gpt-5.6-luna"
-    assert captured_kwargs["temperature"] == LLAMAINDEX_PROVIDER_DEFAULT_TEMPERATURE
+    assert captured_kwargs["model"] == "security-analysis"
+    assert captured_kwargs["api_base"] == "http://gateway.test:4000"
+    assert captured_kwargs["api_key"] == "gateway-test-key"
+    assert "temperature" not in captured_kwargs
     assert isinstance(captured_kwargs["callback_manager"], CallbackManager)
+
+
+def test_gateway_llm_declares_capabilities_without_forwarding_temperature() -> None:
+    llm = InspectableGatewayLLM(
+        model="security-analysis",
+        api_base="http://gateway.test:4000",
+        api_key="gateway-test-key",
+    )
+
+    model_kwargs = llm.request_model_kwargs()
+
+    assert llm.metadata.model_name == "security-analysis"
+    assert llm.metadata.is_chat_model is True
+    assert llm.metadata.is_function_calling_model is True
+    assert model_kwargs["model"] == "security-analysis"
+    assert "temperature" not in model_kwargs
 
 
 def test_llamaindex_runtime_uses_separate_system_and_user_messages(
@@ -237,7 +248,7 @@ def test_llamaindex_analyzer_frames_evidence_as_untrusted_data() -> None:
     assert '"asset_id": "api-prod-01"' in user_prompt
 
 
-def test_llamaindex_analyzer_includes_deterministic_feedback() -> None:
+def test_llamaindex_analyzer_includes_deterministic_evaluator_feedback() -> None:
     runner = StubLlamaIndexAnalysisRunner(_draft())
     analyzer = LlamaIndexVulnerabilityAnalyzer(runner)
 

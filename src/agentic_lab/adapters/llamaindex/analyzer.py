@@ -1,14 +1,20 @@
 """LlamaIndex structured vulnerability-analysis adapter."""
 
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
-from llama_index.core.base.llms.types import ChatMessage, MessageRole
+from llama_index.core.base.llms.types import ChatMessage, LLMMetadata, MessageRole
 from llama_index.core.callbacks import CallbackManager, TokenCountingHandler
+from llama_index.core.constants import DEFAULT_CONTEXT_WINDOW
 from llama_index.core.prompts import ChatPromptTemplate
 from llama_index.llms.openai import OpenAI
 from pydantic import BaseModel
 
+from agentic_lab.adapters.gateway import (
+    gateway_api_key,
+    gateway_base_url,
+    gateway_model_alias,
+)
 from agentic_lab.application.analysis_prompt import (
     SECURITY_ANALYSIS_SYSTEM_PROMPT,
     build_security_analysis_user_prompt,
@@ -19,8 +25,6 @@ from agentic_lab.application.evidence import (
     EvidenceDocument,
     VulnerabilityEvidence,
 )
-
-LLAMAINDEX_PROVIDER_DEFAULT_TEMPERATURE = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,29 +85,38 @@ class _TokenCounter(Protocol):
         ...
 
 
-def normalize_llamaindex_model_name(model_name: str) -> str:
-    """Translate the shared provider:model identifier to LlamaIndex model syntax."""
-    provider, separator, model = model_name.partition(":")
+class LlamaIndexGatewayLLM(OpenAI):
+    """Use the typed LlamaIndex OpenAI transport for the governed gateway alias."""
 
-    if not separator:
-        return model_name
+    @property
+    def metadata(self) -> LLMMetadata:
+        """Declare gateway capabilities without inferring them from the alias name."""
+        return LLMMetadata(
+            context_window=DEFAULT_CONTEXT_WINDOW,
+            num_output=self.max_tokens or -1,
+            is_chat_model=True,
+            is_function_calling_model=True,
+            model_name=self.model,
+        )
 
-    if provider != "openai" or not model:
-        raise ValueError("LlamaIndex OpenAI adapter requires an openai:model identifier")
-
-    return model
+    def _get_model_kwargs(self, **kwargs: Any) -> dict[str, Any]:
+        """Remove the client sampling default before sending a gateway request."""
+        model_kwargs = super()._get_model_kwargs(**kwargs)
+        model_kwargs.pop("temperature", None)
+        return model_kwargs
 
 
 def _create_llm(
-    model_name: str,
+    _model_name: str,
     callback_manager: CallbackManager,
 ) -> _StructuredPredictLLM:
-    """Create an OpenAI LlamaIndex LLM using the provider-supported sampling default."""
+    """Create a structured LlamaIndex client through the governed gateway alias."""
     return cast(
         _StructuredPredictLLM,
-        OpenAI(
-            model=normalize_llamaindex_model_name(model_name),
-            temperature=LLAMAINDEX_PROVIDER_DEFAULT_TEMPERATURE,
+        LlamaIndexGatewayLLM(
+            model=gateway_model_alias(),
+            api_base=gateway_base_url(),
+            api_key=gateway_api_key(),
             callback_manager=callback_manager,
         ),
     )
@@ -117,13 +130,13 @@ class LlamaIndexRuntime:
         model_name: str,
         token_counter: TokenCountingHandler | None = None,
     ) -> None:
-        """Create the LlamaIndex LLM and isolated usage callback state."""
+        """Create gateway-backed LlamaIndex LLM while retaining transitional metadata input."""
         handler = token_counter or TokenCountingHandler(verbose=False)
         callback_manager = CallbackManager([handler])
 
         self._token_counter = cast(_TokenCounter, handler)
         self._llm = _create_llm(
-            model_name=model_name,
+            model_name,
             callback_manager=callback_manager,
         )
 

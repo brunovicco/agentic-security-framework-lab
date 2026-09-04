@@ -8,7 +8,9 @@ Checked on 2026-09-04:
 - LiteLLM official Proxy / LLM Gateway guidance;
 - current official LiteLLM container package releases;
 - LangChain `ChatOpenAI` integration and current API reference for custom `base_url` proxy clients;
-- CrewAI v1.15.20 LLM configuration for custom OpenAI-compatible endpoints.
+- CrewAI v1.15.x LLM configuration for custom OpenAI-compatible endpoints;
+- LlamaIndex OpenAI LLM support for custom `api_base` endpoints;
+- LlamaIndex structured prediction program selection based on function-calling metadata.
 
 Current pattern considered:
 
@@ -17,6 +19,8 @@ Current pattern considered:
 - proxy capabilities include authentication, spend tracking, rate limiting, logging hooks, and model routing;
 - LangChain `ChatOpenAI` accepts an explicit `base_url` when the client talks to a proxy or service emulator;
 - CrewAI `LLM` supports `custom_openai=True` with explicit `base_url` and `api_key` for OpenAI-compatible gateways;
+- LlamaIndex's typed OpenAI integration accepts explicit `api_base` and `api_key` values for an OpenAI-compatible endpoint;
+- LlamaIndex default structured prediction uses function calling when the LLM metadata advertises that capability;
 - sampling controls such as `temperature` are model-specific and are intentionally not forced by migrated clients;
 - current official LiteLLM container releases include the v1.98.0 line.
 
@@ -48,7 +52,7 @@ LiteLLM Proxy
 configured upstream provider model
 ```
 
-CrewAI Agent/Crew and CrewAI Flow now use the same client-facing gateway contract in code:
+CrewAI Agent/Crew and CrewAI Flow use the same client-facing gateway contract and have accepted compatibility-smoke evidence:
 
 ```text
 CrewAI Agent/Crew or Flow
@@ -65,7 +69,26 @@ LiteLLM Proxy
 configured upstream provider model
 ```
 
-The CrewAI client migration is not accepted runtime evidence until a provider-backed smoke is executed and reviewed. LlamaIndex and Agno still use their direct provider integrations during this transitional phase.
+The current LlamaIndex client-migration increment uses its typed OpenAI transport with explicit gateway metadata while preserving the existing structured-prediction behavior:
+
+```text
+LlamaIndex Runtime / Workflow
+    |
+    v
+LlamaIndex OpenAI transport
+    |
+    | model = security-analysis
+    | api_base = AGENTIC_LAB_GATEWAY_BASE_URL
+    | chat capability = true
+    | function calling capability = true
+    v
+LiteLLM Proxy
+    |
+    v
+configured upstream provider model
+```
+
+LlamaIndex migration code is not accepted runtime evidence until a dedicated provider-backed gateway smoke is executed and reviewed. Agno remains on its direct provider integration during this transitional phase.
 
 Framework orchestration, the shared `LLMAnalysisDraft` contract, deterministic validation, retry policy, fallback, and final result construction remain application-owned and unchanged. Only provider access is moving behind the gateway boundary.
 
@@ -73,16 +96,24 @@ Framework orchestration, the shared `LLMAnalysisDraft` contract, deterministic v
 
 ADR 0002 selects LiteLLM as a central infrastructure service, not an in-process framework dependency.
 
-For LangChain, the lab therefore uses `ChatOpenAI` with the proxy's OpenAI-compatible endpoint. For CrewAI, the lab uses CrewAI's native `LLM` custom OpenAI-compatible endpoint support rather than installing `crewai[litellm]` and introducing a second in-process LiteLLM layer.
+For LangChain, the lab uses `ChatOpenAI` with the proxy's OpenAI-compatible endpoint. For CrewAI, the lab uses CrewAI's native `LLM` custom OpenAI-compatible endpoint support rather than installing `crewai[litellm]` and introducing a second in-process LiteLLM layer. For LlamaIndex, the lab reuses its already installed and typed OpenAI transport with a custom `api_base` and a narrow gateway subclass for alias capability metadata and request normalization.
 
 This preserves the same architectural rule across frameworks:
 
 - provider credentials and upstream model identifiers stay outside framework adapters;
-- each adapter knows only the stable gateway alias, endpoint, and client credential;
+- each migrated adapter knows only the stable gateway alias, endpoint, client credential, and capabilities required by its framework;
 - LiteLLM remains independently deployable infrastructure;
 - provider migration can occur behind the alias without changing domain/application code.
 
 If a future experiment requires LiteLLM-specific in-process router behavior or provider-specific response extensions, that requires a separate architectural decision.
+
+## LlamaIndex alias metadata and sampling
+
+The LlamaIndex OpenAI integration normally infers model capabilities and context information from a provider-native OpenAI model name. The gateway alias `security-analysis` is intentionally not such an identifier, so the gateway subclass declares only the framework capabilities required by the existing workload: chat and function calling. It uses the LlamaIndex default context-window metadata rather than copying the configured upstream model's provider-specific limit into the adapter.
+
+LlamaIndex also normally includes its client `temperature` value in every OpenAI request. The gateway subclass removes only that request parameter so sampling remains provider-owned, matching the existing LangGraph and CrewAI gateway policy.
+
+The explicit function-calling metadata matters because LlamaIndex uses it when choosing the default Pydantic structured-prediction program. This preserves the existing function-calling structured-output path instead of silently switching to text parsing.
 
 ## Shared client configuration
 
@@ -102,7 +133,7 @@ LITELLM_MASTER_KEY
 
 `AGENTIC_LAB_GATEWAY_API_KEY` is deliberately named as a client credential instead of reading `LITELLM_MASTER_KEY` directly. A local environment may temporarily assign the master key value to it, but the client contract can later receive a scoped virtual key without changing application code.
 
-`AGENTIC_LAB_MODEL` no longer selects the model for migrated LangGraph or CrewAI provider access. LangGraph benchmark metadata has already been cleaned up to use the gateway alias. CrewAI runners still carry direct-model metadata temporarily so provider compatibility and benchmark metadata migration remain separate evidence increments; issue #48 tracks that cleanup after the CrewAI provider-backed smoke.
+`AGENTIC_LAB_MODEL` no longer selects provider access for migrated LangGraph or CrewAI. Their post-migration runner metadata cleanup is complete. During the first LlamaIndex client-migration increment, historical direct-model inputs remain temporarily in runners/runtime construction even though the gateway alias selects provider access; issue #55 tracks their removal only after a provider-backed LlamaIndex smoke is accepted. Agno still uses `AGENTIC_LAB_MODEL` for direct provider selection until its own migration.
 
 For post-migration runs, `security-analysis` identifies the governed alias actually requested by the client. It is not independent attestation of the provider model selected behind the proxy. The configured upstream remains gateway configuration evidence, and historical persisted benchmark artifacts are intentionally left unchanged.
 
@@ -119,5 +150,7 @@ Read these short sections when reviewing the gateway boundary:
 1. LiteLLM Getting Started: **Proxy Server vs Python SDK**.
 2. LangChain `ChatOpenAI` API reference: `base_url` and `api_key`.
 3. CrewAI LLMs: **Custom OpenAI-Compatible Endpoint** and model-specific parameter guidance.
+4. LlamaIndex OpenAI LLM configuration for custom API base URLs.
+5. LlamaIndex program utilities: default structured-prediction selection from `is_function_calling_model`.
 
 Routing policies, virtual keys, budgets, observability callbacks, and gateway fallback remain deferred to dedicated increments.
