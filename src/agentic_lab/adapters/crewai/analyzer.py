@@ -3,8 +3,9 @@
 from dataclasses import dataclass
 from typing import Protocol, cast
 
-from crewai import LLM, Agent, Crew, Process, Task
+from crewai import Agent, Crew, Process, Task
 
+from agentic_lab.adapters.crewai.model import create_crewai_llm
 from agentic_lab.application.analysis_prompt import (
     SECURITY_ANALYSIS_SYSTEM_PROMPT,
     build_security_analysis_user_prompt,
@@ -100,19 +101,6 @@ class _OutputTask(Protocol):
     output: _StructuredTaskOutput | None
 
 
-def normalize_crewai_model_name(model_name: str) -> str:
-    """Translate the shared provider:model identifier to CrewAI provider/model syntax."""
-    provider, separator, model = model_name.partition(":")
-
-    if not separator:
-        return model_name
-
-    if not provider or not model:
-        raise ValueError("Model identifier must contain both provider and model")
-
-    return f"{provider}/{model}"
-
-
 def build_crewai_analysis_task_description(
     vulnerability: VulnerabilityEvidence,
     assets: tuple[AssetInventoryItem, ...],
@@ -132,8 +120,9 @@ class CrewAIRuntime:
     """Execute structured vulnerability reasoning through CrewAI."""
 
     def __init__(self, model_name: str) -> None:
-        """Configure CrewAI with the shared model identifier."""
-        self._llm = LLM(model=normalize_crewai_model_name(model_name))
+        """Configure CrewAI through the gateway while retaining transitional metadata input."""
+        _ = model_name
+        self._llm = create_crewai_llm()
         self._latest_usage = CrewAIUsage()
         self._consumed_usage = CrewAIUsage()
 
