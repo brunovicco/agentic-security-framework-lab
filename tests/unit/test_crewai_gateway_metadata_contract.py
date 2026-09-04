@@ -1,4 +1,4 @@
-"""Regression tests for the migrated CrewAI gateway metadata contract."""
+"""Regression tests for migrated framework gateway metadata contracts."""
 
 from pathlib import Path
 from runpy import run_path
@@ -55,7 +55,7 @@ def test_crewai_only_generic_runner_does_not_require_direct_model(
 
 
 @pytest.mark.parametrize("script", (_BASELINE_SCRIPT, _SMOKE_SCRIPT))
-def test_generic_runner_retains_direct_model_contract_for_unmigrated_workflows(
+def test_generic_runner_retains_direct_model_contract_only_for_agno(
     script: dict[str, Any],
     monkeypatch: MonkeyPatch,
 ) -> None:
@@ -68,9 +68,7 @@ def test_generic_runner_retains_direct_model_contract_for_unmigrated_workflows(
     direct_model = script["require_direct_model_name"](("llamaindex-workflow", "agno-workflow"))
 
     assert direct_model == "openai:direct-test-model"
-    assert (
-        script["workflow_model_name"]("llamaindex-workflow", direct_model)
-        == "openai:direct-test-model"
-    )
+    llamaindex_model = script["workflow_model_name"]("llamaindex-workflow", direct_model)
+    assert llamaindex_model == "security-analysis"
     agno_model = script["workflow_model_name"]("agno-workflow", direct_model)
     assert agno_model == "openai:direct-test-model"
