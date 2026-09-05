@@ -1,0 +1,102 @@
+"""Tests for framework-neutral governed action runtime enforcement."""
+
+import pytest
+
+from agentic_lab.application.action_authorization import (
+    ActionAuthorizer,
+    AuthorizationDecision,
+    AuthorizationOutcome,
+    ProposedAction,
+    StaticActionAuthorizationPolicy,
+)
+from agentic_lab.application.action_runtime import GovernedActionRuntime
+
+
+class RecordingActionExecutor:
+    """Record actions that cross the runtime enforcement boundary."""
+
+    def __init__(self) -> None:
+        self.actions: list[ProposedAction] = []
+
+    def execute(self, proposed_action: ProposedAction) -> None:
+        """Record one executed action without performing an external side effect."""
+        self.actions.append(proposed_action)
+
+
+class FailingAuthorizer:
+    """Represent an authorization decision point that cannot produce a decision."""
+
+    def authorize(self, proposed_action: ProposedAction) -> AuthorizationDecision:
+        """Fail before any authorization decision can be established."""
+        raise RuntimeError(f"authorization unavailable for {proposed_action.action}")
+
+
+def _authorizer() -> ActionAuthorizer:
+    rules: dict[str, AuthorizationOutcome] = {
+        "read_vulnerability": "allow",
+        "modify_vulnerability": "deny",
+        "create_remediation_task": "require_human_approval",
+    }
+    return StaticActionAuthorizationPolicy(rules)
+
+
+def test_allowed_action_reaches_executor_once() -> None:
+    """Execute exactly once after an explicit allow decision."""
+    executor = RecordingActionExecutor()
+    runtime = GovernedActionRuntime(authorizer=_authorizer(), executor=executor)
+    proposed_action = ProposedAction(action="read_vulnerability")
+
+    evidence = runtime.execute(proposed_action)
+
+    assert executor.actions == [proposed_action]
+    assert evidence.authorization.outcome == "allow"
+    assert evidence.execution_occurred is True
+
+
+def test_denied_action_never_reaches_executor() -> None:
+    """Block execution after an explicit deny decision."""
+    executor = RecordingActionExecutor()
+    runtime = GovernedActionRuntime(authorizer=_authorizer(), executor=executor)
+
+    evidence = runtime.execute(ProposedAction(action="modify_vulnerability"))
+
+    assert executor.actions == []
+    assert evidence.authorization.outcome == "deny"
+    assert evidence.authorization.reason == "explicit_deny"
+    assert evidence.execution_occurred is False
+
+
+def test_approval_required_action_never_reaches_executor() -> None:
+    """Block execution while human approval is still required."""
+    executor = RecordingActionExecutor()
+    runtime = GovernedActionRuntime(authorizer=_authorizer(), executor=executor)
+
+    evidence = runtime.execute(ProposedAction(action="create_remediation_task"))
+
+    assert executor.actions == []
+    assert evidence.authorization.outcome == "require_human_approval"
+    assert evidence.execution_occurred is False
+
+
+def test_unknown_action_fails_closed_before_executor() -> None:
+    """Keep an unknown action outside the executor through fail-closed authorization."""
+    executor = RecordingActionExecutor()
+    runtime = GovernedActionRuntime(authorizer=_authorizer(), executor=executor)
+
+    evidence = runtime.execute(ProposedAction(action="delete_vulnerability"))
+
+    assert executor.actions == []
+    assert evidence.authorization.outcome == "deny"
+    assert evidence.authorization.reason == "no_matching_rule"
+    assert evidence.execution_occurred is False
+
+
+def test_authorization_failure_cannot_fall_through_to_executor() -> None:
+    """Propagate authorization failure without executing the proposed action."""
+    executor = RecordingActionExecutor()
+    runtime = GovernedActionRuntime(authorizer=FailingAuthorizer(), executor=executor)
+
+    with pytest.raises(RuntimeError, match="authorization unavailable"):
+        runtime.execute(ProposedAction(action="read_vulnerability"))
+
+    assert executor.actions == []
