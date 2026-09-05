@@ -90,13 +90,47 @@ def test_langgraph_approval_required_action_has_zero_side_effect() -> None:
     assert executor.execution_count == 0
 
 
-def test_langgraph_scope_escalation_fails_closed_before_mutation() -> None:
+def test_langgraph_resource_escalation_fails_closed_before_mutation() -> None:
     """Keep a substituted resource outside the executor through the same boundary."""
     executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
 
     output = run_governed_action_graph(
         _runtime(executor),
         _action(resource="finding:demo-999"),
+    )
+
+    evidence = output["execution_evidence"]
+    assert evidence.authorization.outcome == "deny"
+    assert evidence.authorization.reason == "no_matching_rule"
+    assert evidence.execution_occurred is False
+    assert executor.is_acknowledged(FINDING_RESOURCE) is False
+    assert executor.execution_count == 0
+
+
+def test_langgraph_environment_escalation_fails_closed_before_mutation() -> None:
+    """Keep an unknown environment outside the exact least-privilege scope."""
+    executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
+
+    output = run_governed_action_graph(
+        _runtime(executor),
+        _action(environment="production-shadow"),
+    )
+
+    evidence = output["execution_evidence"]
+    assert evidence.authorization.outcome == "deny"
+    assert evidence.authorization.reason == "no_matching_rule"
+    assert evidence.execution_occurred is False
+    assert executor.is_acknowledged(FINDING_RESOURCE) is False
+    assert executor.execution_count == 0
+
+
+def test_langgraph_action_substitution_fails_closed_before_mutation() -> None:
+    """Authorize the actual proposed operation rather than a broader tool capability."""
+    executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
+
+    output = run_governed_action_graph(
+        _runtime(executor),
+        _action(action="delete_finding"),
     )
 
     evidence = output["execution_evidence"]
