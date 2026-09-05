@@ -161,10 +161,10 @@ Authentication success is therefore a precondition for authorization, not a perm
 
 `StaticActionAuthorizationPolicy` is the current controlled-lab policy implementation.
 
-It evaluates an exact least-privilege key:
+Phase 37 makes trusted identity provenance part of the exact least-privilege key:
 
 ```text
-(caller_id, action, resource, environment)
+(caller_id, identity_source, action, resource, environment)
 ```
 
 A rule can produce one of three outcomes:
@@ -173,7 +173,7 @@ A rule can produce one of three outcomes:
 - `deny`
 - `require_human_approval`
 
-There are no wildcards, role inheritance, nearest-match rules, or model-generated policy decisions in the current implementation.
+There are no wildcards, role inheritance, nearest-match rules, model-generated policy decisions, or source fallbacks in the current implementation.
 
 If no exact rule exists, authorization fails closed with:
 
@@ -182,11 +182,17 @@ outcome = deny
 reason = no_matching_rule
 ```
 
-This means changing only the resource, environment, caller, or action creates a different authorization request.
+This means changing only the caller, identity source, action, resource, or environment creates a different authorization request.
 
-Authentication and authorization remain separate. A successfully verified API key establishes caller context, and the authenticated runtime then passes that context into the unchanged deterministic authorization policy. The policy can still deny the caller.
+Authentication and authorization remain separate. A successfully verified API key establishes caller context, but that context carries `identity_source = api_key` and must match an explicit API-key-specific authorization rule. A rule for the same `caller_id` under `trusted_composition` does not grant authority to the API-key context.
 
-`identity_source` is not yet a policy dimension. Source-aware authorization remains a separate hardening decision rather than an implicit behavior change.
+The source-aware invariant is:
+
+```text
+same caller_id != same authority when identity_source differs
+```
+
+There is deliberately no compatibility fallback to the older four-field key. Missing source-specific policy remains an unknown scope and therefore fails closed.
 
 ## 4. Human approval is separate authority
 
@@ -259,7 +265,7 @@ This distinction matters because:
 authenticated != authorized != executed successfully
 ```
 
-For example, a service credential can authenticate successfully while policy still denies the requested action. Likewise, policy can authorize a scope while the concrete executor can fail because the target resource does not exist.
+For example, a service credential can authenticate successfully while policy still denies the requested action because its exact identity source has no matching rule. Likewise, policy can authorize a scope while the concrete executor can still fail because the target resource does not exist.
 
 ## 6. Safe mutable fixture
 
@@ -292,7 +298,7 @@ None of these adapters contains its own authorization rule table or interprets a
 
 The framework orchestrates. The application decides and enforces.
 
-Existing framework adapters continue to use their explicitly injected local `trusted_composition` context. Phases 35-36 do not silently add API-key handling inside any framework adapter; authenticated service-caller composition remains an application concern.
+Existing framework adapters continue to use their explicitly injected local `trusted_composition` context. Phase 37 migrates their policy fixtures to declare that source explicitly, so framework behavior cannot depend on an implicit source default inside authorization policy. API-key handling remains an application authentication concern rather than framework input.
 
 ### Agno retry hardening
 
@@ -315,6 +321,7 @@ The controlled matrix covers:
 | approval required, approval missing | `require_human_approval` / `missing` | none |
 | approval required, trusted approval present | `require_human_approval` / `validated` | exactly one mutation |
 | caller mismatch | fail-closed `deny` | none |
+| identity-source mismatch | fail-closed `deny` | none |
 | resource escalation | fail-closed `deny` | none |
 
 For every framework, the suite compares:
@@ -323,7 +330,9 @@ For every framework, the suite compares:
 - observable in-memory state;
 - successful execution count.
 
-This is **provider-free cross-framework conformance evidence**. It does not prove production security, provider behavior, or statistical performance.
+The identity-source mismatch scenario uses the same allowed caller and action scope but changes only the trusted context from `trusted_composition` to `api_key`. Because no API-key-specific rule exists in that fixture, the direct runtime and all four framework adapters must return `deny / no_matching_rule` with zero side effects.
+
+This is **provider-free cross-framework conformance evidence**. It does not prove production security, provider behavior, remote identity propagation, or statistical performance.
 
 Relevant test:
 
@@ -334,6 +343,7 @@ Relevant test:
 Provider-free adversarial tests additionally exercise:
 
 - escalation from a read-only caller to a mutable action;
+- identity-source substitution for the same caller and action scope;
 - resource and environment escalation;
 - privileged caller spoofing inside the untrusted proposal;
 - fake approval-like fields inside the proposal;
@@ -342,11 +352,12 @@ Provider-free adversarial tests additionally exercise:
 - tool/action substitution;
 - unsafe proposals that must not imply unsafe side effects.
 
-Identity tests additionally prove that model-adjacent proposals cannot smuggle `identity_source`, unsupported provenance values are rejected, an invalid service credential creates no trusted context, and rejected authentication cannot reach authorization or mutable execution.
+Identity tests additionally prove that model-adjacent proposals cannot smuggle `identity_source`, unsupported provenance values are rejected, an invalid service credential creates no trusted context, rejected authentication cannot reach authorization or mutable execution, and an API-key context does not inherit a trusted-composition rule.
 
 Relevant tests:
 
 - `tests/integration/test_adversarial_action_authorization.py`
+- `tests/integration/test_governed_action_framework_conformance.py`
 - `tests/unit/application/test_action_authorization.py`
 - `tests/unit/application/test_action_identity.py`
 - `tests/unit/application/test_authenticated_action_runtime.py`
@@ -383,18 +394,19 @@ identity_source = trusted_composition
 
 The tool schema does not accept `caller_id`, `identity_source`, credentials, `approval_id`, or `approver_id`.
 
-The current local policy proves:
+The current local policy binds every MCP rule explicitly to `identity_source = trusted_composition` and proves:
 
 - exact `test` scope can execute;
 - `staging` is explicitly denied;
 - `production` requires approval and remains blocked because the local server does not configure an approval provider;
-- resource substitution fails closed.
+- resource substitution fails closed;
+- another identity source cannot inherit the local composition rules.
 
 The compatibility and real STDIO smoke checks verify both returned execution evidence, including trusted identity provenance, and independent observable state.
 
 MCP tool annotations are treated only as behavioral metadata. They do not replace application authorization or runtime enforcement.
 
-Phases 35-36 do not route API-key credentials through MCP STDIO. Remote transport authentication remains a separate increment.
+Phases 35-37 do not route API-key credentials through MCP STDIO. Remote transport authentication remains a separate increment.
 
 ## 11. What the current implementation does not claim
 
@@ -404,6 +416,7 @@ Current non-goals include:
 
 - RBAC/ABAC policy languages;
 - wildcard or hierarchical resource scopes;
+- identity-source wildcards or inheritance;
 - authenticated end-user identity propagation;
 - remote MCP OAuth authorization as proof of caller identity;
 - federated identity or OIDC/JWT validation;
@@ -421,7 +434,7 @@ Current non-goals include:
 
 The current MCP `local-mcp-host` identity with `identity_source = trusted_composition` is a deployment-scoped local trust context for the experiment. It must not be described as authenticated user or agent identity.
 
-The `api_key` source proves only a matching synthetic service credential in the controlled fixture. Phase 36 proves local authentication-first application composition, not remote authenticated identity propagation.
+The `api_key` source proves only a matching synthetic service credential in the controlled fixture. Phases 36-37 prove local authentication-first application composition and source-aware authorization, not remote authenticated identity propagation.
 
 ## 12. Security invariants
 
@@ -439,20 +452,22 @@ The implemented Governed Agent Actions boundary is designed around these invaria
 10. **Authentication success never implies action authorization.**
 11. **`trusted_composition` provenance is not authentication proof.**
 12. **`api_key` identifies only the controlled service credential mechanism.**
-13. **Unknown authorization scopes fail closed.**
-14. **Human approval is separate trusted evidence, not a prompt field.**
-15. **Approval is bound to one exact caller and action scope.**
-16. **One claimed approval cannot be replayed for a second mutable execution.**
-17. **A retry after a claimed approval requires fresh human evidence.**
-18. **Framework adapters do not own policy or enforcement.**
-19. **A denied or unapproved action must not reach the mutable executor.**
-20. **Execution evidence is distinct from authorization evidence.**
-21. **Framework-specific retries must not silently multiply mutable side effects.**
+13. **Authorization binds to exact caller identity provenance as well as action scope.**
+14. **The same `caller_id` does not inherit authority across identity sources.**
+15. **Unknown or source-mismatched authorization scopes fail closed.**
+16. **Human approval is separate trusted evidence, not a prompt field.**
+17. **Approval is bound to one exact caller context and action scope.**
+18. **One claimed approval cannot be replayed for a second mutable execution.**
+19. **A retry after a claimed approval requires fresh human evidence.**
+20. **Framework adapters do not own policy or enforcement.**
+21. **A denied or unapproved action must not reach the mutable executor.**
+22. **Execution evidence is distinct from authorization evidence.**
+23. **Framework-specific retries must not silently multiply mutable side effects.**
 
 ## 13. How to explain this in an interview
 
 A concise explanation is:
 
-> "The agent can propose a tool action, but the proposal is not authority. I separate caller authentication from authorization: a credential is verified first, that derives a trusted `ActionContext`, and only that context reaches the existing deterministic authorization runtime. Failed authentication never reaches policy or execution, while successful authentication can still be denied by policy. The raw credential stays outside authorization and execution evidence. Human approval is another independent authority, and the same governed runtime remains framework-neutral across LangGraph, CrewAI, LlamaIndex, Agno, and MCP."
+> "Once I had two trusted identity sources, caller ID alone stopped being a sufficient authorization key. I kept authentication separate: a credential first derives a trusted `ActionContext`, then authorization matches the exact caller, identity source, action, resource, and environment. There is no cross-source fallback, so an API-key-authenticated caller does not inherit authority granted to the same caller ID under local trusted composition. Failed authentication never reaches policy, successful authentication can still be denied, human approval remains a separate authority, and the same runtime semantics hold across LangGraph, CrewAI, LlamaIndex, Agno, and MCP."
 
-The important architectural point is not the specific in-memory action or synthetic credential. It is that **authentication, identity context, authorization, approval, and execution are independent control points rather than one model-controlled tool call**.
+The important architectural point is not the specific in-memory action or synthetic credential. It is that **authentication, identity provenance, authorization, approval, and execution are independent control points rather than one model-controlled tool call**.
