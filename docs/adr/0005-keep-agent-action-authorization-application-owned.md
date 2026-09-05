@@ -120,9 +120,9 @@ caller_id
 identity_source
 ```
 
-The closed `CallerIdentitySource` currently permits only `trusted_composition`. This value means that trusted application/composition code supplied the caller identity for the local execution boundary. It is provenance evidence, not proof that the caller was authenticated.
+The closed `CallerIdentitySource` initially permitted only `trusted_composition`. This value means that trusted application/composition code supplied the caller identity for the local execution boundary. It is provenance evidence, not proof that the caller was authenticated.
 
-Authentication-like values such as `authenticated_principal` are intentionally unsupported until a real authentication boundary can derive caller context from verifiable identity evidence. Allowing arbitrary source strings now would create the appearance of stronger trust without a mechanism that establishes it.
+Authentication-like values such as `authenticated_principal` were intentionally unsupported until a real authentication boundary could derive caller context from verifiable identity evidence. Allowing arbitrary source strings would create the appearance of stronger trust without a mechanism that establishes it.
 
 Because `ActionExecutionEvidence` already embeds the exact `ActionContext` used by authorization, identity provenance naturally becomes part of runtime evidence without adding a second identity channel.
 
@@ -134,10 +134,32 @@ The extended invariant is:
 model intent != caller identity != identity provenance != authorization decision
 ```
 
-`identity_source` is not currently a policy dimension. The lab has only one truthful trusted source, so source-aware policy would add no meaningful distinction yet. Revisit that question only when more than one genuinely established trusted identity source exists.
+At Phase 34, `identity_source` was deliberately not a policy dimension because only one truthful trusted source existed. That constraint was temporary and explicitly intended to be revisited once a second genuinely established identity source existed.
+
+## Evolution note: v1.2 Phase 37
+
+Phases 35-36 introduced a second concrete identity source, `api_key`, and proved authentication-first composition before authorization. At that point, `caller_id` alone was no longer a sufficient least-privilege key: the same caller identifier could be established by materially different trust mechanisms.
+
+Phase 37 therefore strengthens `StaticActionAuthorizationPolicy` to require exact rules over:
+
+```text
+(caller_id, identity_source, action, resource, environment)
+```
+
+There is no legacy four-field fallback and no cross-source inheritance. A rule for `trusted_composition` does not authorize the same caller when its context was established through `api_key`, and vice versa. If the exact five-field key is absent, the result remains fail-closed `deny / no_matching_rule`.
+
+This change preserves the original application-owned authorization decision. Framework adapters and MCP still consume the same policy boundary; they do not interpret or synthesize source-specific authorization themselves. Existing local framework and MCP fixtures declare `trusted_composition` explicitly, while an authenticated `api_key` caller requires its own source-specific rule before execution can occur.
+
+The source-aware invariant is:
+
+```text
+same caller_id != same authority when identity_source differs
+```
+
+This remains a small deterministic policy proof rather than a general ABAC language. There are still no wildcards, inheritance rules, external policy engine, or transport-specific authorization semantics.
 
 ## Revisit when
 
-Revisit this decision if a later requirement demonstrates that policy ownership must move outside the application boundary, if resource/caller/environment rules require a dedicated policy representation or external engine, or when a real authenticated identity boundary justifies additional trusted identity-source values. Any replacement must preserve deterministic final authorization and keep framework adapters from becoming the source of authority.
+Revisit this decision if a later requirement demonstrates that policy ownership must move outside the application boundary, if resource/caller/source/environment rules require a dedicated policy representation or external engine, or when new authenticated identity mechanisms justify additional trusted identity-source values. Any replacement must preserve deterministic final authorization and keep framework adapters from becoming the source of authority.
 
-Refs #117, #121, #127, #150
+Refs #117, #121, #127, #150, #156
