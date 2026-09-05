@@ -95,7 +95,7 @@ This means changing only the resource, environment, caller, or action creates a 
 
 `require_human_approval` is not equivalent to `allow`.
 
-When policy requires approval, `GovernedActionRuntime` asks an `ActionApprovalProvider` for trusted `HumanApprovalEvidence`.
+When policy requires approval, `GovernedActionRuntime` asks an `ActionApprovalProvider` to **claim** trusted `HumanApprovalEvidence`.
 
 Approval evidence is bound to the exact:
 
@@ -114,6 +114,18 @@ Only validated, exact-match approval evidence can release an approval-required a
 
 The default provider is fail-closed and returns no approval. The in-memory approval provider used by tests contains only explicitly supplied synthetic evidence; it never auto-approves.
 
+### Approval anti-replay
+
+Approval is modeled as a **single-use capability**, not a reusable boolean or lookup result.
+
+`ActionApprovalProvider.claim_approval(...)` returns one unused approval at most once. The controlled in-memory provider removes a matching approval when it is claimed. A second identical request therefore receives `missing` unless a second, distinct human approval was supplied for that same scope.
+
+The claim happens before the mutable executor runs. If the claimed evidence is invalid, or if the executor fails after the claim, the approval is not restored automatically. A retry requires fresh human approval.
+
+This is deliberately fail-closed: a partially failed side effect must not make the same approval capability replayable.
+
+The fixture rejects duplicate `approval_id` values and can hold multiple distinct approvals for the same exact scope when multiple executions were separately approved. This is process-local test evidence, not proof of durable or distributed transactional approval infrastructure.
+
 ## 5. Runtime enforcement
 
 `GovernedActionRuntime` owns the enforcement order:
@@ -124,7 +136,7 @@ flowchart TD
     C[Trusted ActionContext] --> A
     A -->|deny| D[Return evidence: no execution]
     A -->|allow| X[Execute adapter]
-    A -->|require_human_approval| H[Resolve trusted approval evidence]
+    A -->|require_human_approval| H[Claim one unused trusted approval]
     H -->|missing or invalid| B[Return evidence: no execution]
     H -->|validated| X
     X --> E[Return execution evidence]
@@ -223,6 +235,7 @@ Provider-free adversarial tests additionally exercise:
 - privileged caller spoofing inside the untrusted proposal;
 - fake approval-like fields inside the proposal;
 - repeated denied attempts;
+- trusted approval replay after one successful mutable execution;
 - tool/action substitution;
 - unsafe proposals that must not imply unsafe side effects.
 
@@ -283,6 +296,7 @@ Current non-goals include:
 - remote MCP OAuth authorization as proof of caller identity;
 - durable approval workflows;
 - approval expiry, revocation, or multi-party approval;
+- distributed transactional atomicity between approval claims and external side effects;
 - transactional rollback for external side effects;
 - distributed idempotency keys;
 - production audit storage;
@@ -301,15 +315,17 @@ The implemented v1.1 boundary is designed around these invariants:
 4. **Unknown scopes fail closed.**
 5. **Human approval is separate trusted evidence, not a prompt field.**
 6. **Approval is bound to one exact caller and action scope.**
-7. **Framework adapters do not own policy or enforcement.**
-8. **A denied or unapproved action must not reach the mutable executor.**
-9. **Execution evidence is distinct from authorization evidence.**
-10. **Framework-specific retries must not silently multiply mutable side effects.**
+7. **One claimed approval cannot be replayed for a second mutable execution.**
+8. **A retry after a claimed approval requires fresh human evidence.**
+9. **Framework adapters do not own policy or enforcement.**
+10. **A denied or unapproved action must not reach the mutable executor.**
+11. **Execution evidence is distinct from authorization evidence.**
+12. **Framework-specific retries must not silently multiply mutable side effects.**
 
 ## 13. How to explain this in an interview
 
 A concise explanation is:
 
-> "The agent can propose a tool action, but the proposal is not authority. I keep caller identity in trusted runtime context, evaluate an exact least-privilege policy in the application layer, require separately sourced human approval when policy says so, and only then let the runtime call the mutable adapter. The same boundary is exercised through LangGraph, CrewAI, LlamaIndex, Agno, and MCP, so framework choice does not change the authorization semantics."
+> "The agent can propose a tool action, but the proposal is not authority. I keep caller identity in trusted runtime context, evaluate an exact least-privilege policy in the application layer, require separately sourced human approval when policy says so, consume that approval as a single-use capability, and only then let the runtime call the mutable adapter. The same boundary is exercised through LangGraph, CrewAI, LlamaIndex, Agno, and MCP, so framework choice does not change the authorization semantics."
 
 The important architectural point is not the specific in-memory action. It is that **orchestration remains replaceable while authorization and enforcement remain stable**.
