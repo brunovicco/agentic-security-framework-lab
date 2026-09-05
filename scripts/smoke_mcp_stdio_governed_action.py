@@ -81,9 +81,7 @@ def _assert_runtime_result(
     if document.get("approval_status") != approval_status:
         raise RuntimeError(f"Unexpected approval status: {document.get('approval_status')!r}")
     if document.get("execution_occurred") is not execution_occurred:
-        raise RuntimeError(
-            "Unexpected execution flag: " f"{document.get('execution_occurred')!r}"
-        )
+        raise RuntimeError(f"Unexpected execution flag: {document.get('execution_occurred')!r}")
 
 
 async def _read_state(session: ClientSession) -> dict[str, object]:
