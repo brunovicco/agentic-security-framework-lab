@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -32,6 +33,9 @@ from agentic_lab.application.action_runtime import (
 
 _FINDING_RESOURCE = "finding:demo-001"
 _ALLOWED_CALLER = "remediation-agent"
+_APPROVED_AT = datetime(2026, 9, 5, 20, 0, tzinfo=UTC)
+_NOW = _APPROVED_AT + timedelta(minutes=5)
+_EXPIRES_AT = _APPROVED_AT + timedelta(minutes=15)
 
 _RULES: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
     (
@@ -70,6 +74,7 @@ class _Scenario:
     expected_reason: AuthorizationReason
     expected_approval_status: ApprovalStatus
     expected_execution: bool
+    approval_expires_at: datetime | None = None
 
 
 def _action(
@@ -126,6 +131,17 @@ _SCENARIOS: tuple[_Scenario, ...] = (
         expected_execution=True,
     ),
     _Scenario(
+        name="approval-expired",
+        proposed_action=_action(environment="production"),
+        context=ActionContext(caller_id=_ALLOWED_CALLER),
+        with_approval=True,
+        expected_outcome="require_human_approval",
+        expected_reason="human_approval_required",
+        expected_approval_status="expired",
+        expected_execution=False,
+        approval_expires_at=_NOW,
+    ),
+    _Scenario(
         name="caller-mismatch",
         proposed_action=_action(),
         context=ActionContext(caller_id="unprivileged-agent"),
@@ -158,6 +174,14 @@ _SCENARIOS: tuple[_Scenario, ...] = (
 )
 
 
+class FixedApprovalClock:
+    """Return deterministic application time for framework conformance."""
+
+    def now(self) -> datetime:
+        """Return the fixed current time shared by baseline and adapters."""
+        return _NOW
+
+
 def _runtime(
     executor: InMemoryFindingAcknowledgementExecutor,
     scenario: _Scenario,
@@ -170,6 +194,8 @@ def _runtime(
                 approver_id="security-reviewer",
                 proposed_action=scenario.proposed_action,
                 context=scenario.context,
+                approved_at=_APPROVED_AT,
+                expires_at=scenario.approval_expires_at or _EXPIRES_AT,
             ),
         )
 
@@ -177,6 +203,7 @@ def _runtime(
         authorizer=StaticActionAuthorizationPolicy(_RULES),
         executor=executor,
         approval_provider=InMemoryActionApprovalProvider(approvals),
+        approval_clock=FixedApprovalClock(),
     )
 
 

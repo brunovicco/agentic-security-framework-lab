@@ -1,6 +1,6 @@
 """Tests for the deterministic in-memory action approval provider."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -9,7 +9,7 @@ from agentic_lab.application.action_approval import HumanApprovalEvidence
 from agentic_lab.application.action_authorization import ActionContext, ProposedAction
 
 FINDING_RESOURCE = "finding:demo-001"
-APPROVED_AT = datetime(2026, 9, 5, 20, 0, tzinfo=timezone.utc)
+APPROVED_AT = datetime(2026, 9, 5, 20, 0, tzinfo=UTC)
 EXPIRES_AT = APPROVED_AT + timedelta(minutes=15)
 
 

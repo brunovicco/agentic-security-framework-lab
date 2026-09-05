@@ -1,6 +1,6 @@
 """Tests for framework-neutral trusted human approval contracts."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from pydantic import ValidationError
@@ -11,7 +11,7 @@ from agentic_lab.application.action_approval import (
 )
 from agentic_lab.application.action_authorization import ActionContext, ProposedAction
 
-APPROVED_AT = datetime(2026, 9, 5, 20, 0, tzinfo=timezone.utc)
+APPROVED_AT = datetime(2026, 9, 5, 20, 0, tzinfo=UTC)
 EXPIRES_AT = APPROVED_AT + timedelta(minutes=15)
 
 

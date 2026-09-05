@@ -1,6 +1,6 @@
 """Framework-neutral trusted human approval contracts for governed actions."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal, Protocol, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
@@ -53,7 +53,7 @@ class UtcApprovalClock:
 
     def now(self) -> datetime:
         """Return the current UTC time."""
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
 
 
 SYSTEM_APPROVAL_CLOCK: ApprovalClock = UtcApprovalClock()
