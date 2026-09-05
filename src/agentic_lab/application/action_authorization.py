@@ -25,7 +25,7 @@ _REASON_BY_OUTCOME: dict[AuthorizationOutcome, AuthorizationReason] = {
 
 
 class ProposedAction(BaseModel):
-    """Represent an action proposed by an agent or other untrusted caller."""
+    """Represent a scoped action proposed by an agent or other untrusted caller."""
 
     model_config = ConfigDict(
         frozen=True,
@@ -33,6 +33,8 @@ class ProposedAction(BaseModel):
     )
 
     action: str = Field(min_length=1)
+    resource: str = Field(min_length=1)
+    environment: str = Field(min_length=1)
 
 
 class AuthorizationDecision(BaseModel):
@@ -56,15 +58,23 @@ class ActionAuthorizer(Protocol):
 
 
 class StaticActionAuthorizationPolicy:
-    """Authorize exact action identities from trusted static policy rules."""
+    """Authorize exact action/resource/environment scopes from trusted rules."""
 
-    def __init__(self, rules: Mapping[str, AuthorizationOutcome]) -> None:
+    def __init__(
+        self,
+        rules: Mapping[tuple[str, str, str], AuthorizationOutcome],
+    ) -> None:
         """Copy trusted policy rules so later caller mutation cannot change policy."""
         self._rules = dict(rules)
 
     def authorize(self, proposed_action: ProposedAction) -> AuthorizationDecision:
-        """Apply one exact-match rule or deny fail-closed when no rule exists."""
-        outcome = self._rules.get(proposed_action.action)
+        """Apply one exact-scope rule or deny fail-closed when no rule exists."""
+        policy_key = (
+            proposed_action.action,
+            proposed_action.resource,
+            proposed_action.environment,
+        )
+        outcome = self._rules.get(policy_key)
         if outcome is None:
             return AuthorizationDecision(
                 outcome="deny",
