@@ -1,14 +1,14 @@
 # Governed Agent Actions
 
-This document describes the v1.1 security model for **mutable agent actions** in the Agentic Security Framework Lab.
+This document describes the v1.1 security model for **mutable agent actions** and its v1.2 trusted-identity evolution in the Agentic Security Framework Lab.
 
-The goal is not to make an agent "trusted." The goal is to let an agent propose an action while keeping authorization, human approval, runtime enforcement, and execution evidence outside the model and outside framework-specific orchestration logic.
+The goal is not to make an agent "trusted." The goal is to let an agent propose an action while keeping caller identity, identity provenance, authorization, human approval, runtime enforcement, and execution evidence outside the model and outside framework-specific orchestration logic.
 
 The central rule is:
 
 ```text
 agent/model proposes
-trusted context identifies the caller
+trusted context identifies the caller and its provenance
 policy authorizes
 human evidence approves when required
 runtime enforces
@@ -50,7 +50,7 @@ resource
 environment
 ```
 
-It is frozen, rejects extra fields, and carries no trusted identity or human-approval state.
+It is frozen, rejects extra fields, and carries no trusted identity, identity provenance, or human-approval state.
 
 ### Trusted execution context
 
@@ -58,11 +58,22 @@ It is frozen, rejects extra fields, and carries no trusted identity or human-app
 
 ```text
 caller_id
+identity_source = trusted_composition
 ```
 
 The caller context is supplied by trusted composition code. It is not accepted from `ProposedAction`, framework state controlled by the model, or MCP tool arguments.
 
-This distinction prevents a proposal from upgrading itself by adding fields such as a privileged `caller_id` or fake approval metadata.
+`identity_source` records **how the current lab established the caller identity**. The only implemented source is `trusted_composition`, because local composition roots are the only trusted identity boundary the repository can truthfully demonstrate today.
+
+This source is provenance evidence, not authentication proof. Values such as `authenticated_principal` are deliberately rejected until a real authentication boundary exists and can derive trusted identity from verifiable credentials or claims.
+
+This distinction prevents a proposal from upgrading itself by adding a privileged `caller_id`, a fabricated identity source, or fake approval metadata.
+
+The trust relationship is therefore:
+
+```text
+model intent != caller identity != identity provenance != authorization decision
+```
 
 ## 3. Deterministic authorization
 
@@ -90,6 +101,8 @@ reason = no_matching_rule
 ```
 
 This means changing only the resource, environment, caller, or action creates a different authorization request.
+
+`identity_source` is evidence about the trusted caller boundary; it is not yet a fifth policy dimension. A later phase may add source-aware policy only when multiple genuinely distinct trusted identity mechanisms exist.
 
 ## 4. Human approval is separate authority
 
@@ -147,10 +160,12 @@ The executor is reached only after the application-owned control path permits it
 The runtime returns `ActionExecutionEvidence` containing independent facts about:
 
 - the proposed action;
-- trusted caller context;
+- trusted caller context, including caller identity provenance;
 - authorization decision and reason;
 - approval status and approval evidence when present;
 - whether execution occurred.
+
+Because evidence embeds the same `ActionContext` used by authorization, the runtime does not create a second identity or provenance channel.
 
 This distinction matters because:
 
@@ -190,6 +205,8 @@ The same `GovernedActionRuntime` is consumed by four orchestration frameworks.
 None of these adapters contains its own authorization rule table or interprets an authorization outcome to decide whether execution is permitted.
 
 The framework orchestrates. The application decides and enforces.
+
+Because `identity_source` defaults to the only currently implemented source, existing local framework adapters preserve the same trusted context without framework-specific changes.
 
 ### Agno retry hardening
 
@@ -239,9 +256,12 @@ Provider-free adversarial tests additionally exercise:
 - tool/action substitution;
 - unsafe proposals that must not imply unsafe side effects.
 
+Phase 34 also rejects model-adjacent attempts to smuggle `identity_source` and rejects unimplemented authentication-like identity provenance inside trusted context construction.
+
 Relevant test:
 
 - `tests/integration/test_adversarial_action_authorization.py`
+- `tests/unit/application/test_action_authorization.py`
 
 These tests validate the implemented authorization boundary. They are not a claim of comprehensive prompt-injection, identity, or authorization-system coverage.
 
@@ -268,10 +288,11 @@ environment
 The action name is fixed by the handler as `acknowledge_finding`, and the controlled local caller context is created by the server composition root as:
 
 ```text
-caller_id = local-mcp-host
+caller_id       = local-mcp-host
+identity_source = trusted_composition
 ```
 
-The tool schema does not accept `caller_id`, `approval_id`, or `approver_id`.
+The tool schema does not accept `caller_id`, `identity_source`, `approval_id`, or `approver_id`.
 
 The current local policy proves:
 
@@ -280,13 +301,13 @@ The current local policy proves:
 - `production` requires approval and remains blocked because the local server does not configure an approval provider;
 - resource substitution fails closed.
 
-The compatibility and real STDIO smoke checks verify both returned execution evidence and independent observable state.
+The compatibility and real STDIO smoke checks verify both returned execution evidence, including trusted identity provenance, and independent observable state.
 
 MCP tool annotations are treated only as behavioral metadata. They do not replace application authorization or runtime enforcement.
 
 ## 11. What the current implementation does not claim
 
-This lab intentionally does not yet implement a general enterprise authorization platform.
+This lab intentionally does not yet implement a general enterprise authorization or identity platform.
 
 Current non-goals include:
 
@@ -294,6 +315,7 @@ Current non-goals include:
 - wildcard or hierarchical resource scopes;
 - authenticated end-user identity propagation;
 - remote MCP OAuth authorization as proof of caller identity;
+- authenticated or federated `identity_source` values;
 - durable approval workflows;
 - approval expiry, revocation, or multi-party approval;
 - distributed transactional atomicity between approval claims and external side effects;
@@ -303,29 +325,31 @@ Current non-goals include:
 - external policy engines such as OPA/Cedar;
 - proof of production isolation or certification.
 
-The current `local-mcp-host` identity is a deployment-scoped local trust context for the experiment. It must not be described as authenticated user or agent identity.
+The current `local-mcp-host` identity with `identity_source = trusted_composition` is a deployment-scoped local trust context for the experiment. It must not be described as authenticated user or agent identity.
 
 ## 12. Security invariants
 
-The implemented v1.1 boundary is designed around these invariants:
+The implemented Governed Agent Actions boundary is designed around these invariants:
 
 1. **A model can propose an action but cannot authorize itself.**
 2. **Tool discovery does not grant execution authority.**
 3. **Caller identity is trusted context, not model-controlled proposal data.**
-4. **Unknown scopes fail closed.**
-5. **Human approval is separate trusted evidence, not a prompt field.**
-6. **Approval is bound to one exact caller and action scope.**
-7. **One claimed approval cannot be replayed for a second mutable execution.**
-8. **A retry after a claimed approval requires fresh human evidence.**
-9. **Framework adapters do not own policy or enforcement.**
-10. **A denied or unapproved action must not reach the mutable executor.**
-11. **Execution evidence is distinct from authorization evidence.**
-12. **Framework-specific retries must not silently multiply mutable side effects.**
+4. **Identity provenance is trusted context and cannot be declared by the model.**
+5. **The current `trusted_composition` provenance is not authentication proof.**
+6. **Unknown scopes fail closed.**
+7. **Human approval is separate trusted evidence, not a prompt field.**
+8. **Approval is bound to one exact caller and action scope.**
+9. **One claimed approval cannot be replayed for a second mutable execution.**
+10. **A retry after a claimed approval requires fresh human evidence.**
+11. **Framework adapters do not own policy or enforcement.**
+12. **A denied or unapproved action must not reach the mutable executor.**
+13. **Execution evidence is distinct from authorization evidence.**
+14. **Framework-specific retries must not silently multiply mutable side effects.**
 
 ## 13. How to explain this in an interview
 
 A concise explanation is:
 
-> "The agent can propose a tool action, but the proposal is not authority. I keep caller identity in trusted runtime context, evaluate an exact least-privilege policy in the application layer, require separately sourced human approval when policy says so, consume that approval as a single-use capability, and only then let the runtime call the mutable adapter. The same boundary is exercised through LangGraph, CrewAI, LlamaIndex, Agno, and MCP, so framework choice does not change the authorization semantics."
+> "The agent can propose a tool action, but the proposal is not authority. I keep caller identity and its provenance in trusted runtime context, evaluate an exact least-privilege policy in the application layer, require separately sourced human approval when policy says so, consume that approval as a single-use capability, and only then let the runtime call the mutable adapter. Today the only identity provenance I claim is trusted local composition; I deliberately do not call it authenticated. The same boundary is exercised through LangGraph, CrewAI, LlamaIndex, Agno, and MCP, so framework choice does not change the authorization semantics."
 
-The important architectural point is not the specific in-memory action. It is that **orchestration remains replaceable while authorization and enforcement remain stable**.
+The important architectural point is not the specific in-memory action. It is that **orchestration remains replaceable while identity context, authorization, and enforcement remain stable**.
