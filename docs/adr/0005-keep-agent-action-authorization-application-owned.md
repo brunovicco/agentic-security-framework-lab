@@ -88,8 +88,29 @@ Rejected because the first increment needs only to prove authority separation an
 
 These limitations are deliberate. Expanding the policy surface before runtime enforcement exists would increase model complexity without yet proving a stronger security control.
 
+## Evolution note: v1.1 Phases 19-22
+
+Later increments preserved this decision while strengthening the exact authorization scope.
+
+Phase 19 extended the static proof from action identity to exact `action + resource + environment` matching. Phase 22 adds caller identity as a fourth least-privilege dimension, but deliberately keeps that identity out of `ProposedAction`.
+
+The application now carries trusted caller identity in a separate `ActionContext`. Static rules match exact `caller_id + action + resource + environment` tuples. This distinction is security-relevant because `ProposedAction` remains model-adjacent and untrusted: a model or evidence payload must not gain privileges by declaring its own caller identity.
+
+This local `caller_id` is an authorization-context fixture, not proof of authentication and not a simulated IAM system. A future production boundary would need to derive the context from a genuinely trusted identity mechanism before invoking authorization.
+
+Framework adapters may carry or close over this trusted context, but it must be supplied by the application boundary rather than generated as part of model intent.
+
+The invariant is therefore:
+
+```text
+model intent != caller identity
+
+ProposedAction = untrusted intent
+ActionContext = trusted authorization context
+```
+
 ## Revisit when
 
 Revisit this decision if a later requirement demonstrates that policy ownership must move outside the application boundary, or if resource/caller/environment rules require a dedicated policy representation or external engine. Any replacement must preserve deterministic final authorization and keep framework adapters from becoming the source of authority.
 
-Refs #117
+Refs #117, #121, #127
