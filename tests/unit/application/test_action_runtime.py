@@ -137,6 +137,7 @@ def test_allowed_action_reaches_executor_without_approval_claim() -> None:
     assert executor.actions == [proposed_action]
     assert evidence.proposed_action == proposed_action
     assert evidence.context == context
+    assert evidence.context.identity_source == "trusted_composition"
     assert evidence.authorization.outcome == "allow"
     assert evidence.approval_status == "not_applicable"
     assert evidence.human_approval is None

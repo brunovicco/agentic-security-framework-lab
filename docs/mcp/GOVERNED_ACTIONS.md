@@ -1,6 +1,6 @@
 # Governed mutable MCP actions
 
-Phase 25 adds a second isolated MCP v2 STDIO server dedicated to mutable governed actions.
+Phase 25 adds a second isolated MCP v2 STDIO server dedicated to mutable governed actions. Phase 34 strengthens its trusted caller evidence by making local identity provenance explicit without adding remote authentication claims.
 
 ## Why a separate server
 
@@ -23,7 +23,7 @@ model / MCP client
 acknowledge_finding Tool
        |
        | action fixed by adapter
-       | caller context injected by composition root
+       | caller context + provenance injected by composition root
        v
 ProposedAction + ActionContext
        |
@@ -43,10 +43,18 @@ The Tool input intentionally does **not** expose:
 
 - `action`;
 - `caller_id`;
+- `identity_source`;
 - `approval_id`;
 - `approver_id`.
 
-`action` is fixed by the Tool adapter. `caller_id` is injected as `local-mcp-host` by the local composition root. Human approval remains a separate trusted application boundary.
+`action` is fixed by the Tool adapter. The local composition root creates trusted context as:
+
+```text
+caller_id       = local-mcp-host
+identity_source = trusted_composition
+```
+
+`identity_source` describes the provenance of the caller identity used by the local experiment. It is not a model argument and is not proof that the caller was authenticated. Human approval remains a separate trusted application boundary.
 
 ## Least-privilege fixture policy
 
@@ -64,6 +72,8 @@ The same caller/action/resource is explicitly denied in `staging` and requires h
 
 This makes Tool discovery deliberately broader than execution authority: a client can see the Tool even when the requested scope will be denied.
 
+`identity_source` is currently carried as trusted execution evidence rather than a policy dimension. There is only one truthful source in this local composition experiment, so source-aware authorization would add no meaningful distinction yet.
+
 ## Human approval
 
 The server does not configure a trusted approval provider. Therefore the `production` rule returns:
@@ -80,8 +90,8 @@ No MCP argument can manufacture approval. A later integration may connect a trus
 
 CI exercises the server in two ways:
 
-1. an in-memory MCP v2 compatibility check validates Tool schemas, annotations, authorization outcomes, and observable state transitions;
-2. a real STDIO host/client smoke launches the server from the committed `.codex/config.toml` and repeats blocked and allowed calls across the process boundary.
+1. an in-memory MCP v2 compatibility check validates Tool schemas, annotations, trusted caller provenance, authorization outcomes, and observable state transitions;
+2. a real STDIO host/client smoke launches the server from the committed `.codex/config.toml` and repeats blocked and allowed calls across the process boundary while verifying the same trusted caller provenance.
 
 The expected sequence starts from an unacknowledged finding:
 
@@ -94,16 +104,17 @@ The separate state Tool prevents the transport proof from relying only on `Actio
 
 ## What this does not prove
 
-`local-mcp-host` is a local trusted composition value. It is **not authenticated remote identity**.
+`local-mcp-host` with `identity_source = trusted_composition` is local trusted composition evidence. It is **not authenticated remote identity**.
 
-Phase 25 does not claim:
+Phase 34 still does not claim:
 
 - remote Streamable HTTP readiness;
 - OAuth or OIDC authentication;
 - tenant/user identity propagation;
+- an authenticated or federated identity source;
 - durable state persistence;
 - a production human-approval service;
 - production authorization policy distribution;
 - benchmark or provider behavior.
 
-Those concerns remain separate increments.
+A future remote boundary must derive `ActionContext` from genuinely authenticated transport or application identity evidence. It must not expose `caller_id` or `identity_source` as model-controlled Tool arguments.

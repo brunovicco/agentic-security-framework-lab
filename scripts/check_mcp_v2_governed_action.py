@@ -10,6 +10,7 @@ _MUTABLE_TOOL = "acknowledge_finding"
 _STATE_TOOL = "get_finding_acknowledgement_state"
 _FINDING_RESOURCE = "finding:demo-001"
 _LOCAL_CALLER_ID = "local-mcp-host"
+_LOCAL_IDENTITY_SOURCE = "trusted_composition"
 
 
 def _require_mapping(value: object, label: str) -> dict[str, object]:
@@ -42,7 +43,11 @@ def _assert_execution(
     }
     if proposed_action != expected_action:
         raise RuntimeError(f"Unexpected proposed action: {proposed_action!r}")
-    if context != {"caller_id": _LOCAL_CALLER_ID}:
+    expected_context = {
+        "caller_id": _LOCAL_CALLER_ID,
+        "identity_source": _LOCAL_IDENTITY_SOURCE,
+    }
+    if context != expected_context:
         raise RuntimeError(f"Unexpected trusted action context: {context!r}")
     if authorization != {"outcome": outcome, "reason": reason}:
         raise RuntimeError(f"Unexpected authorization decision: {authorization!r}")
@@ -88,7 +93,13 @@ async def _check() -> dict[str, object]:
             raise RuntimeError(
                 "Mutable Tool must accept only model-controlled resource and environment"
             )
-        forbidden_arguments = {"action", "caller_id", "approval_id", "approver_id"}
+        forbidden_arguments = {
+            "action",
+            "caller_id",
+            "identity_source",
+            "approval_id",
+            "approver_id",
+        }
         if forbidden_arguments.intersection(mutable_properties):
             raise RuntimeError("Trusted action authority leaked into MCP Tool arguments")
 
@@ -182,6 +193,7 @@ async def _check() -> dict[str, object]:
             "tool": _MUTABLE_TOOL,
             "state_tool": _STATE_TOOL,
             "trusted_context_in_tool_schema": False,
+            "trusted_identity_source": _LOCAL_IDENTITY_SOURCE,
             "denied_side_effects": 0,
             "approval_required_side_effects": 0,
             "scope_escalation_side_effects": 0,
