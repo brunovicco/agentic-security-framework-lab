@@ -1,0 +1,90 @@
+name: phase37-doc-sync
+
+on:
+  push:
+    branches:
+      - feat/phase-37-source-aware-authorization
+    paths:
+      - .github/workflows/phase37-doc-sync.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: feat/phase-37-source-aware-authorization
+      - name: Apply exact source-aware documentation replacements
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              Path("docs/ARCHITECTURE.md"): [
+                  (
+                      "The current least-privilege policy key is exact:\n\n```text\n(caller_id, action, resource, environment)\n```\n\nThere are no wildcard or nearest-match semantics. An unknown caller, action, resource, or environment therefore has no matching trusted rule and fails closed.",
+                      "The current least-privilege policy key is exact and source-aware:\n\n```text\n(caller_id, identity_source, action, resource, environment)\n```\n\nThere are no wildcard, nearest-match, or cross-source fallback semantics. An unknown caller, identity source, action, resource, or environment therefore has no matching trusted rule and fails closed. The same `caller_id` established through a different identity source does not inherit authority unless policy grants that exact source explicitly.",
+                  ),
+                  (
+                      "The suite covers exact allow, explicit deny, missing HITL approval, validated trusted approval, caller mismatch, and resource escalation.",
+                      "The suite covers exact allow, explicit deny, missing HITL approval, validated trusted approval, caller mismatch, identity-source mismatch, and resource escalation.",
+                  ),
+              ],
+              Path("README.md"): [
+                  (
+                      "- exact least-privilege authorization currently evaluates `(caller_id, action, resource, environment)`;",
+                      "- exact least-privilege authorization evaluates `(caller_id, identity_source, action, resource, environment)` with no cross-source fallback;",
+                  ),
+                  (
+                      "- separate trusted `ActionContext(caller_id)` supplied by composition/runtime code;",
+                      "- separate trusted `ActionContext(caller_id, identity_source)` supplied by composition/runtime or authentication code;",
+                  ),
+                  (
+                      "The cross-framework conformance matrix covers exact allow, explicit deny, missing approval, validated trusted approval, caller mismatch, and resource escalation.",
+                      "The cross-framework conformance matrix covers exact allow, explicit deny, missing approval, validated trusted approval, caller mismatch, identity-source mismatch, and resource escalation.",
+                  ),
+              ],
+              Path("README.pt-br.md"): [
+                  (
+                      "- autorização least-privilege atual avalia exatamente `(caller_id, action, resource, environment)`;",
+                      "- autorização least-privilege avalia exatamente `(caller_id, identity_source, action, resource, environment)`, sem fallback entre origens de identidade;",
+                  ),
+                  (
+                      "- `ActionContext(caller_id)` separado e fornecido por composição/runtime confiável;",
+                      "- `ActionContext(caller_id, identity_source)` separado e fornecido por composição/runtime ou autenticação confiável;",
+                  ),
+                  (
+                      "A matriz de conformance cobre allow exato, deny explícito, approval ausente, approval confiável validado, caller mismatch e resource escalation.",
+                      "A matriz de conformance cobre allow exato, deny explícito, approval ausente, approval confiável validado, caller mismatch, identity-source mismatch e resource escalation.",
+                  ),
+              ],
+          }
+
+          changed = []
+          for path, pairs in replacements.items():
+              text = path.read_text()
+              original = text
+              for old, new in pairs:
+                  count = text.count(old)
+                  if count != 1:
+                      raise SystemExit(f"{path}: expected exactly one match, found {count}: {old!r}")
+                  text = text.replace(old, new)
+              if text == original:
+                  raise SystemExit(f"{path}: no change produced")
+              path.write_text(text)
+              changed.append(str(path))
+
+          print("updated:", ", ".join(changed))
+          PY
+      - name: Commit only expected documentation files
+        run: |
+          git diff --exit-code -- . ':!docs/ARCHITECTURE.md' ':!README.md' ':!README.pt-br.md'
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add docs/ARCHITECTURE.md README.md README.pt-br.md
+          git commit -m "docs: align source-aware authorization references"
+          git push origin HEAD:feat/phase-37-source-aware-authorization
