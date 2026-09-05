@@ -60,7 +60,7 @@ authentication
                        runtime enforcement
 ```
 
-Phase 35 deliberately stops before composing the new authenticator with `GovernedActionRuntime`. That composition is a separate increment so tests can distinguish failures at the authentication boundary from failures at the authorization boundary.
+Phase 35 deliberately established authentication before composing it with `GovernedActionRuntime`. Phase 36 adds that composition in a separate application-owned runtime so tests can distinguish failures at the authentication boundary from failures at the authorization boundary.
 
 ## Why API key only as a fixture
 
@@ -109,17 +109,41 @@ Rejected. The controlled adapter reduces configured keys to digests when it is c
 - SHA-256 digest storage assumes synthetic high-entropy API keys and is not password hashing;
 - there is no rotation, expiry, revocation, throttling, vault integration, or audit store;
 - the current authorization policy does not yet include `identity_source` as a policy dimension;
-- Phase 35 does not yet prove authenticated caller execution through `GovernedActionRuntime`.
+- the authenticated composition remains local and transport-neutral rather than proving remote identity propagation.
 
 These are explicit boundaries, not production claims.
+
+## Evolution note: Phase 36
+
+Phase 36 introduces `AuthenticatedGovernedActionRuntime` as an application-owned composition boundary.
+
+It accepts `CallerCredential` and `ProposedAction` as separate inputs, authenticates first, and passes only the derived `ActionContext` into `GovernedActionRuntime`. Rejected authentication returns separate authentication evidence with no action execution evidence and does not call authorization, approval, or the mutable executor.
+
+Successful authentication still does not imply authorization. The existing governed runtime evaluates the authenticated caller against the same deterministic least-privilege policy and can still return `deny`.
+
+`AuthenticatedActionExecutionEvidence` keeps authentication and governed execution evidence separate and rejects impossible combinations: rejected authentication cannot carry execution evidence, and authenticated execution must use the exact context established by authentication.
+
+The composed invariant is:
+
+```text
+credential verification
+    -> trusted ActionContext
+    -> authorization
+    -> approval when required
+    -> mutable execution
+```
+
+Raw credential material is intentionally absent from the returned evidence object.
 
 ## Security invariants
 
 ```text
 credential verification != authorization
 failed authentication -> no ActionContext
+failed authentication -> no authorization/runtime invocation
 raw credential not in authorization/runtime evidence
 api_key source != end-user identity
+authenticated != authorized
 ```
 
 ## Revisit when
@@ -128,4 +152,4 @@ Revisit this decision when a real transport requires OAuth/OIDC, mTLS, signed wo
 
 Any future mechanism must keep raw credential material outside model-controlled action proposals and must derive trusted `ActionContext` before invoking action authorization.
 
-Refs #152
+Refs #152, #154
