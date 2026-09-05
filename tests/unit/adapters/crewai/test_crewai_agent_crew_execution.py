@@ -30,12 +30,12 @@ class StubUsageAwareRunner:
         drafts: Sequence[LLMAnalysisDraft],
         *,
         final_usage: CrewAIUsage,
-        stale_usage: CrewAIUsage = CrewAIUsage(),
+        stale_usage: CrewAIUsage | None = None,
         fail_on_run: bool = False,
     ) -> None:
         self._drafts = iter(drafts)
         self._final_usage = final_usage
-        self._stale_usage = stale_usage
+        self._stale_usage = stale_usage if stale_usage is not None else CrewAIUsage()
         self._consume_count = 0
         self._fail_on_run = fail_on_run
         self.run_calls = 0
