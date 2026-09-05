@@ -8,7 +8,7 @@ from typing import Protocol, TypedDict, cast
 
 from langgraph.graph import END, START, StateGraph
 
-from agentic_lab.application.action_authorization import ProposedAction
+from agentic_lab.application.action_authorization import ActionContext, ProposedAction
 from agentic_lab.application.action_runtime import (
     ActionExecutionEvidence,
     GovernedActionRuntime,
@@ -45,26 +45,28 @@ class _InvokableActionGraph(Protocol):
 def execute_governed_action(
     state: _GovernedActionGraphState,
     runtime: GovernedActionRuntime,
+    context: ActionContext,
 ) -> _GovernedActionGraphState:
-    """Delegate authorization and enforcement to the application runtime."""
+    """Delegate trusted caller authorization and enforcement to the application."""
     proposed_action = state.get("proposed_action")
     if proposed_action is None:
         raise RuntimeError("Governed action execution requires a proposed action")
 
     return {
-        "execution_evidence": runtime.execute(proposed_action),
+        "execution_evidence": runtime.execute(proposed_action, context),
     }
 
 
 def build_governed_action_graph(
     runtime: GovernedActionRuntime,
+    context: ActionContext,
 ) -> _InvokableActionGraph:
-    """Build a LangGraph workflow that consumes the governed runtime boundary."""
+    """Build a LangGraph workflow with trusted caller context injected externally."""
 
     def runtime_node(
         state: _GovernedActionGraphState,
     ) -> _GovernedActionGraphState:
-        return execute_governed_action(state, runtime)
+        return execute_governed_action(state, runtime, context)
 
     builder = StateGraph(
         _GovernedActionGraphState,
@@ -80,10 +82,11 @@ def build_governed_action_graph(
 
 def run_governed_action_graph(
     runtime: GovernedActionRuntime,
+    context: ActionContext,
     proposed_action: ProposedAction,
 ) -> GovernedActionGraphOutput:
-    """Run one proposed action through LangGraph and the governed runtime."""
-    graph = build_governed_action_graph(runtime)
+    """Run one proposed action using trusted context supplied outside graph input."""
+    graph = build_governed_action_graph(runtime, context)
     graph_input: GovernedActionGraphInput = {
         "proposed_action": proposed_action,
     }

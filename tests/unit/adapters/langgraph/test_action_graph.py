@@ -5,6 +5,7 @@ from agentic_lab.adapters.fixtures.finding_actions import (
 )
 from agentic_lab.adapters.langgraph.action_graph import run_governed_action_graph
 from agentic_lab.application.action_authorization import (
+    ActionContext,
     AuthorizationOutcome,
     ProposedAction,
     StaticActionAuthorizationPolicy,
@@ -12,15 +13,17 @@ from agentic_lab.application.action_authorization import (
 from agentic_lab.application.action_runtime import GovernedActionRuntime
 
 FINDING_RESOURCE = "finding:demo-001"
+REMEDIATION_AGENT = "remediation-agent"
 
 
 def _runtime(
     executor: InMemoryFindingAcknowledgementExecutor,
 ) -> GovernedActionRuntime:
-    rules: dict[tuple[str, str, str], AuthorizationOutcome] = {
-        ("acknowledge_finding", FINDING_RESOURCE, "test"): "allow",
-        ("acknowledge_finding", FINDING_RESOURCE, "staging"): "deny",
+    rules: dict[tuple[str, str, str, str], AuthorizationOutcome] = {
+        (REMEDIATION_AGENT, "acknowledge_finding", FINDING_RESOURCE, "test"): "allow",
+        (REMEDIATION_AGENT, "acknowledge_finding", FINDING_RESOURCE, "staging"): "deny",
         (
+            REMEDIATION_AGENT,
             "acknowledge_finding",
             FINDING_RESOURCE,
             "production",
@@ -30,6 +33,10 @@ def _runtime(
         authorizer=StaticActionAuthorizationPolicy(rules),
         executor=executor,
     )
+
+
+def _context(caller_id: str = REMEDIATION_AGENT) -> ActionContext:
+    return ActionContext(caller_id=caller_id)
 
 
 def _action(
@@ -48,14 +55,35 @@ def _action(
 def test_langgraph_allowed_action_executes_through_governed_runtime() -> None:
     """Keep LangGraph orchestration outside the authorization authority boundary."""
     executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
+    context = _context()
 
-    output = run_governed_action_graph(_runtime(executor), _action())
+    output = run_governed_action_graph(_runtime(executor), context, _action())
 
     evidence = output["execution_evidence"]
+    assert evidence.context == context
     assert evidence.authorization.outcome == "allow"
     assert evidence.execution_occurred is True
     assert executor.is_acknowledged(FINDING_RESOURCE) is True
     assert executor.execution_count == 1
+
+
+def test_langgraph_different_caller_has_zero_side_effect() -> None:
+    """Inject trusted identity outside graph input and enforce it deterministically."""
+    executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
+
+    output = run_governed_action_graph(
+        _runtime(executor),
+        _context("observer-agent"),
+        _action(),
+    )
+
+    evidence = output["execution_evidence"]
+    assert evidence.context.caller_id == "observer-agent"
+    assert evidence.authorization.outcome == "deny"
+    assert evidence.authorization.reason == "no_matching_rule"
+    assert evidence.execution_occurred is False
+    assert executor.is_acknowledged(FINDING_RESOURCE) is False
+    assert executor.execution_count == 0
 
 
 def test_langgraph_denied_action_has_zero_side_effect() -> None:
@@ -64,6 +92,7 @@ def test_langgraph_denied_action_has_zero_side_effect() -> None:
 
     output = run_governed_action_graph(
         _runtime(executor),
+        _context(),
         _action(environment="staging"),
     )
 
@@ -80,6 +109,7 @@ def test_langgraph_approval_required_action_has_zero_side_effect() -> None:
 
     output = run_governed_action_graph(
         _runtime(executor),
+        _context(),
         _action(environment="production"),
     )
 
@@ -96,6 +126,7 @@ def test_langgraph_resource_escalation_fails_closed_before_mutation() -> None:
 
     output = run_governed_action_graph(
         _runtime(executor),
+        _context(),
         _action(resource="finding:demo-999"),
     )
 
@@ -113,6 +144,7 @@ def test_langgraph_environment_escalation_fails_closed_before_mutation() -> None
 
     output = run_governed_action_graph(
         _runtime(executor),
+        _context(),
         _action(environment="production-shadow"),
     )
 
@@ -130,6 +162,7 @@ def test_langgraph_action_substitution_fails_closed_before_mutation() -> None:
 
     output = run_governed_action_graph(
         _runtime(executor),
+        _context(),
         _action(action="delete_finding"),
     )
 

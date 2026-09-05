@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 from agentic_lab.application.action_authorization import (
     ActionAuthorizer,
+    ActionContext,
     AuthorizationDecision,
     ProposedAction,
 )
@@ -20,7 +21,7 @@ class ActionExecutor(Protocol):
 
 
 class ActionExecutionEvidence(BaseModel):
-    """Record authorization and whether the action reached its executor."""
+    """Record trusted authorization context and whether execution occurred."""
 
     model_config = ConfigDict(
         frozen=True,
@@ -28,6 +29,7 @@ class ActionExecutionEvidence(BaseModel):
     )
 
     proposed_action: ProposedAction
+    context: ActionContext
     authorization: AuthorizationDecision
     execution_occurred: bool
 
@@ -40,12 +42,17 @@ class GovernedActionRuntime:
         self._authorizer = authorizer
         self._executor = executor
 
-    def execute(self, proposed_action: ProposedAction) -> ActionExecutionEvidence:
-        """Execute only an explicitly allowed action and record the enforced result."""
-        decision = self._authorizer.authorize(proposed_action)
+    def execute(
+        self,
+        proposed_action: ProposedAction,
+        context: ActionContext,
+    ) -> ActionExecutionEvidence:
+        """Execute only an action allowed for the trusted caller and exact scope."""
+        decision = self._authorizer.authorize(proposed_action, context)
         if decision.outcome != "allow":
             return ActionExecutionEvidence(
                 proposed_action=proposed_action,
+                context=context,
                 authorization=decision,
                 execution_occurred=False,
             )
@@ -53,6 +60,7 @@ class GovernedActionRuntime:
         self._executor.execute(proposed_action)
         return ActionExecutionEvidence(
             proposed_action=proposed_action,
+            context=context,
             authorization=decision,
             execution_occurred=True,
         )

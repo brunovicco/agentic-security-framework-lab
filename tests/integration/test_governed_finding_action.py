@@ -6,6 +6,7 @@ from agentic_lab.adapters.fixtures.finding_actions import (
     InMemoryFindingAcknowledgementExecutor,
 )
 from agentic_lab.application.action_authorization import (
+    ActionContext,
     AuthorizationOutcome,
     ProposedAction,
     StaticActionAuthorizationPolicy,
@@ -13,15 +14,17 @@ from agentic_lab.application.action_authorization import (
 from agentic_lab.application.action_runtime import GovernedActionRuntime
 
 FINDING_RESOURCE = "finding:demo-001"
+REMEDIATION_AGENT = "remediation-agent"
 
 
 def _runtime(
     executor: InMemoryFindingAcknowledgementExecutor,
 ) -> GovernedActionRuntime:
-    rules: dict[tuple[str, str, str], AuthorizationOutcome] = {
-        ("acknowledge_finding", FINDING_RESOURCE, "test"): "allow",
-        ("acknowledge_finding", FINDING_RESOURCE, "staging"): "deny",
+    rules: dict[tuple[str, str, str, str], AuthorizationOutcome] = {
+        (REMEDIATION_AGENT, "acknowledge_finding", FINDING_RESOURCE, "test"): "allow",
+        (REMEDIATION_AGENT, "acknowledge_finding", FINDING_RESOURCE, "staging"): "deny",
         (
+            REMEDIATION_AGENT,
             "acknowledge_finding",
             FINDING_RESOURCE,
             "production",
@@ -31,6 +34,10 @@ def _runtime(
         authorizer=StaticActionAuthorizationPolicy(rules),
         executor=executor,
     )
+
+
+def _context(caller_id: str = REMEDIATION_AGENT) -> ActionContext:
+    return ActionContext(caller_id=caller_id)
 
 
 def _action(
@@ -47,22 +54,43 @@ def _action(
 
 
 def test_allowed_action_mutates_exact_authorized_resource() -> None:
-    """Apply the real in-memory side effect only after an exact allow decision."""
+    """Apply the real side effect only after an exact trusted-caller allow decision."""
     executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
+    context = _context()
 
-    evidence = _runtime(executor).execute(_action())
+    evidence = _runtime(executor).execute(_action(), context)
 
+    assert evidence.context == context
     assert evidence.authorization.outcome == "allow"
     assert evidence.execution_occurred is True
     assert executor.is_acknowledged(FINDING_RESOURCE) is True
     assert executor.execution_count == 1
 
 
+def test_different_caller_has_zero_side_effect_for_same_scope() -> None:
+    """Keep identical action scope blocked when the trusted principal does not match."""
+    executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
+
+    evidence = _runtime(executor).execute(
+        _action(),
+        _context("observer-agent"),
+    )
+
+    assert evidence.authorization.outcome == "deny"
+    assert evidence.authorization.reason == "no_matching_rule"
+    assert evidence.execution_occurred is False
+    assert executor.is_acknowledged(FINDING_RESOURCE) is False
+    assert executor.execution_count == 0
+
+
 def test_denied_action_has_zero_side_effect() -> None:
     """Keep explicit-deny state outside the mutable adapter."""
     executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
 
-    evidence = _runtime(executor).execute(_action(environment="staging"))
+    evidence = _runtime(executor).execute(
+        _action(environment="staging"),
+        _context(),
+    )
 
     assert evidence.authorization.outcome == "deny"
     assert evidence.execution_occurred is False
@@ -74,7 +102,10 @@ def test_approval_required_action_has_zero_side_effect() -> None:
     """Do not simulate human approval or mutate production state automatically."""
     executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
 
-    evidence = _runtime(executor).execute(_action(environment="production"))
+    evidence = _runtime(executor).execute(
+        _action(environment="production"),
+        _context(),
+    )
 
     assert evidence.authorization.outcome == "require_human_approval"
     assert evidence.execution_occurred is False
@@ -86,7 +117,10 @@ def test_scope_escalation_has_zero_side_effect() -> None:
     """Block an untrusted resource substitution before it reaches the adapter."""
     executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
 
-    evidence = _runtime(executor).execute(_action(resource="finding:demo-999"))
+    evidence = _runtime(executor).execute(
+        _action(resource="finding:demo-999"),
+        _context(),
+    )
 
     assert evidence.authorization.outcome == "deny"
     assert evidence.authorization.reason == "no_matching_rule"
@@ -98,8 +132,8 @@ def test_scope_escalation_has_zero_side_effect() -> None:
 def test_authorized_but_missing_resource_fails_without_mutation() -> None:
     """Keep authorization distinct from successful tool execution."""
     missing_resource = "finding:missing"
-    rules: dict[tuple[str, str, str], AuthorizationOutcome] = {
-        ("acknowledge_finding", missing_resource, "test"): "allow",
+    rules: dict[tuple[str, str, str, str], AuthorizationOutcome] = {
+        (REMEDIATION_AGENT, "acknowledge_finding", missing_resource, "test"): "allow",
     }
     executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
     runtime = GovernedActionRuntime(
@@ -108,7 +142,7 @@ def test_authorized_but_missing_resource_fails_without_mutation() -> None:
     )
 
     with pytest.raises(LookupError, match="finding does not exist"):
-        runtime.execute(_action(resource=missing_resource))
+        runtime.execute(_action(resource=missing_resource), _context())
 
     assert executor.is_acknowledged(FINDING_RESOURCE) is False
     assert executor.execution_count == 0

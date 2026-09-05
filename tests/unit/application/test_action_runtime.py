@@ -4,6 +4,7 @@ import pytest
 
 from agentic_lab.application.action_authorization import (
     ActionAuthorizer,
+    ActionContext,
     AuthorizationDecision,
     AuthorizationOutcome,
     ProposedAction,
@@ -13,6 +14,7 @@ from agentic_lab.application.action_runtime import GovernedActionRuntime
 
 VULNERABILITY_RESOURCE = "CVE-2026-DEMO-001"
 REMEDIATION_RESOURCE = "finding:demo-001"
+REMEDIATION_AGENT = "remediation-agent"
 
 
 class RecordingActionExecutor:
@@ -29,22 +31,33 @@ class RecordingActionExecutor:
 class FailingAuthorizer:
     """Represent an authorization decision point that cannot produce a decision."""
 
-    def authorize(self, proposed_action: ProposedAction) -> AuthorizationDecision:
+    def authorize(
+        self,
+        proposed_action: ProposedAction,
+        context: ActionContext,
+    ) -> AuthorizationDecision:
         """Fail before any authorization decision can be established."""
-        raise RuntimeError(f"authorization unavailable for {proposed_action.action}")
+        raise RuntimeError(
+            f"authorization unavailable for {context.caller_id}:{proposed_action.action}"
+        )
 
 
 def _authorizer() -> ActionAuthorizer:
-    rules: dict[tuple[str, str, str], AuthorizationOutcome] = {
-        ("read_vulnerability", VULNERABILITY_RESOURCE, "test"): "allow",
-        ("modify_vulnerability", VULNERABILITY_RESOURCE, "test"): "deny",
+    rules: dict[tuple[str, str, str, str], AuthorizationOutcome] = {
+        (REMEDIATION_AGENT, "read_vulnerability", VULNERABILITY_RESOURCE, "test"): "allow",
+        (REMEDIATION_AGENT, "modify_vulnerability", VULNERABILITY_RESOURCE, "test"): "deny",
         (
+            REMEDIATION_AGENT,
             "create_remediation_task",
             REMEDIATION_RESOURCE,
             "production",
         ): "require_human_approval",
     }
     return StaticActionAuthorizationPolicy(rules)
+
+
+def _context(caller_id: str = REMEDIATION_AGENT) -> ActionContext:
+    return ActionContext(caller_id=caller_id)
 
 
 def _vulnerability_action(action: str, environment: str = "test") -> ProposedAction:
@@ -56,17 +69,36 @@ def _vulnerability_action(action: str, environment: str = "test") -> ProposedAct
 
 
 def test_allowed_action_reaches_executor_once() -> None:
-    """Execute exactly once after an explicit allow decision for the exact scope."""
+    """Execute exactly once after an explicit allow for trusted caller and scope."""
     executor = RecordingActionExecutor()
     runtime = GovernedActionRuntime(authorizer=_authorizer(), executor=executor)
     proposed_action = _vulnerability_action("read_vulnerability")
+    context = _context()
 
-    evidence = runtime.execute(proposed_action)
+    evidence = runtime.execute(proposed_action, context)
 
     assert executor.actions == [proposed_action]
     assert evidence.proposed_action == proposed_action
+    assert evidence.context == context
     assert evidence.authorization.outcome == "allow"
     assert evidence.execution_occurred is True
+
+
+def test_unknown_caller_never_reaches_executor() -> None:
+    """Block a valid action scope when trusted caller identity has no matching rule."""
+    executor = RecordingActionExecutor()
+    runtime = GovernedActionRuntime(authorizer=_authorizer(), executor=executor)
+
+    evidence = runtime.execute(
+        _vulnerability_action("read_vulnerability"),
+        _context("unknown-agent"),
+    )
+
+    assert executor.actions == []
+    assert evidence.context.caller_id == "unknown-agent"
+    assert evidence.authorization.outcome == "deny"
+    assert evidence.authorization.reason == "no_matching_rule"
+    assert evidence.execution_occurred is False
 
 
 def test_denied_action_never_reaches_executor() -> None:
@@ -74,7 +106,10 @@ def test_denied_action_never_reaches_executor() -> None:
     executor = RecordingActionExecutor()
     runtime = GovernedActionRuntime(authorizer=_authorizer(), executor=executor)
 
-    evidence = runtime.execute(_vulnerability_action("modify_vulnerability"))
+    evidence = runtime.execute(
+        _vulnerability_action("modify_vulnerability"),
+        _context(),
+    )
 
     assert executor.actions == []
     assert evidence.authorization.outcome == "deny"
@@ -92,7 +127,8 @@ def test_approval_required_action_never_reaches_executor() -> None:
             action="create_remediation_task",
             resource=REMEDIATION_RESOURCE,
             environment="production",
-        )
+        ),
+        _context(),
     )
 
     assert executor.actions == []
@@ -105,7 +141,10 @@ def test_unknown_action_fails_closed_before_executor() -> None:
     executor = RecordingActionExecutor()
     runtime = GovernedActionRuntime(authorizer=_authorizer(), executor=executor)
 
-    evidence = runtime.execute(_vulnerability_action("delete_vulnerability"))
+    evidence = runtime.execute(
+        _vulnerability_action("delete_vulnerability"),
+        _context(),
+    )
 
     assert executor.actions == []
     assert evidence.authorization.outcome == "deny"
@@ -123,7 +162,8 @@ def test_resource_escalation_fails_closed_before_executor() -> None:
             action="read_vulnerability",
             resource="CVE-2026-DEMO-999",
             environment="test",
-        )
+        ),
+        _context(),
     )
 
     assert executor.actions == []
@@ -138,6 +178,6 @@ def test_authorization_failure_cannot_fall_through_to_executor() -> None:
     runtime = GovernedActionRuntime(authorizer=FailingAuthorizer(), executor=executor)
 
     with pytest.raises(RuntimeError, match="authorization unavailable"):
-        runtime.execute(_vulnerability_action("read_vulnerability"))
+        runtime.execute(_vulnerability_action("read_vulnerability"), _context())
 
     assert executor.actions == []

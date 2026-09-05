@@ -37,6 +37,17 @@ class ProposedAction(BaseModel):
     environment: str = Field(min_length=1)
 
 
+class ActionContext(BaseModel):
+    """Carry trusted caller identity separately from the untrusted action proposal."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    caller_id: str = Field(min_length=1)
+
+
 class AuthorizationDecision(BaseModel):
     """Represent the deterministic authorization result for a proposed action."""
 
@@ -52,24 +63,33 @@ class AuthorizationDecision(BaseModel):
 class ActionAuthorizer(Protocol):
     """Decide whether a proposed action is authorized to proceed."""
 
-    def authorize(self, proposed_action: ProposedAction) -> AuthorizationDecision:
-        """Return the deterministic authorization decision for one action."""
+    def authorize(
+        self,
+        proposed_action: ProposedAction,
+        context: ActionContext,
+    ) -> AuthorizationDecision:
+        """Return the deterministic authorization decision for one trusted caller."""
         ...
 
 
 class StaticActionAuthorizationPolicy:
-    """Authorize exact action/resource/environment scopes from trusted rules."""
+    """Authorize exact caller/action/resource/environment scopes from trusted rules."""
 
     def __init__(
         self,
-        rules: Mapping[tuple[str, str, str], AuthorizationOutcome],
+        rules: Mapping[tuple[str, str, str, str], AuthorizationOutcome],
     ) -> None:
         """Copy trusted policy rules so later caller mutation cannot change policy."""
         self._rules = dict(rules)
 
-    def authorize(self, proposed_action: ProposedAction) -> AuthorizationDecision:
+    def authorize(
+        self,
+        proposed_action: ProposedAction,
+        context: ActionContext,
+    ) -> AuthorizationDecision:
         """Apply one exact-scope rule or deny fail-closed when no rule exists."""
         policy_key = (
+            context.caller_id,
             proposed_action.action,
             proposed_action.resource,
             proposed_action.environment,
