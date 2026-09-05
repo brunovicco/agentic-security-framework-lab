@@ -26,6 +26,9 @@ from agentic_lab.application.evidence import (
     VulnerabilityEvidence,
 )
 
+LLAMAINDEX_GATEWAY_REQUEST_TIMEOUT_SECONDS = 30.0
+LLAMAINDEX_GATEWAY_MAX_RETRIES = 0
+
 
 @dataclass(frozen=True, slots=True)
 class LlamaIndexUsage:
@@ -115,6 +118,8 @@ def _create_llm(callback_manager: CallbackManager) -> _StructuredPredictLLM:
             api_base=gateway_base_url(),
             api_key=gateway_api_key(),
             callback_manager=callback_manager,
+            timeout=LLAMAINDEX_GATEWAY_REQUEST_TIMEOUT_SECONDS,
+            max_retries=LLAMAINDEX_GATEWAY_MAX_RETRIES,
         ),
     )
 
