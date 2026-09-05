@@ -100,7 +100,9 @@ def _assert_rejected_authentication(payload: object, credential: str) -> None:
     if authentication != expected:
         raise RuntimeError(f"Unexpected rejected authentication evidence: {authentication!r}")
     if document.get("execution") is not None:
-        raise RuntimeError("Rejected authentication must not produce authorization/execution evidence")
+        raise RuntimeError(
+            "Rejected authentication must not produce authorization/execution evidence"
+        )
 
 
 def _assert_authenticated_execution(
