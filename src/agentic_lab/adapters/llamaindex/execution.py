@@ -53,9 +53,7 @@ class LlamaIndexObservedWorkflowRuntime:
         usage = execution.usage
 
         if usage.model_calls < output.analysis_attempts:
-            raise RuntimeError(
-                "LlamaIndex usage exposed fewer model calls than analysis attempts"
-            )
+            raise RuntimeError("LlamaIndex usage exposed fewer model calls than analysis attempts")
 
         self._observer.record(
             AnalysisExecutionObservation(
