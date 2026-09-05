@@ -255,7 +255,8 @@ class CrewAIFlowRuntime:
                 policy=evidence_bundle["policy"],
                 documents=evidence_bundle.get("documents", ()),
                 max_attempts=max_attempts,
-            )
+            ),
+            tracing=False,
         )
         cast(object, flow.kickoff())
 
