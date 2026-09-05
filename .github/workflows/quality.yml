@@ -38,6 +38,16 @@ jobs:
         run: >-
           uv run --no-project --with "mcp[cli]==2.1.1"
           python scripts/smoke_mcp_stdio_applicability.py
+      - name: Governed MCP v2 compatibility check
+        env:
+          PYTHONPATH: src
+        run: >-
+          uv run --no-project --with "mcp[cli]==2.1.1"
+          python scripts/check_mcp_v2_governed_action.py
+      - name: Governed MCP v2 STDIO host/client smoke
+        run: >-
+          uv run --no-project --with "mcp[cli]==2.1.1"
+          python scripts/smoke_mcp_stdio_governed_action.py
       - name: OpenTelemetry analysis observation check
         env:
           PYTHONPATH: src
