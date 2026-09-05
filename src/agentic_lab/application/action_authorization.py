@@ -16,7 +16,7 @@ AuthorizationReason = Literal[
     "human_approval_required",
     "no_matching_rule",
 ]
-CallerIdentitySource = Literal["trusted_composition"]
+CallerIdentitySource = Literal["trusted_composition", "api_key"]
 
 _REASON_BY_OUTCOME: dict[AuthorizationOutcome, AuthorizationReason] = {
     "allow": "explicit_allow",
@@ -39,7 +39,7 @@ class ProposedAction(BaseModel):
 
 
 class ActionContext(BaseModel):
-    """Carry trusted caller identity and its current composition-boundary source."""
+    """Carry trusted caller identity and its established identity source."""
 
     model_config = ConfigDict(
         frozen=True,
