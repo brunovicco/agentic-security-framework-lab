@@ -1,4 +1,4 @@
-"""Validate the safe analysis observation contract with an in-memory OTel exporter."""
+"""Validate the safe analysis observer contract with an in-memory OTel exporter."""
 
 import json
 
@@ -6,11 +6,12 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from agentic_lab.observability.analysis import (
-    ANALYSIS_SPAN_NAME,
+from agentic_lab.observability import (
     AnalysisExecutionObservation,
+    OpenTelemetryAnalysisObserver,
     analysis_span_attributes,
 )
+from agentic_lab.observability.analysis import ANALYSIS_SPAN_NAME
 
 _FORBIDDEN_ATTRIBUTE_TERMS = (
     "prompt",
@@ -26,7 +27,7 @@ _FORBIDDEN_ATTRIBUTE_TERMS = (
 
 
 def main() -> None:
-    """Emit one safe logical-analysis span and fail closed on contract drift."""
+    """Emit one safe logical-analysis span through the project-owned observer."""
     observation = AnalysisExecutionObservation(
         framework="langgraph",
         workflow="langgraph-evaluator-optimizer",
@@ -43,8 +44,7 @@ def main() -> None:
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     tracer = provider.get_tracer("agentic_security_framework_lab.observability")
 
-    with tracer.start_as_current_span(ANALYSIS_SPAN_NAME, attributes=attributes):
-        pass
+    OpenTelemetryAnalysisObserver(tracer).record(observation)
 
     spans = exporter.get_finished_spans()
     if len(spans) != 1:
@@ -74,6 +74,7 @@ def main() -> None:
                 "span_count": len(spans),
                 "attribute_count": len(observed_attributes),
                 "safe_attribute_contract": True,
+                "observer_backend": "OpenTelemetryAnalysisObserver",
             }
         )
     )
