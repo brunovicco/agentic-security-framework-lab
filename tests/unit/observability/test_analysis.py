@@ -5,22 +5,32 @@ import pytest
 from agentic_lab.observability.analysis import (
     ANALYSIS_SPAN_NAME,
     AnalysisExecutionObservation,
+    AnalysisSource,
+    FrameworkName,
+    WorkflowName,
     analysis_span_attributes,
 )
 
 
-def _observation(**overrides: object) -> AnalysisExecutionObservation:
-    values: dict[str, object] = {
-        "framework": "langgraph",
-        "workflow": "langgraph-evaluator-optimizer",
-        "analysis_source": "llm",
-        "validation_passed": True,
-        "analysis_attempts": 1,
-        "model_calls": 1,
-        "requires_human_review": True,
-    }
-    values.update(overrides)
-    return AnalysisExecutionObservation(**values)  # type: ignore[arg-type]
+def _observation(
+    *,
+    framework: FrameworkName = "langgraph",
+    workflow: WorkflowName = "langgraph-evaluator-optimizer",
+    analysis_source: AnalysisSource = "llm",
+    validation_passed: bool = True,
+    analysis_attempts: int = 1,
+    model_calls: int = 1,
+    requires_human_review: bool = True,
+) -> AnalysisExecutionObservation:
+    return AnalysisExecutionObservation(
+        framework=framework,
+        workflow=workflow,
+        analysis_source=analysis_source,
+        validation_passed=validation_passed,
+        analysis_attempts=analysis_attempts,
+        model_calls=model_calls,
+        requires_human_review=requires_human_review,
+    )
 
 
 def test_analysis_observation_exposes_only_safe_operational_attributes() -> None:
