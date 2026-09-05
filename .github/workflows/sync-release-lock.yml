@@ -1,0 +1,66 @@
+name: sync-release-lock
+
+on:
+  push:
+    branches: [release/phase-32-v1.1.0]
+    paths:
+      - .github/workflows/sync-release-lock.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync-lock:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out release branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: release/phase-32-v1.1.0
+          fetch-depth: 0
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.28"
+          enable-cache: true
+      - name: Install Python
+        run: uv python install
+      - name: Synchronize lockfile metadata
+        run: uv lock
+      - name: Verify minimal release-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed_files="$(git diff --name-only)"
+          test "$changed_files" = "uv.lock"
+          python - <<'PY'
+          import subprocess
+
+          diff = subprocess.check_output(
+              ["git", "diff", "--unified=0", "--", "uv.lock"],
+              text=True,
+          )
+          changed = [
+              line
+              for line in diff.splitlines()
+              if (line.startswith("+") or line.startswith("-"))
+              and not line.startswith("+++")
+              and not line.startswith("---")
+          ]
+          expected = ['-version = "1.0.0"', '+version = "1.1.0"']
+          if changed != expected:
+              raise SystemExit(
+                  "uv lock changed more than the local project version:\n" + diff
+              )
+          PY
+      - name: Commit synchronized lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add uv.lock
+          git commit -m "chore: sync uv lock for v1.1.0"
+          git push origin HEAD:release/phase-32-v1.1.0
