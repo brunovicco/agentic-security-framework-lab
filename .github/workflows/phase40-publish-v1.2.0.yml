@@ -1,0 +1,177 @@
+name: phase40-publish-v1.2.0
+
+on:
+  push:
+    branches:
+      - release/phase-40-publish-v1.2.0
+    paths:
+      - .github/workflows/phase40-publish-v1.2.0.yml
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_SHA: 9b77e0b1773e089efa530949cedd6bd56659ebf5
+      TAG_NAME: v1.2.0
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: release/phase-40-publish-v1.2.0
+          fetch-depth: 0
+      - name: Verify immutable release preconditions
+        run: |
+          set -euo pipefail
+
+          main_sha="$(git ls-remote origin refs/heads/main | cut -f1)"
+          test "$main_sha" = "$TARGET_SHA"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+            echo "$TAG_NAME already exists" >&2
+            exit 1
+          fi
+
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG_NAME" >/dev/null 2>&1; then
+            echo "Release $TAG_NAME already exists" >&2
+            exit 1
+          fi
+
+          python - <<'PY'
+          import os
+          import subprocess
+
+          target = os.environ["TARGET_SHA"]
+
+          def show(path: str) -> str:
+              return subprocess.check_output(
+                  ["git", "show", f"{target}:{path}"],
+                  text=True,
+              )
+
+          pyproject = show("pyproject.toml")
+          if pyproject.count('version = "1.2.0"') != 1:
+              raise SystemExit("release target does not contain project version 1.2.0 exactly once")
+
+          lock = show("uv.lock")
+          expected_lock = 'name = "agentic-security-framework-lab"\nversion = "1.2.0"'
+          if lock.count(expected_lock) != 1:
+              raise SystemExit("release target does not contain editable package version 1.2.0")
+
+          changelog = show("CHANGELOG.md")
+          if changelog.count("## 1.2.0 - 2026-09-05") != 1:
+              raise SystemExit("release target does not contain the v1.2.0 changelog heading")
+          PY
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$TARGET_SHA&per_page=20" \
+            > /tmp/target-runs.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("/tmp/target-runs.json").read_text())
+          matching = [
+              run
+              for run in payload.get("workflow_runs", [])
+              if run.get("name") == "quality"
+              and run.get("event") == "push"
+              and run.get("status") == "completed"
+              and run.get("conclusion") == "success"
+          ]
+          if not matching:
+              raise SystemExit("release target has no successful post-merge quality run")
+          print("validated quality run:", matching[0]["id"])
+          PY
+      - name: Build evidence-disciplined release notes
+        run: |
+          cat > /tmp/release-notes.md <<'EOF'
+          # Agentic Security Framework Lab v1.2.0
+
+          Trusted Caller Identity release: authentication is established outside model-controlled action proposals, then source-aware authorization independently decides whether the authenticated caller may execute the requested mutable action.
+
+          ## Highlights
+
+          - `ActionContext` records trusted caller provenance explicitly through `identity_source`.
+          - A framework-neutral service-caller authentication boundary keeps opaque credentials separate from authorization and execution evidence.
+          - The controlled API-key fixture derives `identity_source = api_key` only after matching synthetic credential verification material.
+          - `AuthenticatedGovernedActionRuntime` composes authentication before the existing governed authorization/approval/execution runtime.
+          - Exact least-privilege authorization now evaluates `(caller_id, identity_source, action, resource, environment)` with no cross-source fallback.
+          - An `api_key` caller does not inherit authority granted to the same caller id under `trusted_composition` unless policy explicitly grants that source.
+          - A separate MCP v2 STDIO experiment receives service credential material from trusted host/process environment while the model-visible mutable Tool still accepts only `resource` and `environment`.
+          - Real subprocess checks cover missing credentials, invalid credentials, authenticated deny, approval-required, and exact allow paths with independently observed side effects.
+
+          ## Security invariants
+
+          - Credential verification != caller identity != action authorization.
+          - Same caller id != same authority when identity source differs.
+          - Host credential context != model Tool input.
+          - Successful authentication does not imply authorization.
+          - Rejected authentication never reaches mutable execution.
+          - Tool availability != tool authorization != tool execution.
+
+          ## Evidence discipline
+
+          The v1.2 trusted-identity, service-authentication, source-aware authorization, and authenticated MCP checks are provider-free local/CI evidence. This release does not claim authenticated remote MCP identity, transport-bound identity, OAuth/OIDC/JWT/mTLS, end-user authentication, production IAM or secrets management, or provider-backed mutable action execution.
+
+          The accepted v1.0 Phase 15 provider-backed evaluation bundle and the v1.1 Governed Agent Actions release remain unchanged.
+
+          ## Documentation
+
+          - `docs/security/GOVERNED_AGENT_ACTIONS.md`
+          - `docs/MCP.md`
+          - `docs/adr/0008-separate-service-caller-authentication-from-authorization.md`
+          - `CHANGELOG.md`
+          EOF
+      - name: Publish exact-target GitHub release
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = {
+              "tag_name": os.environ["TAG_NAME"],
+              "target_commitish": os.environ["TARGET_SHA"],
+              "name": "v1.2.0 — Trusted Caller Identity",
+              "body": Path("/tmp/release-notes.md").read_text(),
+              "draft": False,
+              "prerelease": False,
+              "generate_release_notes": False,
+              "make_latest": "true",
+          }
+          Path("/tmp/release.json").write_text(json.dumps(payload))
+          PY
+
+          gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
+            --input /tmp/release.json > /tmp/release-response.json
+      - name: Verify published tag and release
+        run: |
+          set -euo pipefail
+
+          tag_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG_NAME" --jq '.object.sha')"
+          test "$tag_sha" = "$TARGET_SHA"
+
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG_NAME" > /tmp/published-release.json
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          release = json.loads(Path("/tmp/published-release.json").read_text())
+          expected = {
+              "tag_name": os.environ["TAG_NAME"],
+              "name": "v1.2.0 — Trusted Caller Identity",
+              "draft": False,
+              "prerelease": False,
+          }
+          for key, value in expected.items():
+              if release.get(key) != value:
+                  raise SystemExit(
+                      f"unexpected release field {key}: {release.get(key)!r} != {value!r}"
+                  )
+          if release.get("published_at") is None:
+              raise SystemExit("release is not published")
+          print("published:", release.get("html_url"))
+          PY
