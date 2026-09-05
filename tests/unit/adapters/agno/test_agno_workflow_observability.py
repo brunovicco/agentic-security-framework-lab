@@ -184,7 +184,7 @@ def test_observed_runtime_emits_no_observation_when_workflow_fails() -> None:
     runner = StubUsageRunner([], fail_on_run=True)
     observer = RecordingObserver()
 
-    with pytest.raises(RuntimeError, match="Agno Workflow execution failed"):
+    with pytest.raises(RuntimeError, match="controlled Agno Workflow failure"):
         _runtime(runner, observer).run(_evidence_bundle())
 
     assert observer.observations == []
