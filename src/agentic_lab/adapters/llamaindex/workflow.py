@@ -122,14 +122,29 @@ class LlamaIndexValidatedAnalysisWorkflow(Workflow):
         *,
         timeout: float | None = 45.0,
     ) -> None:
-        """Create a fresh workflow around an application-compatible analyzer."""
+        """Create a workflow with an orchestration wait bound around a sync analyzer."""
         super().__init__(timeout=timeout, verbose=False)
         self._analyzer = analyzer
+
+    async def _analyze_off_event_loop(
+        self,
+        *,
+        vulnerability: VulnerabilityEvidence,
+        assets: tuple[AssetInventoryItem, ...],
+        feedback: str | None,
+    ) -> LLMAnalysisDraft:
+        """Run the synchronous analyzer without blocking Workflow timeout scheduling."""
+        return await asyncio.to_thread(
+            self._analyzer.analyze,
+            vulnerability=vulnerability,
+            assets=assets,
+            feedback=feedback,
+        )
 
     @step
     async def analyze_once(self, ev: ValidatedAnalysisStartEvent) -> AnalysisDraftEvent:
         """Execute the first structured LLM analysis attempt."""
-        draft = self._analyzer.analyze(
+        draft = await self._analyze_off_event_loop(
             vulnerability=ev.vulnerability,
             assets=ev.assets,
             feedback=None,
@@ -203,7 +218,7 @@ class LlamaIndexValidatedAnalysisWorkflow(Workflow):
     async def retry_analysis(self, ev: RetryAnalysisEvent) -> AnalysisDraftEvent:
         """Retry structured reasoning with deterministic evaluator feedback."""
         next_attempt = ev.analysis_attempts + 1
-        draft = self._analyzer.analyze(
+        draft = await self._analyze_off_event_loop(
             vulnerability=ev.vulnerability,
             assets=ev.assets,
             feedback=ev.feedback,
