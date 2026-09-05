@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Framework-neutral Governed Agent Actions contracts separating untrusted `ProposedAction` from trusted `ActionContext`.
+- Exact least-privilege authorization over `(caller_id, action, resource, environment)` with fail-closed handling for unknown scopes.
+- Runtime enforcement that treats `allow`, `deny`, and `require_human_approval` as explicit policy outcomes.
+- Trusted human-approval evidence bound to the exact caller and action scope, with distinct `missing`, `invalid`, and `validated` states.
+- Provider-free mutable-action integration using an in-memory finding acknowledgement adapter.
+- Governed-action adapters for LangGraph, CrewAI Flow, LlamaIndex Workflow, and Agno Workflow, all delegating authority to the shared application runtime.
+- Cross-framework conformance coverage comparing complete execution evidence and observable side effects with the direct application baseline.
+- A separate governed mutable MCP STDIO server with compatibility and real host/client smoke checks.
+- `docs/security/GOVERNED_AGENT_ACTIONS.md` documenting the v1.1 trust, authorization, HITL, enforcement, MCP, and evidence boundaries.
+
+### Hardened
+
+- Mutable Agno Workflow execution disables framework retries so a failed side-effecting step is not silently retried.
+- Model-adjacent proposals reject caller identity and approval-like extra fields rather than treating them as trusted authority.
+- Governed MCP tools keep caller identity and approval authority outside model-controlled tool arguments.
+
+### Evidence
+
+- Governed-action application, framework-adapter, adversarial, conformance, and local MCP checks are provider-free CI evidence.
+- The accepted v1.0 Phase 15 provider-backed evaluation artifacts remain immutable and are not rewritten by v1.1 work.
+- The v1.1 work does not claim production certification, authenticated remote MCP identity, or provider-backed action execution.
+
 ## 1.0.0 - 2026-09-05
 
 First portfolio-complete release of the Agentic Security Framework Lab.
