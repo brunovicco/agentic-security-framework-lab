@@ -44,6 +44,25 @@ def _vulnerability_action(action: str, environment: str = "test") -> ProposedAct
     )
 
 
+def test_action_context_records_current_trusted_identity_source() -> None:
+    """Record local composition as the only caller identity provenance currently proven."""
+    context = _context()
+
+    assert context.caller_id == REMEDIATION_AGENT
+    assert context.identity_source == "trusted_composition"
+
+
+def test_action_context_rejects_unimplemented_authenticated_identity_source() -> None:
+    """Reject authentication-like provenance until a real trusted boundary implements it."""
+    with pytest.raises(ValidationError, match="identity_source"):
+        ActionContext.model_validate(
+            {
+                "caller_id": REMEDIATION_AGENT,
+                "identity_source": "authenticated_principal",
+            }
+        )
+
+
 def test_explicitly_allowed_action_is_allowed() -> None:
     """Allow only an exact caller/action/resource/environment policy match."""
     decision = _authorizer().authorize(
@@ -149,5 +168,18 @@ def test_proposed_action_cannot_smuggle_caller_identity() -> None:
                 "resource": VULNERABILITY_RESOURCE,
                 "environment": "test",
                 "caller_id": REMEDIATION_AGENT,
+            }
+        )
+
+
+def test_proposed_action_cannot_smuggle_identity_provenance() -> None:
+    """Reject model-adjacent attempts to declare how trusted identity was established."""
+    with pytest.raises(ValidationError, match="identity_source"):
+        ProposedAction.model_validate(
+            {
+                "action": "read_vulnerability",
+                "resource": VULNERABILITY_RESOURCE,
+                "environment": "test",
+                "identity_source": "trusted_composition",
             }
         )
