@@ -31,6 +31,11 @@ from agentic_lab.application.validated_analysis import (
     evaluate_human_review_policy,
     validate_analysis_draft,
 )
+from agentic_lab.observability import (
+    NULL_ANALYSIS_OBSERVER,
+    AnalysisExecutionObservation,
+    AnalysisObserver,
+)
 
 _ACCEPTED_ROUTE = "accepted"
 _RETRY_ROUTE = "retry"
@@ -230,6 +235,10 @@ class CrewAIValidatedAnalysisFlow(Flow[CrewAIValidatedFlowState]):
 class CrewAIFlowRuntime:
     """Execute the direct-LLM evaluator-optimizer through CrewAI Flow."""
 
+    def __init__(self, observer: AnalysisObserver = NULL_ANALYSIS_OBSERVER) -> None:
+        """Store a framework-neutral completed-execution observer."""
+        self._observer = observer
+
     def run(
         self,
         evidence_bundle: AnalysisEvidenceBundle,
@@ -270,7 +279,19 @@ class CrewAIFlowRuntime:
             total_tokens=metrics.total_tokens,
             model_calls=metrics.successful_requests,
         )
-        return CrewAIFlowExecution(
+        execution = CrewAIFlowExecution(
             output=output,
             usage=usage,
         )
+        self._observer.record(
+            AnalysisExecutionObservation(
+                framework="crewai",
+                workflow="crewai-flow",
+                analysis_source=output.analysis_source,
+                validation_passed=output.validation_passed,
+                analysis_attempts=output.analysis_attempts,
+                model_calls=usage.model_calls,
+                requires_human_review=output.result.requires_human_review,
+            )
+        )
+        return execution
