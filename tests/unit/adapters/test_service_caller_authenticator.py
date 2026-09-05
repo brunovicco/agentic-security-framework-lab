@@ -1,5 +1,7 @@
 """Tests for the provider-free service caller authentication fixture."""
 
+from hashlib import sha256
+
 import pytest
 from pydantic import SecretStr
 
@@ -15,6 +17,10 @@ def _credential(value: str) -> CallerCredential:
     return CallerCredential(secret=SecretStr(value))
 
 
+def _digest_hex(value: str) -> str:
+    return sha256(value.encode("utf-8")).hexdigest()
+
+
 def test_matching_api_key_authenticates_service_caller() -> None:
     """Create trusted caller context only after exact credential verification."""
     authenticator = StaticApiKeyCallerAuthenticator({API_KEY: CALLER_ID})
@@ -26,6 +32,21 @@ def test_matching_api_key_authenticates_service_caller() -> None:
     assert decision.context is not None
     assert decision.context.caller_id == CALLER_ID
     assert decision.context.identity_source == "api_key"
+
+
+def test_precomputed_sha256_digest_authenticates_matching_service_caller() -> None:
+    """Accept trusted verification material without retaining expected plaintext keys."""
+    authenticator = StaticApiKeyCallerAuthenticator.from_sha256_hex(
+        {_digest_hex(API_KEY): CALLER_ID}
+    )
+
+    decision = authenticator.authenticate(_credential(API_KEY))
+
+    assert decision.outcome == "authenticated"
+    assert decision.context is not None
+    assert decision.context.caller_id == CALLER_ID
+    assert decision.context.identity_source == "api_key"
+    assert API_KEY not in repr(vars(authenticator))
 
 
 def test_unknown_api_key_is_rejected_without_trusted_context() -> None:
@@ -59,3 +80,20 @@ def test_invalid_authenticator_configuration_is_rejected(
     """Reject empty credential or caller identifiers in trusted fixture configuration."""
     with pytest.raises(ValueError):
         StaticApiKeyCallerAuthenticator(configuration)
+
+
+@pytest.mark.parametrize(
+    "configuration",
+    [
+        {"": CALLER_ID},
+        {"not-hex": CALLER_ID},
+        {"00": CALLER_ID},
+        {_digest_hex(API_KEY): ""},
+    ],
+)
+def test_invalid_digest_configuration_is_rejected(
+    configuration: dict[str, str],
+) -> None:
+    """Reject malformed verification digests before authentication can begin."""
+    with pytest.raises(ValueError):
+        StaticApiKeyCallerAuthenticator.from_sha256_hex(configuration)
