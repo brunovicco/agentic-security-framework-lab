@@ -98,7 +98,12 @@ def _install_flow(
     model_calls: int = 1,
     fail_kickoff: bool = False,
 ) -> None:
-    def factory(*, initial_state: CrewAIValidatedFlowState) -> StubRuntimeFlow:
+    def factory(
+        *,
+        initial_state: CrewAIValidatedFlowState,
+        tracing: bool | None = None,
+    ) -> StubRuntimeFlow:
+        assert tracing is False
         return StubRuntimeFlow(
             initial_state,
             analysis_source=analysis_source,
