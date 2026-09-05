@@ -120,9 +120,7 @@ def test_agent_crew_runtime_emits_one_first_pass_observation() -> None:
     )
     observer = RecordingObserver()
 
-    execution = CrewAIAgentCrewRuntime(runner=runner, observer=observer).run(
-        _evidence_bundle()
-    )
+    execution = CrewAIAgentCrewRuntime(runner=runner, observer=observer).run(_evidence_bundle())
 
     assert execution.output.analysis_attempts == 1
     assert execution.usage.model_calls == 1
@@ -151,9 +149,7 @@ def test_agent_crew_runtime_preserves_framework_calls_across_retry() -> None:
     )
     observer = RecordingObserver()
 
-    execution = CrewAIAgentCrewRuntime(runner=runner, observer=observer).run(
-        _evidence_bundle()
-    )
+    execution = CrewAIAgentCrewRuntime(runner=runner, observer=observer).run(_evidence_bundle())
 
     assert execution.output.analysis_attempts == 2
     assert execution.output.analysis_source == "llm"
@@ -175,9 +171,7 @@ def test_agent_crew_runtime_emits_final_fallback_observation() -> None:
     )
     observer = RecordingObserver()
 
-    execution = CrewAIAgentCrewRuntime(runner=runner, observer=observer).run(
-        _evidence_bundle()
-    )
+    execution = CrewAIAgentCrewRuntime(runner=runner, observer=observer).run(_evidence_bundle())
 
     assert execution.output.analysis_source == "oracle_fallback"
     assert execution.output.validation_passed is False
