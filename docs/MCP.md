@@ -67,6 +67,30 @@ local deployment-scoped trust context, not authenticated end-user identity.
 MCP `ToolAnnotations` remain behavioral metadata/hints. They are not treated as authorization
 decisions.
 
+### Host-injected authenticated STDIO experiment
+
+Phase 38 adds a separate authenticated governed-action server used only by controlled compatibility
+and subprocess smoke checks. It is deliberately not registered in `.codex/config.toml`, because its
+credential and verification material belong to the trusted host/process environment rather than
+checked-in project configuration.
+
+The host supplies the presented synthetic API key and a precomputed SHA-256 verification digest as
+process environment. The server captures the presented credential, removes it from the process
+environment, wraps it as `CallerCredential`, and delegates to `AuthenticatedGovernedActionRuntime`.
+The model-visible `acknowledge_finding` Tool still accepts only `resource` and `environment`; it has
+no credential, API-key, caller-id, identity-source, approval-id, or approver-id field.
+
+The source-aware policy for this experiment binds authority to `identity_source = api_key`. Real
+STDIO subprocess checks prove that missing credentials fail closed, invalid credentials return
+rejection evidence with zero mutation, and valid authentication can still be denied, require human
+approval, or execute depending on the exact action scope. A separate read-only state Tool verifies
+side effects independently. Smoke credentials are generated at runtime and no expected plaintext API
+key is committed.
+
+This is provider-free local host-injection evidence. It does **not** establish remote MCP identity,
+transport-bound authentication, OAuth/OIDC/JWT/mTLS, production secret storage, rotation, expiry, or
+end-user identity.
+
 ## Governance
 
 - Record purpose, owner, accessed systems, data classes, allowed tools, retention, and revocation.
