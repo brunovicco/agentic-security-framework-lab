@@ -40,6 +40,11 @@ class StubUsageAwareRunner:
         self._fail_on_run = fail_on_run
         self.run_calls = 0
 
+    @property
+    def consume_count(self) -> int:
+        """Expose usage-consumption count for boundary assertions."""
+        return self._consume_count
+
     def run(self, task_description: str) -> LLMAnalysisDraft:
         del task_description
         self.run_calls += 1
@@ -222,7 +227,7 @@ def test_agent_crew_runtime_rejects_incomplete_model_call_usage() -> None:
     assert observer.observations == []
 
 
-def test_agent_crew_runtime_emits_no_observation_when_execution_fails() -> None:
+def test_agent_crew_runtime_drains_failed_usage_without_observation() -> None:
     runner = StubUsageAwareRunner(
         [],
         final_usage=CrewAIUsage(
@@ -234,14 +239,9 @@ def test_agent_crew_runtime_emits_no_observation_when_execution_fails() -> None:
         fail_on_run=True,
     )
     observer = RecordingObserver()
-    runtime = CrewAIAgentCrewRuntime(runner=runner, observer=observer)
 
     with pytest.raises(RuntimeError, match="controlled CrewAI Agent/Crew failure"):
-        runtime.run(_evidence_bundle())
+        CrewAIAgentCrewRuntime(runner=runner, observer=observer).run(_evidence_bundle())
 
+    assert runner.consume_count == 2
     assert observer.observations == []
-
-    runner._fail_on_run = False
-    runner._drafts = iter([_correct_draft()])
-    execution = runtime.run(_evidence_bundle())
-    assert execution.output.analysis_source == "llm"
