@@ -12,10 +12,11 @@ Recommended order:
 
 1. [Development guide](DEVELOPMENT.md)
 2. [Architecture](ARCHITECTURE.md)
-3. [Agentic fast track](AGENTIC_FAST_TRACK.md)
-4. [Framework decision matrix](FRAMEWORK_DECISION_MATRIX.md)
-5. [Final-evaluation methodology](evaluation/FINAL_EVALUATION.md)
-6. [Engineering contract](../AGENTS.md)
+3. [Governed Agent Actions](security/GOVERNED_AGENT_ACTIONS.md)
+4. [Agentic fast track](AGENTIC_FAST_TRACK.md)
+5. [Framework decision matrix](FRAMEWORK_DECISION_MATRIX.md)
+6. [Final-evaluation methodology](evaluation/FINAL_EVALUATION.md)
+7. [Engineering contract](../AGENTS.md)
 
 Focus on:
 
@@ -24,6 +25,8 @@ Focus on:
 - typed structured output;
 - bounded retry and deterministic fallback;
 - framework-specific orchestration differences;
+- application-owned action authorization and runtime enforcement;
+- trusted caller context and exact least-privilege scopes;
 - provider/gateway ownership;
 - provider-free regression gates;
 - evidence immutability.
@@ -34,15 +37,18 @@ Recommended order:
 
 1. [Executive overview](EXECUTIVE_OVERVIEW.md)
 2. [Architecture](ARCHITECTURE.md)
-3. [Framework decision matrix](FRAMEWORK_DECISION_MATRIX.md)
-4. [LiteLLM gateway foundation](litellm/GATEWAY_FOUNDATION.md)
-5. [Privacy](PRIVACY.md)
-6. [Current five-way evaluation](../artifacts/final-evaluation/phase15-20260905-v2/benchmarks/comparison/five-way-latest.md)
+3. [Governed Agent Actions](security/GOVERNED_AGENT_ACTIONS.md)
+4. [Framework decision matrix](FRAMEWORK_DECISION_MATRIX.md)
+5. [LiteLLM gateway foundation](litellm/GATEWAY_FOUNDATION.md)
+6. [Privacy](PRIVACY.md)
+7. [Current five-way evaluation](../artifacts/final-evaluation/phase15-20260905-v2/benchmarks/comparison/five-way-latest.md)
 
 Focus on:
 
 - which responsibilities remain stable when frameworks change;
 - where policy and authority live;
+- how tool availability is separated from authorization and execution;
+- how trusted human approval is kept outside model-controlled inputs;
 - how provider access can be centralized;
 - how model failures are contained;
 - what the benchmark does and does not establish;
@@ -54,13 +60,15 @@ Recommended order:
 
 1. [Root README](../README.md)
 2. [Executive overview](EXECUTIVE_OVERVIEW.md)
-3. [Framework decision matrix](FRAMEWORK_DECISION_MATRIX.md)
-4. [Current evaluation report](../artifacts/final-evaluation/phase15-20260905-v2/benchmarks/comparison/five-way-latest.md)
+3. [Governed Agent Actions](security/GOVERNED_AGENT_ACTIONS.md)
+4. [Framework decision matrix](FRAMEWORK_DECISION_MATRIX.md)
+5. [Current evaluation report](../artifacts/final-evaluation/phase15-20260905-v2/benchmarks/comparison/five-way-latest.md)
 
 What this path exposes quickly:
 
 - multi-framework AI engineering rather than one-framework familiarity;
 - security and governance reasoning;
+- least-privilege tool authorization and HITL runtime enforcement;
 - gateway/platform thinking;
 - deterministic validation around probabilistic models;
 - observability and privacy boundaries;
@@ -72,17 +80,20 @@ What this path exposes quickly:
 Recommended order:
 
 1. [Architecture](ARCHITECTURE.md)
-2. [Privacy](PRIVACY.md)
-3. [Security experiments](security/)
-4. [MCP overview](MCP.md)
-5. [MCP v2 implementation notes](mcp/README.md)
-6. [Architecture decision records](adr/)
+2. [Governed Agent Actions](security/GOVERNED_AGENT_ACTIONS.md)
+3. [Privacy](PRIVACY.md)
+4. [Security experiments](security/)
+5. [MCP overview](MCP.md)
+6. [MCP v2 implementation notes](mcp/README.md)
+7. [Architecture decision records](adr/)
 
 Focus on:
 
 - trust boundaries;
 - instruction authority vs untrusted data;
 - deterministic applicability controls;
+- exact caller/action/resource/environment authorization;
+- human approval as separately sourced evidence;
 - fallback behavior;
 - tool/runtime boundaries;
 - content-free logical telemetry;
@@ -93,6 +104,7 @@ Focus on:
 | Topic | Canonical document |
 | --- | --- |
 | Overall architecture and trust boundaries | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Governed mutable actions, authorization, HITL, and enforcement | [security/GOVERNED_AGENT_ACTIONS.md](security/GOVERNED_AGENT_ACTIONS.md) |
 | Framework selection trade-offs | [FRAMEWORK_DECISION_MATRIX.md](FRAMEWORK_DECISION_MATRIX.md) |
 | Developer onboarding | [DEVELOPMENT.md](DEVELOPMENT.md) |
 | Executive / portfolio summary | [EXECUTIVE_OVERVIEW.md](EXECUTIVE_OVERVIEW.md) |
@@ -129,6 +141,8 @@ Files under `artifacts/` record observed benchmark/evaluation results for a part
 Accepted evidence is not rewritten to make later architecture look cleaner. Historical provider-native identifiers, latencies, token counts, retries, and fallbacks are preserved as generated.
 
 That separation is deliberate: **documentation explains the system; evidence records what actually happened.**
+
+The v1.1 governed-action documentation describes provider-free CI and local MCP integration evidence. It does not rewrite or expand the accepted v1.0 provider-backed evaluation bundle.
 
 ## Language
 
