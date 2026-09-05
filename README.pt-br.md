@@ -305,7 +305,7 @@ src/agentic_lab/
     ├── agno/
     ├── crewai/
     ├── fixtures/
-    ├── gateway/
+    ├── gateway.py
     ├── langchain/
     ├── langgraph/
     └── llamaindex/
@@ -381,14 +381,24 @@ export AGENTIC_LAB_GATEWAY_BASE_URL="http://localhost:4000"
 export AGENTIC_LAB_GATEWAY_API_KEY="$LITELLM_MASTER_KEY"
 ```
 
-Execute um benchmark individual ao explorar um adapter:
+Para benchmarks diretos de framework que devam preservar a mesma fronteira de privacidade usada na avaliação aceita da Phase 15, aplique os mesmos guards específicos de telemetry dos vendors. `CREWAI_TESTING=true` é necessário aqui para bloquear o caminho de coleta de trace da primeira execução no CrewAI 1.15.18 fixado; o OpenTelemetry controlado pelo projeto permanece habilitado porque `OTEL_SDK_DISABLED` deliberadamente não é utilizado.
+
+```bash
+export CREWAI_TRACING_ENABLED=false
+export CREWAI_DISABLE_TELEMETRY=true
+export CREWAI_DISABLE_TRACKING=true
+export CREWAI_TESTING=true
+export AGNO_TELEMETRY=false
+```
+
+Depois execute um benchmark individual ao explorar um adapter:
 
 ```bash
 uv run python scripts/benchmark_langgraph_scenarios.py --runs 3
 uv run python scripts/benchmark_crewai_scenarios.py --runs 3
 uv run python scripts/benchmark_crewai_flow_scenarios.py --runs 3
 uv run python scripts/benchmark_llamaindex_workflow_scenarios.py --runs 3
-AGNO_TELEMETRY=false uv run python scripts/benchmark_agno_workflow_scenarios.py --runs 3
+uv run python scripts/benchmark_agno_workflow_scenarios.py --runs 3
 ```
 
 Para uma nova geração controlada de evidência five-way provider-backed, prefira o runner de avaliação final. Ele executa os benchmarks em workspace temporário isolado, valida alias e repetição, aplica os guards de telemetry de vendor exigidos pela metodologia aceita e persiste um novo bundle append-only:
