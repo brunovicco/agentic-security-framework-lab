@@ -68,7 +68,9 @@ async def _check() -> dict[str, object]:
             "approver_id",
         }
         if forbidden.intersection(properties):
-            raise RuntimeError("Trusted authentication or authorization data leaked into Tool input")
+            raise RuntimeError(
+                "Trusted authentication or authorization data leaked into Tool input"
+            )
 
         state = await client.call_tool(_STATE_TOOL, {})
         if state.is_error:
