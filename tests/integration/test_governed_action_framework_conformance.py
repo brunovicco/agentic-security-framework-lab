@@ -177,9 +177,7 @@ def _run_langgraph(
     context: ActionContext,
     proposed_action: ProposedAction,
 ) -> ActionExecutionEvidence:
-    return run_governed_action_graph(runtime, context, proposed_action)[
-        "execution_evidence"
-    ]
+    return run_governed_action_graph(runtime, context, proposed_action)["execution_evidence"]
 
 
 def _run_crewai(
@@ -224,9 +222,7 @@ def _assert_expected_behavior(
     assert evidence.approval_status == scenario.expected_approval_status
     assert evidence.execution_occurred is scenario.expected_execution
     assert executor.execution_count == int(scenario.expected_execution)
-    assert (
-        executor.is_acknowledged(_FINDING_RESOURCE) is scenario.expected_execution
-    )
+    assert executor.is_acknowledged(_FINDING_RESOURCE) is scenario.expected_execution
 
 
 @pytest.mark.parametrize(
