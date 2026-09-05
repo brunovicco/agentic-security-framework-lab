@@ -54,4 +54,4 @@ def test_human_approval_rejects_unmodeled_fields() -> None:
 
 def test_null_approval_provider_fails_closed() -> None:
     """Return no approval when no trusted HITL source is configured."""
-    assert NULL_ACTION_APPROVAL_PROVIDER.find_approval(_action(), _context()) is None
+    assert NULL_ACTION_APPROVAL_PROVIDER.claim_approval(_action(), _context()) is None

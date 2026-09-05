@@ -29,21 +29,35 @@ class RecordingActionExecutor:
         self.actions.append(proposed_action)
 
 
+class FailingActionExecutor:
+    """Fail after crossing the runtime boundary while recording call count."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def execute(self, proposed_action: ProposedAction) -> None:
+        """Record one attempted side effect and fail deterministically."""
+        self.calls += 1
+        raise RuntimeError(f"executor failed for {proposed_action.action}")
+
+
 class RecordingApprovalProvider:
-    """Return configured approval evidence while recording trusted lookup attempts."""
+    """Claim configured approval evidence once while recording trusted attempts."""
 
     def __init__(self, approval: HumanApprovalEvidence | None) -> None:
         self._approval = approval
-        self.lookup_calls = 0
+        self.claim_calls = 0
 
-    def find_approval(
+    def claim_approval(
         self,
         proposed_action: ProposedAction,
         context: ActionContext,
     ) -> HumanApprovalEvidence | None:
-        """Return the configured evidence without silently rebinding its scope."""
-        self.lookup_calls += 1
-        return self._approval
+        """Consume configured evidence without silently rebinding its scope."""
+        self.claim_calls += 1
+        approval = self._approval
+        self._approval = None
+        return approval
 
 
 class FailingAuthorizer:
@@ -106,8 +120,8 @@ def _approval(
     )
 
 
-def test_allowed_action_reaches_executor_without_approval_lookup() -> None:
-    """Execute explicit allow without consulting irrelevant human approval evidence."""
+def test_allowed_action_reaches_executor_without_approval_claim() -> None:
+    """Execute explicit allow without consuming irrelevant human approval evidence."""
     executor = RecordingActionExecutor()
     approval_provider = RecordingApprovalProvider(None)
     runtime = GovernedActionRuntime(
@@ -127,7 +141,7 @@ def test_allowed_action_reaches_executor_without_approval_lookup() -> None:
     assert evidence.approval_status == "not_applicable"
     assert evidence.human_approval is None
     assert evidence.execution_occurred is True
-    assert approval_provider.lookup_calls == 0
+    assert approval_provider.claim_calls == 0
 
 
 def test_unknown_caller_never_reaches_executor() -> None:
@@ -148,8 +162,8 @@ def test_unknown_caller_never_reaches_executor() -> None:
     assert evidence.execution_occurred is False
 
 
-def test_denied_action_cannot_be_overridden_by_human_approval() -> None:
-    """Keep explicit deny terminal even if an approval provider has evidence."""
+def test_denied_action_cannot_be_overridden_or_consume_human_approval() -> None:
+    """Keep explicit deny terminal without consuming unrelated approval capacity."""
     executor = RecordingActionExecutor()
     denied_action = _vulnerability_action("modify_vulnerability")
     context = _context()
@@ -168,7 +182,7 @@ def test_denied_action_cannot_be_overridden_by_human_approval() -> None:
     assert evidence.approval_status == "not_applicable"
     assert evidence.human_approval is None
     assert evidence.execution_occurred is False
-    assert approval_provider.lookup_calls == 0
+    assert approval_provider.claim_calls == 0
 
 
 def test_approval_required_action_is_blocked_when_approval_is_missing() -> None:
@@ -205,11 +219,59 @@ def test_exact_trusted_approval_satisfies_required_runtime_precondition() -> Non
     assert evidence.approval_status == "validated"
     assert evidence.human_approval == approval
     assert evidence.execution_occurred is True
-    assert approval_provider.lookup_calls == 1
+    assert approval_provider.claim_calls == 1
+
+
+def test_consumed_approval_cannot_execute_same_action_twice() -> None:
+    """Require a fresh human approval for every repeated mutable execution."""
+    executor = RecordingActionExecutor()
+    proposed_action = _remediation_action()
+    context = _context()
+    approval_provider = RecordingApprovalProvider(_approval(proposed_action, context))
+    runtime = GovernedActionRuntime(
+        authorizer=_authorizer(),
+        executor=executor,
+        approval_provider=approval_provider,
+    )
+
+    first = runtime.execute(proposed_action, context)
+    second = runtime.execute(proposed_action, context)
+
+    assert first.approval_status == "validated"
+    assert first.execution_occurred is True
+    assert second.authorization.outcome == "require_human_approval"
+    assert second.approval_status == "missing"
+    assert second.execution_occurred is False
+    assert executor.actions == [proposed_action]
+    assert approval_provider.claim_calls == 2
+
+
+def test_executor_failure_does_not_restore_claimed_approval() -> None:
+    """Fail closed after a side-effect attempt instead of replaying the same approval."""
+    executor = FailingActionExecutor()
+    proposed_action = _remediation_action()
+    context = _context()
+    approval_provider = RecordingApprovalProvider(_approval(proposed_action, context))
+    runtime = GovernedActionRuntime(
+        authorizer=_authorizer(),
+        executor=executor,
+        approval_provider=approval_provider,
+    )
+
+    with pytest.raises(RuntimeError, match="executor failed"):
+        runtime.execute(proposed_action, context)
+
+    second = runtime.execute(proposed_action, context)
+
+    assert second.authorization.outcome == "require_human_approval"
+    assert second.approval_status == "missing"
+    assert second.execution_occurred is False
+    assert executor.calls == 1
+    assert approval_provider.claim_calls == 2
 
 
 def test_mismatched_approval_fails_closed_before_executor() -> None:
-    """Reject approval evidence bound to a different resource scope."""
+    """Reject approval evidence bound to a different resource scope after consuming it."""
     executor = RecordingActionExecutor()
     proposed_action = _remediation_action()
     context = _context()
@@ -231,7 +293,7 @@ def test_mismatched_approval_fails_closed_before_executor() -> None:
     assert evidence.approval_status == "invalid"
     assert evidence.human_approval == mismatched_approval
     assert evidence.execution_occurred is False
-    assert approval_provider.lookup_calls == 1
+    assert approval_provider.claim_calls == 1
 
 
 def test_unknown_action_fails_closed_before_executor() -> None:

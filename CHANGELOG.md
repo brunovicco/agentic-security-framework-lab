@@ -16,6 +16,7 @@
 
 ### Hardened
 
+- Trusted HITL approvals are claimed as single-use capabilities so one approval cannot be replayed for repeated mutable executions; retries after a claimed approval require fresh human evidence.
 - Mutable Agno Workflow execution disables framework retries so a failed side-effecting step is not silently retried.
 - Model-adjacent proposals reject caller identity and approval-like extra fields rather than treating them as trusted authority.
 - Governed MCP tools keep caller identity and approval authority outside model-controlled tool arguments.

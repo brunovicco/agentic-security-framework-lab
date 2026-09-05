@@ -75,7 +75,7 @@ class GovernedActionRuntime:
             )
 
         if decision.outcome == "require_human_approval":
-            approval = self._approval_provider.find_approval(proposed_action, context)
+            approval = self._approval_provider.claim_approval(proposed_action, context)
             if approval is None:
                 return ActionExecutionEvidence(
                     proposed_action=proposed_action,

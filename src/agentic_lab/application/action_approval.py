@@ -29,21 +29,21 @@ class HumanApprovalEvidence(BaseModel):
 
 
 class ActionApprovalProvider(Protocol):
-    """Resolve trusted human approval evidence for one exact action request."""
+    """Claim trusted human approval evidence for one exact action request."""
 
-    def find_approval(
+    def claim_approval(
         self,
         proposed_action: ProposedAction,
         context: ActionContext,
     ) -> HumanApprovalEvidence | None:
-        """Return trusted approval evidence or no approval for the requested scope."""
+        """Atomically return one unused approval at most once for the requested scope."""
         ...
 
 
 class NoActionApprovalProvider:
     """Fail-closed approval provider used when no HITL source is configured."""
 
-    def find_approval(
+    def claim_approval(
         self,
         proposed_action: ProposedAction,
         context: ActionContext,
