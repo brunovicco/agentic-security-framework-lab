@@ -1,0 +1,36 @@
+name: sync-release-lock
+
+on:
+  push:
+    branches: [release/v1.0.0]
+    paths:
+      - .github/workflows/sync-release-lock.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out release branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.28"
+      - name: Synchronize lock metadata
+        run: uv lock
+      - name: Commit lockfile only
+        run: |
+          test -z "$(git status --short --untracked-files=no -- . ':!uv.lock')"
+          if git diff --quiet -- uv.lock; then
+            echo "uv.lock already synchronized"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add uv.lock
+          git commit -m "chore: sync v1.0.0 lockfile"
+          git push origin HEAD:release/v1.0.0
