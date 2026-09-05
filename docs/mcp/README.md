@@ -9,10 +9,13 @@ The root framework-comparison environment still resolves MCP v1.x transitively t
 Current local topology:
 
 ```text
-MCP host / client
-      |
-      | STDIO
-      v
+MCP host
+    |
+    v
+MCP client
+    |
+    | STDIO
+    v
 isolated MCP v2 server
       |
       +--> Prompt: review_vulnerability_applicability
@@ -39,6 +42,17 @@ isolated MCP v2 server
               v
           domain version rules
 ```
+
+## Host, Client, Server, and Transport
+
+These roles are deliberately separate:
+
+- **Host** is the application that decides which MCP servers to connect, which context to expose, and when a client connection exists. In this lab the project configuration and the STDIO smoke represent that host-side responsibility.
+- **Client** is the protocol participant created by the host for one server connection. The real transport smoke uses `ClientSession` to initialize the session and call MCP operations.
+- **Server** publishes the capability surface. `scripts/mcp_security_server.py` owns the current Prompt, Resource, and Tool declarations but does not own the application's deterministic business rules.
+- **Transport** carries MCP protocol messages between Client and Server. The project-scoped runtime uses STDIO, so the server runs as a separate child process instead of sharing Python objects with the host.
+
+This is the architectural change introduced by MCP: capability discovery and invocation now cross an explicit protocol boundary. The application rule itself remains reusable without MCP, while MCP makes that capability interoperable with any compatible host/client.
 
 ## Primitive control boundaries
 
@@ -95,20 +109,17 @@ The Resource is labeled `application/json` and contains no credentials, external
 
 Its MCP annotations describe those properties for clients. They are metadata hints, not authorization controls. The implementation boundary is the security control.
 
-## Compatibility evidence
+## Compatibility and transport evidence
 
-CI validates two environments separately:
+CI now validates three different concerns:
 
 1. the root project quality gate under the locked framework-comparison dependency graph;
-2. an isolated `mcp[cli]==2.1.1` environment that connects an MCP v2 `Client` to the server and exercises the actual protocol-facing Prompt, Resource, and Tool APIs.
+2. an isolated `mcp[cli]==2.1.1` in-memory compatibility check that exercises Prompt, Resource, and Tool protocol surfaces quickly without a process boundary;
+3. a separate isolated STDIO smoke that reads the committed `.codex/config.toml`, starts the configured server as a child process, initializes a real `ClientSession`, and exercises the same primitives across the transport boundary.
 
-The isolated check verifies:
+The in-memory check proves SDK/server compatibility and primitive contracts. The STDIO smoke proves process launch, initialization, framing, discovery, invocation, and structured result delivery through the committed transport configuration. Neither test is evidence of remote production readiness.
 
-- exactly one Prompt, one Resource, and one Tool;
-- `prompts/get` returns one user message with the governed review guidance;
-- Resource MIME type and contract content;
-- Tool annotations;
-- exact structured deterministic Tool output.
+The STDIO smoke emits only compact non-secret evidence: server identity, transport, primitive identities, and whether deterministic structured output matched external expected truth.
 
 ## Deferred work
 
@@ -130,3 +141,4 @@ Each introduces a separate security or governance concern and should be added on
 - MCP `2026-07-28` release: https://blog.modelcontextprotocol.io/posts/2026-07-28/
 - Python SDK v2 first steps and primitive control semantics: https://github.com/modelcontextprotocol/python-sdk/blob/main/docs/get-started/first-steps.md
 - Python SDK v2 Resources: https://github.com/modelcontextprotocol/python-sdk/blob/main/docs/servers/resources.md
+- Python SDK v2 STDIO client example: https://github.com/modelcontextprotocol/python-sdk/blob/v2.1.1/examples/clients/simple-chatbot/mcp_simple_chatbot/main.py

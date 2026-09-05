@@ -34,3 +34,7 @@ jobs:
         run: >-
           uv run --no-project --with "mcp[cli]==2.1.1"
           python scripts/check_mcp_v2_applicability.py
+      - name: MCP v2 STDIO host/client smoke
+        run: >-
+          uv run --no-project --with "mcp[cli]==2.1.1"
+          python scripts/smoke_mcp_stdio_applicability.py
