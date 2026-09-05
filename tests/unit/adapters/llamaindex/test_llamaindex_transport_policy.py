@@ -31,9 +31,5 @@ def test_runtime_disables_client_retries_and_bounds_gateway_request(
     assert captured_kwargs["api_base"] == "http://gateway.test:4000"
     assert captured_kwargs["api_key"] == "gateway-test-key"
     assert captured_kwargs["max_retries"] == LLAMAINDEX_GATEWAY_MAX_RETRIES == 0
-    assert (
-        captured_kwargs["timeout"]
-        == LLAMAINDEX_GATEWAY_REQUEST_TIMEOUT_SECONDS
-        == 30.0
-    )
+    assert captured_kwargs["timeout"] == LLAMAINDEX_GATEWAY_REQUEST_TIMEOUT_SECONDS == 30.0
     assert isinstance(captured_kwargs["callback_manager"], CallbackManager)
