@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Trusted caller identity provenance in `ActionContext`, distinguishing local composition from future authenticated identity mechanisms without letting model-controlled proposals declare either caller identity or provenance.
+- A framework-neutral service-caller authentication contract that keeps opaque credentials separate from authorization and execution evidence.
+- A provider-free static API-key authentication fixture that derives `identity_source = api_key` only after matching configured synthetic service credential verification material.
+
+### Hardened
+
+- Caller credentials use secret-safe representations, failed authentication produces no trusted `ActionContext`, and authentication decisions cannot carry contradictory context state.
+- Configured synthetic API keys are reduced to SHA-256 digests in the controlled fixture and presented digests are compared with constant-time `hmac.compare_digest()`.
+
+### Evidence
+
+- Trusted-identity and service-authentication checks remain provider-free local/CI evidence and do not claim end-user authentication, OAuth/OIDC, remote MCP identity, or production secrets management.
+
 ## 1.1.0 - 2026-09-05
 
 ### Added
