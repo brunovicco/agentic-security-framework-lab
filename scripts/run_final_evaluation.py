@@ -101,7 +101,9 @@ def _benchmark_environment(repo_root: Path) -> dict[str, str]:
     source_root = str(repo_root / "src")
     current_pythonpath = environment.get("PYTHONPATH")
     environment["PYTHONPATH"] = (
-        source_root if not current_pythonpath else os.pathsep.join((source_root, current_pythonpath))
+        source_root
+        if not current_pythonpath
+        else os.pathsep.join((source_root, current_pythonpath))
     )
     return environment
 
