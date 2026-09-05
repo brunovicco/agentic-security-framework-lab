@@ -49,9 +49,7 @@ def _assert_execution(
     if document.get("approval_status") != approval_status:
         raise RuntimeError(f"Unexpected approval status: {document.get('approval_status')!r}")
     if document.get("execution_occurred") is not execution_occurred:
-        raise RuntimeError(
-            "Unexpected execution flag: " f"{document.get('execution_occurred')!r}"
-        )
+        raise RuntimeError(f"Unexpected execution flag: {document.get('execution_occurred')!r}")
 
 
 def _assert_state(payload: object, *, acknowledged: bool, execution_count: int) -> None:
@@ -111,7 +109,9 @@ async def _check() -> dict[str, object]:
             {"resource": _FINDING_RESOURCE, "environment": "staging"},
         )
         if denied.is_error:
-            raise RuntimeError(f"Denied action should return evidence, not Tool error: {denied.content}")
+            raise RuntimeError(
+                f"Denied action should return evidence, not Tool error: {denied.content}"
+            )
         _assert_execution(
             denied.structured_content,
             outcome="deny",
@@ -147,7 +147,8 @@ async def _check() -> dict[str, object]:
         )
         if escalated.is_error:
             raise RuntimeError(
-                f"Scope escalation should return denial evidence, not Tool error: {escalated.content}"
+                "Scope escalation should return denial evidence, not Tool error: "
+                f"{escalated.content}"
             )
         _assert_execution(
             escalated.structured_content,
