@@ -4,6 +4,7 @@ import pytest
 
 from agentic_lab.application.action_approval import HumanApprovalEvidence
 from agentic_lab.application.action_authorization import (
+    ActionAuthorizationRuleKey,
     ActionAuthorizer,
     ActionContext,
     AuthorizationDecision,
@@ -75,11 +76,24 @@ class FailingAuthorizer:
 
 
 def _authorizer() -> ActionAuthorizer:
-    rules: dict[tuple[str, str, str, str], AuthorizationOutcome] = {
-        (REMEDIATION_AGENT, "read_vulnerability", VULNERABILITY_RESOURCE, "test"): "allow",
-        (REMEDIATION_AGENT, "modify_vulnerability", VULNERABILITY_RESOURCE, "test"): "deny",
+    rules: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
         (
             REMEDIATION_AGENT,
+            "trusted_composition",
+            "read_vulnerability",
+            VULNERABILITY_RESOURCE,
+            "test",
+        ): "allow",
+        (
+            REMEDIATION_AGENT,
+            "trusted_composition",
+            "modify_vulnerability",
+            VULNERABILITY_RESOURCE,
+            "test",
+        ): "deny",
+        (
+            REMEDIATION_AGENT,
+            "trusted_composition",
             "create_remediation_task",
             REMEDIATION_RESOURCE,
             "production",

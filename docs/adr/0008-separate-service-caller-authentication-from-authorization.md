@@ -108,7 +108,6 @@ Rejected. The controlled adapter reduces configured keys to digests when it is c
 - the fixture is process-local and static;
 - SHA-256 digest storage assumes synthetic high-entropy API keys and is not password hashing;
 - there is no rotation, expiry, revocation, throttling, vault integration, or audit store;
-- the current authorization policy does not yet include `identity_source` as a policy dimension;
 - the authenticated composition remains local and transport-neutral rather than proving remote identity propagation.
 
 These are explicit boundaries, not production claims.
@@ -135,6 +134,29 @@ credential verification
 
 Raw credential material is intentionally absent from the returned evidence object.
 
+## Evolution note: Phase 37
+
+Once `trusted_composition` and `api_key` both existed as concrete trusted identity sources, authentication provenance became authorization-relevant. The same `caller_id` can no longer be assumed to carry the same authority regardless of how the context was established.
+
+Phase 37 therefore binds deterministic authorization to the exact five-field scope:
+
+```text
+(caller_id, identity_source, action, resource, environment)
+```
+
+An authenticated `api_key` context does not inherit a rule written for `trusted_composition`. The policy has no source fallback or wildcard: absence of the exact key returns `deny / no_matching_rule`.
+
+This strengthens least privilege without collapsing authentication and authorization. Authentication still only establishes trusted caller context; authorization independently decides what that exact identity source may do.
+
+The combined invariant becomes:
+
+```text
+credential verification != authorization
+same caller_id != same authority when identity_source differs
+```
+
+Framework adapters and the local MCP server remain consumers of the application policy. Their existing local fixtures explicitly use `trusted_composition`; API-key authentication is not silently added to framework or MCP inputs.
+
 ## Security invariants
 
 ```text
@@ -144,12 +166,13 @@ failed authentication -> no authorization/runtime invocation
 raw credential not in authorization/runtime evidence
 api_key source != end-user identity
 authenticated != authorized
+same caller_id != same authority when identity_source differs
 ```
 
 ## Revisit when
 
-Revisit this decision when a real transport requires OAuth/OIDC, mTLS, signed workload identity, or another authentication mechanism; when service credentials require lifecycle management; or when authorization must distinguish the same `caller_id` by identity source.
+Revisit this decision when a real transport requires OAuth/OIDC, mTLS, signed workload identity, or another authentication mechanism; when service credentials require lifecycle management; or when source-aware rules need a richer policy representation than exact tuples.
 
-Any future mechanism must keep raw credential material outside model-controlled action proposals and must derive trusted `ActionContext` before invoking action authorization.
+Any future mechanism must keep raw credential material outside model-controlled action proposals, derive trusted `ActionContext` before invoking action authorization, and preserve source-aware least privilege unless an explicit policy model supersedes it.
 
-Refs #152, #154
+Refs #152, #154, #156

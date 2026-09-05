@@ -18,6 +18,7 @@ from agentic_lab.adapters.llamaindex.action_workflow import (
 )
 from agentic_lab.application.action_approval import ApprovalStatus, HumanApprovalEvidence
 from agentic_lab.application.action_authorization import (
+    ActionAuthorizationRuleKey,
     ActionContext,
     AuthorizationOutcome,
     AuthorizationReason,
@@ -32,21 +33,24 @@ from agentic_lab.application.action_runtime import (
 _FINDING_RESOURCE = "finding:demo-001"
 _ALLOWED_CALLER = "remediation-agent"
 
-_RULES: dict[tuple[str, str, str, str], AuthorizationOutcome] = {
+_RULES: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
     (
         _ALLOWED_CALLER,
+        "trusted_composition",
         ACKNOWLEDGE_FINDING_ACTION,
         _FINDING_RESOURCE,
         "test",
     ): "allow",
     (
         _ALLOWED_CALLER,
+        "trusted_composition",
         ACKNOWLEDGE_FINDING_ACTION,
         _FINDING_RESOURCE,
         "staging",
     ): "deny",
     (
         _ALLOWED_CALLER,
+        "trusted_composition",
         ACKNOWLEDGE_FINDING_ACTION,
         _FINDING_RESOURCE,
         "production",
@@ -125,6 +129,16 @@ _SCENARIOS: tuple[_Scenario, ...] = (
         name="caller-mismatch",
         proposed_action=_action(),
         context=ActionContext(caller_id="unprivileged-agent"),
+        with_approval=False,
+        expected_outcome="deny",
+        expected_reason="no_matching_rule",
+        expected_approval_status="not_applicable",
+        expected_execution=False,
+    ),
+    _Scenario(
+        name="identity-source-mismatch",
+        proposed_action=_action(),
+        context=ActionContext(caller_id=_ALLOWED_CALLER, identity_source="api_key"),
         with_approval=False,
         expected_outcome="deny",
         expected_reason="no_matching_rule",

@@ -9,6 +9,7 @@ from agentic_lab.adapters.fixtures.finding_actions import (
     InMemoryFindingAcknowledgementExecutor,
 )
 from agentic_lab.application.action_authorization import (
+    ActionAuthorizationRuleKey,
     ActionContext,
     AuthorizationOutcome,
     ProposedAction,
@@ -38,11 +39,24 @@ mcp = MCPServer(_SERVER_NAME)
 
 _executor = InMemoryFindingAcknowledgementExecutor([_FINDING_RESOURCE])
 _context = ActionContext(caller_id=_LOCAL_CALLER_ID)
-_rules: dict[tuple[str, str, str, str], AuthorizationOutcome] = {
-    (_LOCAL_CALLER_ID, ACKNOWLEDGE_FINDING_ACTION, _FINDING_RESOURCE, "test"): "allow",
-    (_LOCAL_CALLER_ID, ACKNOWLEDGE_FINDING_ACTION, _FINDING_RESOURCE, "staging"): "deny",
+_rules: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
     (
         _LOCAL_CALLER_ID,
+        "trusted_composition",
+        ACKNOWLEDGE_FINDING_ACTION,
+        _FINDING_RESOURCE,
+        "test",
+    ): "allow",
+    (
+        _LOCAL_CALLER_ID,
+        "trusted_composition",
+        ACKNOWLEDGE_FINDING_ACTION,
+        _FINDING_RESOURCE,
+        "staging",
+    ): "deny",
+    (
+        _LOCAL_CALLER_ID,
+        "trusted_composition",
         ACKNOWLEDGE_FINDING_ACTION,
         _FINDING_RESOURCE,
         "production",

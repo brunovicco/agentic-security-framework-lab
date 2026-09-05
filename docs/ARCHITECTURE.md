@@ -242,13 +242,13 @@ flowchart TD
     EX --> EE[ActionExecutionEvidence]
 ```
 
-The current least-privilege policy key is exact:
+The current least-privilege policy key is exact and source-aware:
 
 ```text
-(caller_id, action, resource, environment)
+(caller_id, identity_source, action, resource, environment)
 ```
 
-There are no wildcard or nearest-match semantics. An unknown caller, action, resource, or environment therefore has no matching trusted rule and fails closed.
+There are no wildcard, nearest-match, or cross-source fallback semantics. An unknown caller, identity source, action, resource, or environment therefore has no matching trusted rule and fails closed. The same `caller_id` established through a different identity source does not inherit authority unless policy grants that exact source explicitly.
 
 `ActionContext` is deliberately separate from `ProposedAction`. Caller identity is trusted runtime context supplied by composition code; it is not accepted as model-controlled proposal data.
 
@@ -326,7 +326,7 @@ LlamaIndex Workflow
 Agno Workflow
 ```
 
-The suite covers exact allow, explicit deny, missing HITL approval, validated trusted approval, caller mismatch, and resource escalation.
+The suite covers exact allow, explicit deny, missing HITL approval, validated trusted approval, caller mismatch, identity-source mismatch, and resource escalation.
 
 Each adapter must match the direct application baseline for:
 

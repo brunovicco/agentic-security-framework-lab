@@ -8,16 +8,18 @@
 - A framework-neutral service-caller authentication contract that keeps opaque credentials separate from authorization and execution evidence.
 - A provider-free static API-key authentication fixture that derives `identity_source = api_key` only after matching configured synthetic service credential verification material.
 - An application-owned authenticated governed-action runtime that composes credential verification before authorization and passes only the derived `ActionContext` into the existing governed runtime.
+- Source-aware least-privilege authorization over exact `(caller_id, identity_source, action, resource, environment)` scopes.
 
 ### Hardened
 
 - Caller credentials use secret-safe representations, failed authentication produces no trusted `ActionContext`, and authentication decisions cannot carry contradictory context state.
 - Configured synthetic API keys are reduced to SHA-256 digests in the controlled fixture and presented digests are compared with constant-time `hmac.compare_digest()`.
 - Rejected authentication cannot reach authorization or mutable execution, and authenticated execution evidence must use the exact context established by authentication.
+- Identity-source mismatches fail closed with no legacy four-field fallback or cross-source authority inheritance; an `api_key` caller requires its own explicit policy rule instead of inheriting `trusted_composition` authority.
 
 ### Evidence
 
-- Trusted-identity, service-authentication, and authentication-first runtime checks remain provider-free local/CI evidence and do not claim end-user authentication, OAuth/OIDC, remote MCP identity, or production secrets management.
+- Trusted-identity, service-authentication, authentication-first runtime, source-confusion adversarial, and cross-framework source-aware conformance checks remain provider-free local/CI evidence and do not claim end-user authentication, OAuth/OIDC, remote MCP identity, or production secrets management.
 
 ## 1.1.0 - 2026-09-05
 

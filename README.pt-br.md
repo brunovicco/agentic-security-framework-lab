@@ -57,7 +57,7 @@ Veja o [mapa completo da documentação](docs/README.md).
 - evidência não confiável não recebe autoridade de instrução por padrão;
 - política determinística controla necessidade de revisão humana;
 - `ProposedAction`, adjacente ao modelo, é separada do `ActionContext` confiável;
-- autorização least-privilege atual avalia exatamente `(caller_id, action, resource, environment)`;
+- autorização least-privilege avalia exatamente `(caller_id, identity_source, action, resource, environment)`, sem fallback entre origens de identidade;
 - scopes desconhecidos falham de forma fechada;
 - `require_human_approval` continua bloqueado até existir evidência de aprovação confiável para exatamente o mesmo caller e action scope;
 - autorização, aprovação e execução real são preservadas como fatos distintos de evidence;
@@ -116,7 +116,7 @@ O desenvolvimento pós-v1.0 estende o princípio original de **decisões de aná
 A fronteira controlada atual inclui:
 
 - `ProposedAction(action, resource, environment)` congelada como proposta não confiável;
-- `ActionContext(caller_id)` separado e fornecido por composição/runtime confiável;
+- `ActionContext(caller_id, identity_source)` separado e fornecido por composição/runtime ou autenticação confiável;
 - autorização determinística de scope exato com outcomes `allow`, `deny` e `require_human_approval`;
 - `HumanApprovalEvidence` confiável vinculada exatamente à proposta e ao caller context;
 - `GovernedActionRuntime` como único enforcement point antes da execução mutável;
@@ -127,7 +127,7 @@ A fronteira controlada atual inclui:
 - conformance cross-framework comparando evidence completa e side effects observáveis com a execução direta da Application;
 - um servidor MCP STDIO mutável separado, cujo schema não permite ao modelo fornecer identidade de caller ou aprovação confiável.
 
-A matriz de conformance cobre allow exato, deny explícito, approval ausente, approval confiável validado, caller mismatch e resource escalation. Em todos os frameworks, os mesmos security semantics e a mesma contagem de side effects devem coincidir com a baseline direta da Application.
+A matriz de conformance cobre allow exato, deny explícito, approval ausente, approval confiável validado, caller mismatch, identity-source mismatch e resource escalation. Em todos os frameworks, os mesmos security semantics e a mesma contagem de side effects devem coincidir com a baseline direta da Application.
 
 Isso é **evidência provider-free de integração entre Application, frameworks e MCP local**. Não é uma afirmação de identidade remota autenticada, infraestrutura de autorização production-grade, action execution provider-backed ou certificação de produção.
 

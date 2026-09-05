@@ -9,9 +9,11 @@ from agentic_lab.adapters.fixtures.finding_actions import (
 )
 from agentic_lab.application.action_approval import HumanApprovalEvidence
 from agentic_lab.application.action_authorization import (
+    ActionAuthorizationRuleKey,
     ActionContext,
     AuthorizationDecision,
     AuthorizationOutcome,
+    CallerIdentitySource,
     ProposedAction,
     StaticActionAuthorizationPolicy,
 )
@@ -41,12 +43,31 @@ class CountingActionAuthorizer:
 
 
 def _policy() -> StaticActionAuthorizationPolicy:
-    rules: dict[tuple[str, str, str, str], AuthorizationOutcome] = {
-        (OBSERVER_AGENT, "read_finding", FINDING_RESOURCE, "test"): "allow",
-        (REMEDIATION_AGENT, "acknowledge_finding", FINDING_RESOURCE, "test"): "allow",
-        (REMEDIATION_AGENT, "acknowledge_finding", FINDING_RESOURCE, "staging"): "deny",
+    rules: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
+        (
+            OBSERVER_AGENT,
+            "trusted_composition",
+            "read_finding",
+            FINDING_RESOURCE,
+            "test",
+        ): "allow",
         (
             REMEDIATION_AGENT,
+            "trusted_composition",
+            "acknowledge_finding",
+            FINDING_RESOURCE,
+            "test",
+        ): "allow",
+        (
+            REMEDIATION_AGENT,
+            "trusted_composition",
+            "acknowledge_finding",
+            FINDING_RESOURCE,
+            "staging",
+        ): "deny",
+        (
+            REMEDIATION_AGENT,
+            "trusted_composition",
             "acknowledge_finding",
             FINDING_RESOURCE,
             "production",
@@ -61,8 +82,11 @@ def _runtime(
     return GovernedActionRuntime(authorizer=_policy(), executor=executor)
 
 
-def _context(caller_id: str = REMEDIATION_AGENT) -> ActionContext:
-    return ActionContext(caller_id=caller_id)
+def _context(
+    caller_id: str = REMEDIATION_AGENT,
+    identity_source: CallerIdentitySource = "trusted_composition",
+) -> ActionContext:
+    return ActionContext(caller_id=caller_id, identity_source=identity_source)
 
 
 def _action(
@@ -92,6 +116,24 @@ def test_tool_escalation_from_read_only_caller_is_denied() -> None:
     assert evidence.execution_occurred is False
     assert executor.is_acknowledged(FINDING_RESOURCE) is False
     assert executor.execution_count == 0
+
+
+def test_identity_source_substitution_does_not_inherit_composition_authority() -> None:
+    """Deny the same caller scope when identity provenance does not match its policy rule."""
+    executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
+
+    evidence = _runtime(executor).execute(
+        _action(),
+        _context(identity_source="api_key"),
+    )
+
+    assert evidence.context.caller_id == REMEDIATION_AGENT
+    assert evidence.context.identity_source == "api_key"
+    assert evidence.authorization.outcome == "deny"
+    assert evidence.authorization.reason == "no_matching_rule"
+    assert evidence.execution_occurred is False
+    assert executor.execution_count == 0
+    assert executor.is_acknowledged(FINDING_RESOURCE) is False
 
 
 def test_resource_and_environment_escalation_remain_blocked() -> None:

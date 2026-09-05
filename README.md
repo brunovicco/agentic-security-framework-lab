@@ -57,7 +57,7 @@ See the complete [documentation map](docs/README.md).
 - untrusted evidence has no instruction authority by default;
 - deterministic policy controls human-review requirements;
 - model-adjacent `ProposedAction` is separated from trusted `ActionContext`;
-- exact least-privilege authorization currently evaluates `(caller_id, action, resource, environment)`;
+- exact least-privilege authorization evaluates `(caller_id, identity_source, action, resource, environment)` with no cross-source fallback;
 - unknown action scopes fail closed;
 - `require_human_approval` remains blocked until separately sourced approval evidence is validated for the exact caller/action scope;
 - authorization, approval, and actual execution are recorded as independent evidence facts;
@@ -116,7 +116,7 @@ The post-v1.0 work extends the original principle from **analysis decisions** in
 The current controlled boundary includes:
 
 - frozen `ProposedAction(action, resource, environment)` as untrusted proposal data;
-- separate trusted `ActionContext(caller_id)` supplied by composition/runtime code;
+- separate trusted `ActionContext(caller_id, identity_source)` supplied by composition/runtime or authentication code;
 - deterministic exact-scope authorization with `allow`, `deny`, and `require_human_approval` outcomes;
 - trusted `HumanApprovalEvidence` bound to the exact proposal and caller context;
 - `GovernedActionRuntime` as the single enforcement point before mutable execution;
@@ -127,7 +127,7 @@ The current controlled boundary includes:
 - cross-framework conformance comparing complete evidence and observable side effects with direct application execution;
 - a separate governed mutable MCP STDIO server whose tool schema cannot provide trusted caller or approval identity.
 
-The cross-framework conformance matrix covers exact allow, explicit deny, missing approval, validated trusted approval, caller mismatch, and resource escalation. For every framework, the expected security semantics and side-effect count must match the direct application baseline.
+The cross-framework conformance matrix covers exact allow, explicit deny, missing approval, validated trusted approval, caller mismatch, identity-source mismatch, and resource escalation. For every framework, the expected security semantics and side-effect count must match the direct application baseline.
 
 This is **provider-free application/framework/MCP integration evidence**. It does not claim authenticated remote identity, production-grade authorization infrastructure, provider-backed action execution, or production certification.
 

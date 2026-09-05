@@ -8,6 +8,7 @@ from agentic_lab.adapters.llamaindex.action_workflow import (
     LlamaIndexGovernedActionRuntime,
 )
 from agentic_lab.application.action_authorization import (
+    ActionAuthorizationRuleKey,
     ActionContext,
     AuthorizationOutcome,
     ProposedAction,
@@ -22,21 +23,24 @@ _ALLOWED_CALLER = "remediation-agent"
 def _runtime(
     executor: InMemoryFindingAcknowledgementExecutor,
 ) -> GovernedActionRuntime:
-    rules: dict[tuple[str, str, str, str], AuthorizationOutcome] = {
+    rules: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
         (
             _ALLOWED_CALLER,
+            "trusted_composition",
             ACKNOWLEDGE_FINDING_ACTION,
             _FINDING_RESOURCE,
             "test",
         ): "allow",
         (
             _ALLOWED_CALLER,
+            "trusted_composition",
             ACKNOWLEDGE_FINDING_ACTION,
             _FINDING_RESOURCE,
             "staging",
         ): "deny",
         (
             _ALLOWED_CALLER,
+            "trusted_composition",
             ACKNOWLEDGE_FINDING_ACTION,
             _FINDING_RESOURCE,
             "production",
