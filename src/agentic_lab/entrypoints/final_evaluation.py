@@ -92,7 +92,7 @@ def _require_int(mapping: dict[str, object], key: str, *, context: str) -> int:
     value = mapping.get(key)
     if type(value) is not int:
         raise RuntimeError(f"Expected integer {key!r} in {context}")
-    return cast(int, value)
+    return value
 
 
 def validate_final_benchmark_workspace(
@@ -124,7 +124,9 @@ def validate_final_benchmark_workspace(
                 f"expected {FINAL_EVALUATION_REPETITIONS}"
             )
 
-        overall = _object_mapping(payload.get("overall_summary"), context=f"{context}.overall_summary")
+        overall = _object_mapping(
+            payload.get("overall_summary"), context=f"{context}.overall_summary"
+        )
         overall_model = _require_string(overall, "model", context=f"{context}.overall_summary")
         if overall_model != expected_model_alias:
             raise RuntimeError(f"Final evaluation overall model differs in {context}")
