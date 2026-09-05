@@ -11,8 +11,9 @@ from agentic_lab.adapters.crewai.flow import (
     CrewAIValidatedFlowState,
 )
 from agentic_lab.adapters.fixtures.evaluation import load_evaluation_scenarios
+from agentic_lab.application.evidence import AnalysisEvidenceBundle
 from agentic_lab.application.oracle import assess_assets_deterministically
-from agentic_lab.application.validated_analysis import build_analysis_result
+from agentic_lab.application.validated_analysis import AnalysisSource, build_analysis_result
 from agentic_lab.observability import AnalysisExecutionObservation
 
 
@@ -43,7 +44,7 @@ class StubRuntimeFlow:
         self,
         state: CrewAIValidatedFlowState,
         *,
-        analysis_source: str,
+        analysis_source: AnalysisSource,
         validation_passed: bool,
         analysis_attempts: int,
         model_calls: int,
@@ -54,7 +55,7 @@ class StubRuntimeFlow:
             vulnerability=scenario.vulnerability,
             assets=scenario.assets,
         )
-        state.analysis_source = analysis_source  # type: ignore[assignment]
+        state.analysis_source = analysis_source
         state.validation_passed = validation_passed
         state.validation_reason = "controlled test validation"
         state.analysis_attempts = analysis_attempts
@@ -79,7 +80,7 @@ class StubRuntimeFlow:
             raise RuntimeError("controlled CrewAI Flow failure")
 
 
-def _evidence_bundle() -> dict[str, object]:
+def _evidence_bundle() -> AnalysisEvidenceBundle:
     scenario = load_evaluation_scenarios()[0]
     return {
         "vulnerability": scenario.vulnerability,
@@ -91,7 +92,7 @@ def _evidence_bundle() -> dict[str, object]:
 def _install_flow(
     monkeypatch: MonkeyPatch,
     *,
-    analysis_source: str = "llm",
+    analysis_source: AnalysisSource = "llm",
     validation_passed: bool = True,
     analysis_attempts: int = 1,
     model_calls: int = 1,
@@ -115,7 +116,7 @@ def test_flow_runtime_emits_one_first_pass_observation(monkeypatch: MonkeyPatch)
     observer = RecordingObserver()
     runtime = CrewAIFlowRuntime(observer=observer)
 
-    execution = runtime.run(_evidence_bundle())  # type: ignore[arg-type]
+    execution = runtime.run(_evidence_bundle())
 
     assert execution.usage.model_calls == 1
     assert observer.observations == [
@@ -137,9 +138,7 @@ def test_flow_runtime_preserves_framework_reported_calls_on_retry(
     _install_flow(monkeypatch, analysis_attempts=2, model_calls=3)
     observer = RecordingObserver()
 
-    execution = CrewAIFlowRuntime(observer=observer).run(  # type: ignore[arg-type]
-        _evidence_bundle()
-    )
+    execution = CrewAIFlowRuntime(observer=observer).run(_evidence_bundle())
 
     assert execution.output.analysis_attempts == 2
     assert execution.usage.model_calls == 3
@@ -157,7 +156,7 @@ def test_flow_runtime_emits_final_fallback_observation(monkeypatch: MonkeyPatch)
     )
     observer = RecordingObserver()
 
-    CrewAIFlowRuntime(observer=observer).run(_evidence_bundle())  # type: ignore[arg-type]
+    CrewAIFlowRuntime(observer=observer).run(_evidence_bundle())
 
     assert len(observer.observations) == 1
     observation = observer.observations[0]
@@ -174,8 +173,6 @@ def test_flow_runtime_emits_no_completed_observation_when_kickoff_fails(
     observer = RecordingObserver()
 
     with pytest.raises(RuntimeError, match="controlled CrewAI Flow failure"):
-        CrewAIFlowRuntime(observer=observer).run(  # type: ignore[arg-type]
-            _evidence_bundle()
-        )
+        CrewAIFlowRuntime(observer=observer).run(_evidence_bundle())
 
     assert observer.observations == []
