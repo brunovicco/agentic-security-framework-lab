@@ -2,9 +2,11 @@
 
 import pytest
 
+from agentic_lab.adapters.fixtures.action_approvals import InMemoryActionApprovalProvider
 from agentic_lab.adapters.fixtures.finding_actions import (
     InMemoryFindingAcknowledgementExecutor,
 )
+from agentic_lab.application.action_approval import HumanApprovalEvidence
 from agentic_lab.application.action_authorization import (
     ActionContext,
     AuthorizationOutcome,
@@ -62,6 +64,7 @@ def test_allowed_action_mutates_exact_authorized_resource() -> None:
 
     assert evidence.context == context
     assert evidence.authorization.outcome == "allow"
+    assert evidence.approval_status == "not_applicable"
     assert evidence.execution_occurred is True
     assert executor.is_acknowledged(FINDING_RESOURCE) is True
     assert executor.execution_count == 1
@@ -98,8 +101,8 @@ def test_denied_action_has_zero_side_effect() -> None:
     assert executor.execution_count == 0
 
 
-def test_approval_required_action_has_zero_side_effect() -> None:
-    """Do not simulate human approval or mutate production state automatically."""
+def test_approval_required_action_has_zero_side_effect_without_approval() -> None:
+    """Keep approval-required production state blocked when HITL evidence is absent."""
     executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
 
     evidence = _runtime(executor).execute(
@@ -108,9 +111,45 @@ def test_approval_required_action_has_zero_side_effect() -> None:
     )
 
     assert evidence.authorization.outcome == "require_human_approval"
+    assert evidence.approval_status == "missing"
     assert evidence.execution_occurred is False
     assert executor.is_acknowledged(FINDING_RESOURCE) is False
     assert executor.execution_count == 0
+
+
+def test_exact_trusted_approval_allows_only_approved_mutation() -> None:
+    """Apply the production mutation only after explicit trusted approval evidence."""
+    executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
+    proposed_action = _action(environment="production")
+    context = _context()
+    approval = HumanApprovalEvidence(
+        approval_id="approval-001",
+        approver_id="soc-reviewer",
+        proposed_action=proposed_action,
+        context=context,
+    )
+    rules: dict[tuple[str, str, str, str], AuthorizationOutcome] = {
+        (
+            REMEDIATION_AGENT,
+            "acknowledge_finding",
+            FINDING_RESOURCE,
+            "production",
+        ): "require_human_approval",
+    }
+    runtime = GovernedActionRuntime(
+        authorizer=StaticActionAuthorizationPolicy(rules),
+        executor=executor,
+        approval_provider=InMemoryActionApprovalProvider([approval]),
+    )
+
+    evidence = runtime.execute(proposed_action, context)
+
+    assert evidence.authorization.outcome == "require_human_approval"
+    assert evidence.approval_status == "validated"
+    assert evidence.human_approval == approval
+    assert evidence.execution_occurred is True
+    assert executor.is_acknowledged(FINDING_RESOURCE) is True
+    assert executor.execution_count == 1
 
 
 def test_scope_escalation_has_zero_side_effect() -> None:

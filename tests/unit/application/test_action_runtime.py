@@ -2,6 +2,7 @@
 
 import pytest
 
+from agentic_lab.application.action_approval import HumanApprovalEvidence
 from agentic_lab.application.action_authorization import (
     ActionAuthorizer,
     ActionContext,
@@ -26,6 +27,23 @@ class RecordingActionExecutor:
     def execute(self, proposed_action: ProposedAction) -> None:
         """Record one executed action without performing an external side effect."""
         self.actions.append(proposed_action)
+
+
+class RecordingApprovalProvider:
+    """Return configured approval evidence while recording trusted lookup attempts."""
+
+    def __init__(self, approval: HumanApprovalEvidence | None) -> None:
+        self._approval = approval
+        self.lookup_calls = 0
+
+    def find_approval(
+        self,
+        proposed_action: ProposedAction,
+        context: ActionContext,
+    ) -> HumanApprovalEvidence | None:
+        """Return the configured evidence without silently rebinding its scope."""
+        self.lookup_calls += 1
+        return self._approval
 
 
 class FailingAuthorizer:
@@ -68,10 +86,35 @@ def _vulnerability_action(action: str, environment: str = "test") -> ProposedAct
     )
 
 
-def test_allowed_action_reaches_executor_once() -> None:
-    """Execute exactly once after an explicit allow for trusted caller and scope."""
+def _remediation_action(resource: str = REMEDIATION_RESOURCE) -> ProposedAction:
+    return ProposedAction(
+        action="create_remediation_task",
+        resource=resource,
+        environment="production",
+    )
+
+
+def _approval(
+    proposed_action: ProposedAction,
+    context: ActionContext,
+) -> HumanApprovalEvidence:
+    return HumanApprovalEvidence(
+        approval_id="approval-001",
+        approver_id="soc-reviewer",
+        proposed_action=proposed_action,
+        context=context,
+    )
+
+
+def test_allowed_action_reaches_executor_without_approval_lookup() -> None:
+    """Execute explicit allow without consulting irrelevant human approval evidence."""
     executor = RecordingActionExecutor()
-    runtime = GovernedActionRuntime(authorizer=_authorizer(), executor=executor)
+    approval_provider = RecordingApprovalProvider(None)
+    runtime = GovernedActionRuntime(
+        authorizer=_authorizer(),
+        executor=executor,
+        approval_provider=approval_provider,
+    )
     proposed_action = _vulnerability_action("read_vulnerability")
     context = _context()
 
@@ -81,7 +124,10 @@ def test_allowed_action_reaches_executor_once() -> None:
     assert evidence.proposed_action == proposed_action
     assert evidence.context == context
     assert evidence.authorization.outcome == "allow"
+    assert evidence.approval_status == "not_applicable"
+    assert evidence.human_approval is None
     assert evidence.execution_occurred is True
+    assert approval_provider.lookup_calls == 0
 
 
 def test_unknown_caller_never_reaches_executor() -> None:
@@ -98,42 +144,94 @@ def test_unknown_caller_never_reaches_executor() -> None:
     assert evidence.context.caller_id == "unknown-agent"
     assert evidence.authorization.outcome == "deny"
     assert evidence.authorization.reason == "no_matching_rule"
+    assert evidence.approval_status == "not_applicable"
     assert evidence.execution_occurred is False
 
 
-def test_denied_action_never_reaches_executor() -> None:
-    """Block execution after an explicit deny decision."""
+def test_denied_action_cannot_be_overridden_by_human_approval() -> None:
+    """Keep explicit deny terminal even if an approval provider has evidence."""
     executor = RecordingActionExecutor()
-    runtime = GovernedActionRuntime(authorizer=_authorizer(), executor=executor)
-
-    evidence = runtime.execute(
-        _vulnerability_action("modify_vulnerability"),
-        _context(),
+    denied_action = _vulnerability_action("modify_vulnerability")
+    context = _context()
+    approval_provider = RecordingApprovalProvider(_approval(denied_action, context))
+    runtime = GovernedActionRuntime(
+        authorizer=_authorizer(),
+        executor=executor,
+        approval_provider=approval_provider,
     )
+
+    evidence = runtime.execute(denied_action, context)
 
     assert executor.actions == []
     assert evidence.authorization.outcome == "deny"
     assert evidence.authorization.reason == "explicit_deny"
+    assert evidence.approval_status == "not_applicable"
+    assert evidence.human_approval is None
     assert evidence.execution_occurred is False
+    assert approval_provider.lookup_calls == 0
 
 
-def test_approval_required_action_never_reaches_executor() -> None:
-    """Block execution while human approval is still required."""
+def test_approval_required_action_is_blocked_when_approval_is_missing() -> None:
+    """Block approval-required execution when the trusted HITL source has no evidence."""
     executor = RecordingActionExecutor()
     runtime = GovernedActionRuntime(authorizer=_authorizer(), executor=executor)
 
-    evidence = runtime.execute(
-        ProposedAction(
-            action="create_remediation_task",
-            resource=REMEDIATION_RESOURCE,
-            environment="production",
-        ),
-        _context(),
-    )
+    evidence = runtime.execute(_remediation_action(), _context())
 
     assert executor.actions == []
     assert evidence.authorization.outcome == "require_human_approval"
+    assert evidence.approval_status == "missing"
+    assert evidence.human_approval is None
     assert evidence.execution_occurred is False
+
+
+def test_exact_trusted_approval_satisfies_required_runtime_precondition() -> None:
+    """Execute only after trusted approval binds to the exact caller and action scope."""
+    executor = RecordingActionExecutor()
+    proposed_action = _remediation_action()
+    context = _context()
+    approval = _approval(proposed_action, context)
+    approval_provider = RecordingApprovalProvider(approval)
+    runtime = GovernedActionRuntime(
+        authorizer=_authorizer(),
+        executor=executor,
+        approval_provider=approval_provider,
+    )
+
+    evidence = runtime.execute(proposed_action, context)
+
+    assert executor.actions == [proposed_action]
+    assert evidence.authorization.outcome == "require_human_approval"
+    assert evidence.approval_status == "validated"
+    assert evidence.human_approval == approval
+    assert evidence.execution_occurred is True
+    assert approval_provider.lookup_calls == 1
+
+
+def test_mismatched_approval_fails_closed_before_executor() -> None:
+    """Reject approval evidence bound to a different resource scope."""
+    executor = RecordingActionExecutor()
+    proposed_action = _remediation_action()
+    context = _context()
+    mismatched_approval = _approval(
+        _remediation_action(resource="finding:other"),
+        context,
+    )
+    approval_provider = RecordingApprovalProvider(mismatched_approval)
+    runtime = GovernedActionRuntime(
+        authorizer=_authorizer(),
+        executor=executor,
+        approval_provider=approval_provider,
+    )
+
+    evidence = runtime.execute(proposed_action, context)
+
+    assert executor.actions == []
+    assert evidence.authorization.outcome == "require_human_approval"
+    assert evidence.approval_status == "invalid"
+    assert evidence.human_approval == mismatched_approval
+    assert evidence.execution_occurred is False
+    assert approval_provider.lookup_calls == 1
 
 
 def test_unknown_action_fails_closed_before_executor() -> None:
