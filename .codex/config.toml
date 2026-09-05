@@ -15,3 +15,16 @@ args = [
 env = { PYTHONPATH = "src" }
 startup_timeout_sec = 30
 tool_timeout_sec = 30
+
+[mcp_servers.agentic-security-governed-actions]
+command = "uvx"
+args = [
+  "--from",
+  "mcp[cli]==2.1.1",
+  "mcp",
+  "run",
+  "scripts/mcp_governed_action_server.py",
+]
+env = { PYTHONPATH = "src" }
+startup_timeout_sec = 30
+tool_timeout_sec = 30
