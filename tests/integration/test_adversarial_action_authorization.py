@@ -3,9 +3,11 @@
 import pytest
 from pydantic import ValidationError
 
+from agentic_lab.adapters.fixtures.action_approvals import InMemoryActionApprovalProvider
 from agentic_lab.adapters.fixtures.finding_actions import (
     InMemoryFindingAcknowledgementExecutor,
 )
+from agentic_lab.application.action_approval import HumanApprovalEvidence
 from agentic_lab.application.action_authorization import (
     ActionContext,
     AuthorizationDecision,
@@ -158,6 +160,36 @@ def test_retry_after_deny_does_not_accumulate_authority() -> None:
     assert authorizer.authorization_calls == 2
     assert executor.execution_count == 0
     assert executor.is_acknowledged(FINDING_RESOURCE) is False
+
+
+def test_consumed_human_approval_cannot_be_replayed() -> None:
+    """Require a fresh trusted approval for a repeated mutable production action."""
+    executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
+    proposed_action = _action(environment="production")
+    context = _context()
+    approval = HumanApprovalEvidence(
+        approval_id="approval-replay-001",
+        approver_id="soc-reviewer",
+        proposed_action=proposed_action,
+        context=context,
+    )
+    runtime = GovernedActionRuntime(
+        authorizer=_policy(),
+        executor=executor,
+        approval_provider=InMemoryActionApprovalProvider([approval]),
+    )
+
+    first = runtime.execute(proposed_action, context)
+    replay = runtime.execute(proposed_action, context)
+
+    assert first.authorization.outcome == "require_human_approval"
+    assert first.approval_status == "validated"
+    assert first.execution_occurred is True
+    assert replay.authorization.outcome == "require_human_approval"
+    assert replay.approval_status == "missing"
+    assert replay.execution_occurred is False
+    assert executor.execution_count == 1
+    assert executor.is_acknowledged(FINDING_RESOURCE) is True
 
 
 def test_tool_substitution_is_authorized_as_the_actual_proposed_action() -> None:
