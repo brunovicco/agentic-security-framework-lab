@@ -17,6 +17,7 @@ AuthorizationReason = Literal[
     "no_matching_rule",
 ]
 CallerIdentitySource = Literal["trusted_composition", "api_key"]
+ActionAuthorizationRuleKey = tuple[str, CallerIdentitySource, str, str, str]
 
 _REASON_BY_OUTCOME: dict[AuthorizationOutcome, AuthorizationReason] = {
     "allow": "explicit_allow",
@@ -75,11 +76,11 @@ class ActionAuthorizer(Protocol):
 
 
 class StaticActionAuthorizationPolicy:
-    """Authorize exact caller/action/resource/environment scopes from trusted rules."""
+    """Authorize exact caller/source/action/resource/environment scopes from trusted rules."""
 
     def __init__(
         self,
-        rules: Mapping[tuple[str, str, str, str], AuthorizationOutcome],
+        rules: Mapping[ActionAuthorizationRuleKey, AuthorizationOutcome],
     ) -> None:
         """Copy trusted policy rules so later caller mutation cannot change policy."""
         self._rules = dict(rules)
@@ -90,8 +91,9 @@ class StaticActionAuthorizationPolicy:
         context: ActionContext,
     ) -> AuthorizationDecision:
         """Apply one exact-scope rule or deny fail-closed when no rule exists."""
-        policy_key = (
+        policy_key: ActionAuthorizationRuleKey = (
             context.caller_id,
+            context.identity_source,
             proposed_action.action,
             proposed_action.resource,
             proposed_action.environment,
