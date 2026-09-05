@@ -109,8 +109,35 @@ ProposedAction = untrusted intent
 ActionContext = trusted authorization context
 ```
 
+## Evolution note: v1.2 Phase 34
+
+Phase 34 makes the provenance of trusted caller identity explicit without claiming an authentication mechanism that the lab does not yet implement.
+
+`ActionContext` now carries:
+
+```text
+caller_id
+identity_source
+```
+
+The closed `CallerIdentitySource` currently permits only `trusted_composition`. This value means that trusted application/composition code supplied the caller identity for the local execution boundary. It is provenance evidence, not proof that the caller was authenticated.
+
+Authentication-like values such as `authenticated_principal` are intentionally unsupported until a real authentication boundary can derive caller context from verifiable identity evidence. Allowing arbitrary source strings now would create the appearance of stronger trust without a mechanism that establishes it.
+
+Because `ActionExecutionEvidence` already embeds the exact `ActionContext` used by authorization, identity provenance naturally becomes part of runtime evidence without adding a second identity channel.
+
+`ProposedAction` continues to reject both `caller_id` and `identity_source`. MCP Tool schemas likewise keep those trusted fields outside model-controlled input.
+
+The extended invariant is:
+
+```text
+model intent != caller identity != identity provenance != authorization decision
+```
+
+`identity_source` is not currently a policy dimension. The lab has only one truthful trusted source, so source-aware policy would add no meaningful distinction yet. Revisit that question only when more than one genuinely established trusted identity source exists.
+
 ## Revisit when
 
-Revisit this decision if a later requirement demonstrates that policy ownership must move outside the application boundary, or if resource/caller/environment rules require a dedicated policy representation or external engine. Any replacement must preserve deterministic final authorization and keep framework adapters from becoming the source of authority.
+Revisit this decision if a later requirement demonstrates that policy ownership must move outside the application boundary, if resource/caller/environment rules require a dedicated policy representation or external engine, or when a real authenticated identity boundary justifies additional trusted identity-source values. Any replacement must preserve deterministic final authorization and keep framework adapters from becoming the source of authority.
 
-Refs #117, #121, #127
+Refs #117, #121, #127, #150
