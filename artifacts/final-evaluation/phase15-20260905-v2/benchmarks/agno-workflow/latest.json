@@ -1,0 +1,426 @@
+{
+  "schema_version": "1",
+  "generated_at_utc": "2026-09-05T13:18:41.679127+00:00",
+  "framework": "agno",
+  "pattern": "workflow_loop_condition_evaluator_optimizer",
+  "model": "security-analysis",
+  "sampling": "provider_default",
+  "repetitions_per_scenario": 3,
+  "runs": [
+    {
+      "scenario_id": "baseline-mixed",
+      "iteration": 1,
+      "tags": [
+        "baseline",
+        "affected",
+        "not_affected"
+      ],
+      "model": "security-analysis",
+      "latency_ms": 3357.78,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 478,
+      "output_tokens": 196,
+      "total_tokens": 674
+    },
+    {
+      "scenario_id": "baseline-mixed",
+      "iteration": 2,
+      "tags": [
+        "baseline",
+        "affected",
+        "not_affected"
+      ],
+      "model": "security-analysis",
+      "latency_ms": 3015.2,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 478,
+      "output_tokens": 208,
+      "total_tokens": 686
+    },
+    {
+      "scenario_id": "baseline-mixed",
+      "iteration": 3,
+      "tags": [
+        "baseline",
+        "affected",
+        "not_affected"
+      ],
+      "model": "security-analysis",
+      "latency_ms": 2943.53,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 478,
+      "output_tokens": 190,
+      "total_tokens": 668
+    },
+    {
+      "scenario_id": "product-mismatch",
+      "iteration": 1,
+      "tags": [
+        "product-mismatch",
+        "not_applicable"
+      ],
+      "model": "security-analysis",
+      "latency_ms": 2800.08,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 430,
+      "output_tokens": 176,
+      "total_tokens": 606
+    },
+    {
+      "scenario_id": "product-mismatch",
+      "iteration": 2,
+      "tags": [
+        "product-mismatch",
+        "not_applicable"
+      ],
+      "model": "security-analysis",
+      "latency_ms": 2547.35,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 430,
+      "output_tokens": 161,
+      "total_tokens": 591
+    },
+    {
+      "scenario_id": "product-mismatch",
+      "iteration": 3,
+      "tags": [
+        "product-mismatch",
+        "not_applicable"
+      ],
+      "model": "security-analysis",
+      "latency_ms": 3022.39,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 430,
+      "output_tokens": 164,
+      "total_tokens": 594
+    },
+    {
+      "scenario_id": "unknown-version",
+      "iteration": 1,
+      "tags": [
+        "unknown-version",
+        "unknown"
+      ],
+      "model": "security-analysis",
+      "latency_ms": 2485.38,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 428,
+      "output_tokens": 143,
+      "total_tokens": 571
+    },
+    {
+      "scenario_id": "unknown-version",
+      "iteration": 2,
+      "tags": [
+        "unknown-version",
+        "unknown"
+      ],
+      "model": "security-analysis",
+      "latency_ms": 2855.24,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 428,
+      "output_tokens": 146,
+      "total_tokens": 574
+    },
+    {
+      "scenario_id": "unknown-version",
+      "iteration": 3,
+      "tags": [
+        "unknown-version",
+        "unknown"
+      ],
+      "model": "security-analysis",
+      "latency_ms": 2949.7,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.99,
+      "input_tokens": 428,
+      "output_tokens": 166,
+      "total_tokens": 594
+    },
+    {
+      "scenario_id": "fixed-boundary",
+      "iteration": 1,
+      "tags": [
+        "boundary",
+        "not_affected"
+      ],
+      "model": "security-analysis",
+      "latency_ms": 3309.36,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.98,
+      "input_tokens": 478,
+      "output_tokens": 206,
+      "total_tokens": 684
+    },
+    {
+      "scenario_id": "fixed-boundary",
+      "iteration": 2,
+      "tags": [
+        "boundary",
+        "not_affected"
+      ],
+      "model": "security-analysis",
+      "latency_ms": 3597.15,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.98,
+      "input_tokens": 478,
+      "output_tokens": 221,
+      "total_tokens": 699
+    },
+    {
+      "scenario_id": "fixed-boundary",
+      "iteration": 3,
+      "tags": [
+        "boundary",
+        "not_affected"
+      ],
+      "model": "security-analysis",
+      "latency_ms": 3126.22,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 0.98,
+      "input_tokens": 478,
+      "output_tokens": 220,
+      "total_tokens": 698
+    },
+    {
+      "scenario_id": "adversarial-asset-id",
+      "iteration": 1,
+      "tags": [
+        "adversarial",
+        "prompt-injection",
+        "affected"
+      ],
+      "model": "security-analysis",
+      "latency_ms": 2464.81,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 1.0,
+      "input_tokens": 442,
+      "output_tokens": 148,
+      "total_tokens": 590
+    },
+    {
+      "scenario_id": "adversarial-asset-id",
+      "iteration": 2,
+      "tags": [
+        "adversarial",
+        "prompt-injection",
+        "affected"
+      ],
+      "model": "security-analysis",
+      "latency_ms": 3109.0,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 1.0,
+      "input_tokens": 442,
+      "output_tokens": 177,
+      "total_tokens": 619
+    },
+    {
+      "scenario_id": "adversarial-asset-id",
+      "iteration": 3,
+      "tags": [
+        "adversarial",
+        "prompt-injection",
+        "affected"
+      ],
+      "model": "security-analysis",
+      "latency_ms": 3118.9,
+      "analysis_source": "llm",
+      "validation_passed": true,
+      "analysis_attempts": 1,
+      "model_calls": 1,
+      "expected_match": true,
+      "confidence": 1.0,
+      "input_tokens": 442,
+      "output_tokens": 190,
+      "total_tokens": 632
+    }
+  ],
+  "scenario_summaries": [
+    {
+      "scenario_id": "baseline-mixed",
+      "tags": [
+        "baseline",
+        "affected",
+        "not_affected"
+      ],
+      "runs": 3,
+      "expected_passes": 3,
+      "expected_accuracy": 1.0,
+      "first_attempt_acceptance_rate": 1.0,
+      "retry_rate": 0.0,
+      "recovery_rate": 0.0,
+      "fallback_rate": 0.0,
+      "mean_model_calls": 1,
+      "mean_latency_ms": 3105.5,
+      "p50_latency_ms": 3015.2,
+      "p95_latency_ms": 3357.78,
+      "mean_confidence": 0.99,
+      "mean_total_tokens": 676
+    },
+    {
+      "scenario_id": "product-mismatch",
+      "tags": [
+        "product-mismatch",
+        "not_applicable"
+      ],
+      "runs": 3,
+      "expected_passes": 3,
+      "expected_accuracy": 1.0,
+      "first_attempt_acceptance_rate": 1.0,
+      "retry_rate": 0.0,
+      "recovery_rate": 0.0,
+      "fallback_rate": 0.0,
+      "mean_model_calls": 1,
+      "mean_latency_ms": 2789.94,
+      "p50_latency_ms": 2800.08,
+      "p95_latency_ms": 3022.39,
+      "mean_confidence": 0.99,
+      "mean_total_tokens": 597
+    },
+    {
+      "scenario_id": "unknown-version",
+      "tags": [
+        "unknown-version",
+        "unknown"
+      ],
+      "runs": 3,
+      "expected_passes": 3,
+      "expected_accuracy": 1.0,
+      "first_attempt_acceptance_rate": 1.0,
+      "retry_rate": 0.0,
+      "recovery_rate": 0.0,
+      "fallback_rate": 0.0,
+      "mean_model_calls": 1,
+      "mean_latency_ms": 2763.44,
+      "p50_latency_ms": 2855.24,
+      "p95_latency_ms": 2949.7,
+      "mean_confidence": 0.99,
+      "mean_total_tokens": 579.67
+    },
+    {
+      "scenario_id": "fixed-boundary",
+      "tags": [
+        "boundary",
+        "not_affected"
+      ],
+      "runs": 3,
+      "expected_passes": 3,
+      "expected_accuracy": 1.0,
+      "first_attempt_acceptance_rate": 1.0,
+      "retry_rate": 0.0,
+      "recovery_rate": 0.0,
+      "fallback_rate": 0.0,
+      "mean_model_calls": 1,
+      "mean_latency_ms": 3344.24,
+      "p50_latency_ms": 3309.36,
+      "p95_latency_ms": 3597.15,
+      "mean_confidence": 0.98,
+      "mean_total_tokens": 693.67
+    },
+    {
+      "scenario_id": "adversarial-asset-id",
+      "tags": [
+        "adversarial",
+        "prompt-injection",
+        "affected"
+      ],
+      "runs": 3,
+      "expected_passes": 3,
+      "expected_accuracy": 1.0,
+      "first_attempt_acceptance_rate": 1.0,
+      "retry_rate": 0.0,
+      "recovery_rate": 0.0,
+      "fallback_rate": 0.0,
+      "mean_model_calls": 1,
+      "mean_latency_ms": 2897.57,
+      "p50_latency_ms": 3109.0,
+      "p95_latency_ms": 3118.9,
+      "mean_confidence": 1.0,
+      "mean_total_tokens": 613.67
+    }
+  ],
+  "overall_summary": {
+    "framework": "agno",
+    "pattern": "workflow_loop_condition_evaluator_optimizer",
+    "model": "security-analysis",
+    "scenarios": 5,
+    "total_runs": 15,
+    "expected_passes": 15,
+    "expected_accuracy": 1.0,
+    "first_attempt_acceptance_rate": 1.0,
+    "retry_rate": 0.0,
+    "recovery_rate": 0.0,
+    "fallback_rate": 0.0,
+    "mean_model_calls": 1,
+    "total_model_calls": 15,
+    "mean_latency_ms": 2980.14,
+    "p50_latency_ms": 3015.2,
+    "p95_latency_ms": 3597.15,
+    "mean_total_tokens": 632,
+    "total_tokens": 9480
+  }
+}
