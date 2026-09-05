@@ -5,6 +5,7 @@ from agentic_lab.adapters.fixtures.finding_actions import (
 )
 from agentic_lab.adapters.langgraph.action_graph import run_governed_action_graph
 from agentic_lab.application.action_authorization import (
+    ActionAuthorizationRuleKey,
     ActionContext,
     AuthorizationOutcome,
     ProposedAction,
@@ -19,11 +20,24 @@ REMEDIATION_AGENT = "remediation-agent"
 def _runtime(
     executor: InMemoryFindingAcknowledgementExecutor,
 ) -> GovernedActionRuntime:
-    rules: dict[tuple[str, str, str, str], AuthorizationOutcome] = {
-        (REMEDIATION_AGENT, "acknowledge_finding", FINDING_RESOURCE, "test"): "allow",
-        (REMEDIATION_AGENT, "acknowledge_finding", FINDING_RESOURCE, "staging"): "deny",
+    rules: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
         (
             REMEDIATION_AGENT,
+            "trusted_composition",
+            "acknowledge_finding",
+            FINDING_RESOURCE,
+            "test",
+        ): "allow",
+        (
+            REMEDIATION_AGENT,
+            "trusted_composition",
+            "acknowledge_finding",
+            FINDING_RESOURCE,
+            "staging",
+        ): "deny",
+        (
+            REMEDIATION_AGENT,
+            "trusted_composition",
             "acknowledge_finding",
             FINDING_RESOURCE,
             "production",
