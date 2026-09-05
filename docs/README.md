@@ -75,7 +75,7 @@ Recommended order:
 2. [Privacy](PRIVACY.md)
 3. [Security experiments](security/)
 4. [MCP overview](MCP.md)
-5. [MCP v2 local transport](mcp/V2_LOCAL_TRANSPORT.md)
+5. [MCP v2 implementation notes](mcp/README.md)
 6. [Architecture decision records](adr/)
 
 Focus on:
