@@ -11,6 +11,7 @@ from agentic_lab.observability.observer import (
     AnalysisObserver,
     NullAnalysisObserver,
 )
+from agentic_lab.observability.opentelemetry import OpenTelemetryAnalysisObserver
 
 __all__ = [
     "NULL_ANALYSIS_OBSERVER",
@@ -18,6 +19,7 @@ __all__ = [
     "AnalysisObserver",
     "FrameworkName",
     "NullAnalysisObserver",
+    "OpenTelemetryAnalysisObserver",
     "WorkflowName",
     "analysis_span_attributes",
 ]
