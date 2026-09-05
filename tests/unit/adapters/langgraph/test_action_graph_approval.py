@@ -7,6 +7,7 @@ from agentic_lab.adapters.fixtures.finding_actions import (
 from agentic_lab.adapters.langgraph.action_graph import run_governed_action_graph
 from agentic_lab.application.action_approval import HumanApprovalEvidence
 from agentic_lab.application.action_authorization import (
+    ActionAuthorizationRuleKey,
     ActionContext,
     AuthorizationOutcome,
     ProposedAction,
@@ -32,9 +33,10 @@ def test_langgraph_executes_validated_approval_without_hitl_logic_in_graph() -> 
         proposed_action=proposed_action,
         context=context,
     )
-    rules: dict[tuple[str, str, str, str], AuthorizationOutcome] = {
+    rules: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
         (
             REMEDIATION_AGENT,
+            "trusted_composition",
             "acknowledge_finding",
             FINDING_RESOURCE,
             "production",
