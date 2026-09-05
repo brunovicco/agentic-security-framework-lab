@@ -90,12 +90,20 @@ def _require_clean_worktree(repo_root: Path) -> str:
 
 
 def _benchmark_environment(repo_root: Path) -> dict[str, str]:
-    """Build child-process environment without logging credentials or legacy model selection."""
+    """Build a fail-safe child environment for provider-backed benchmark execution."""
     gateway_base_url()
     gateway_api_key()
 
     environment = dict(os.environ)
     environment.pop("AGENTIC_LAB_MODEL", None)
+
+    # Framework-owned telemetry is opt-out for final evaluation. CrewAI 1.15.18
+    # treats first execution as a special trace-collection path; CREWAI_TESTING
+    # prevents that vendor path without disabling this project's OTel contracts.
+    environment["CREWAI_TRACING_ENABLED"] = "false"
+    environment["CREWAI_DISABLE_TELEMETRY"] = "true"
+    environment["CREWAI_DISABLE_TRACKING"] = "true"
+    environment["CREWAI_TESTING"] = "true"
     environment["AGNO_TELEMETRY"] = "false"
 
     source_root = str(repo_root / "src")

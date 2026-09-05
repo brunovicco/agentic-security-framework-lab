@@ -150,6 +150,7 @@ class CrewAIRuntime:
             tasks=[task],
             process=Process.sequential,
             verbose=False,
+            tracing=False,
         )
 
         execution_output = cast(_CrewExecutionOutput, cast(_CrewKickoff, crew).kickoff())
