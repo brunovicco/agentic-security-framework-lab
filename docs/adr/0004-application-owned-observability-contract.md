@@ -2,10 +2,11 @@
 
 - Status: Accepted
 - Date: 2026-09-04
+- Phase 14 milestone: Completed 2026-09-05
 
 ## Context
 
-The lab now executes the same security-sensitive workload through LangGraph, CrewAI, LlamaIndex, and Agno, with provider access centralized behind LiteLLM and a local MCP v2 capability boundary.
+The lab executes the same security-sensitive workload through LangGraph, CrewAI, LlamaIndex, and Agno, with provider access centralized behind LiteLLM and a local MCP v2 capability boundary.
 
 Each framework and provider can expose its own tracing or telemetry integrations. Enabling those independently would make the first observability dataset framework-specific and could also capture prompts, retrieved evidence, rationales, evaluator feedback, or provider details before the project has defined a data-minimization policy.
 
@@ -17,7 +18,7 @@ OpenTelemetry's current Python guidance supports manual instrumentation for mean
 
 Define a small framework-neutral observation contract for one logical validated-analysis execution before instrumenting individual framework/provider internals.
 
-The first logical span is named:
+The logical span is named:
 
 ```text
 validated_analysis
@@ -37,11 +38,37 @@ agentic.security.human_review.required
 
 The contract contains operational facts already produced by the controlled workload. It does not contain the analyzed vulnerability or asset data itself.
 
-The foundation keeps OpenTelemetry out of the domain and application packages. `agentic_lab.observability` defines only plain Python contracts. An isolated CI check maps that contract to OpenTelemetry SDK spans with an in-memory exporter. Runtime SDK/exporter wiring will be introduced separately.
+OpenTelemetry remains outside the domain and application packages. `agentic_lab.observability` owns the logical observation, observer port, safe attribute mapping, and a tracer-compatible `OpenTelemetryAnalysisObserver`. SDK provider, processor, exporter, and collector configuration remain deployment composition concerns.
+
+## Implemented runtime boundaries
+
+The Phase 14 milestone now emits the same logical observation from every controlled framework surface:
+
+- LangGraph evaluator-optimizer;
+- CrewAI Agent/Crew;
+- CrewAI Flow;
+- LlamaIndex Workflow;
+- Agno Workflow.
+
+Each integration emits only after the logical execution has a final validated output and the strongest normalized model-call count available at that framework boundary.
+
+`analysis_attempts` and `model_calls` are deliberately separate concepts. Framework-reported request counts are preserved when available rather than collapsed into evaluator attempts. Failed or incomplete executions do not emit a completed logical observation.
+
+The framework adapters depend only on the project-owned observer port. They do not import the OpenTelemetry SDK or configure exporters.
+
+## OpenTelemetry backend boundary
+
+`OpenTelemetryAnalysisObserver` converts one `AnalysisExecutionObservation` into one `validated_analysis` span using an injected tracer-like object.
+
+The observer does not create a `TracerProvider`, choose a span processor, configure an OTLP endpoint, or instantiate a collector. Those decisions belong to the deployment composition root because they vary by environment and backend.
+
+An isolated CI check installs `opentelemetry-sdk==1.44.0`, creates a real SDK tracer with an in-memory exporter, passes that tracer through `OpenTelemetryAnalysisObserver`, and verifies that exactly one span is exported with exactly the seven allowed attributes.
+
+A network exporter is intentionally not required to prove the application observability contract. Adding an OTLP collector or vendor backend becomes justified when the lab has an actual deployment target or operational requirement, not merely to expand the technology list.
 
 ## Data-minimization rule
 
-The following are excluded from the foundation span contract:
+The following are excluded from the span contract:
 
 - prompts or system instructions;
 - evidence documents or retrieved content;
@@ -59,7 +86,7 @@ A future requirement to capture any content-bearing field requires a separate de
 
 Framework-native traces are useful for debugging implementation details but do not provide a stable cross-framework semantic layer by themselves.
 
-If one framework records graph nodes, another records crews/tasks, and another records workflow steps, comparing those raw traces can confuse framework structure with workload semantics. The project-owned logical span gives every implementation a common parent operation before framework-specific child spans are considered.
+If one framework records graph nodes, another records crews/tasks, and another records workflow steps, comparing those raw traces can confuse framework structure with workload semantics. The project-owned logical span gives every implementation a common operation before framework-specific child spans are considered.
 
 Framework/provider telemetry may be added later as child detail, but it must not become the source of truth for deterministic validation, retry, fallback, or policy outcomes.
 
@@ -73,27 +100,30 @@ Custom `agentic.security.*` attributes are therefore explicit project vocabulary
 
 Advantages:
 
-- comparable logical traces across frameworks;
+- comparable logical traces across all controlled framework surfaces;
 - explicit privacy/data-minimization boundary;
-- no dependency from domain/application code to OpenTelemetry;
-- exporter choice remains deployment-owned;
-- framework telemetry can be layered beneath a stable project semantic operation.
+- no dependency from domain/application/framework adapters to the OpenTelemetry SDK;
+- exporter and collector choice remain deployment-owned;
+- framework telemetry can be layered beneath a stable project semantic operation;
+- framework-specific request-count semantics remain visible instead of being normalized inaccurately.
 
-Costs:
+Costs and deliberate limits:
 
-- the first span is intentionally coarse;
-- framework step timings are not captured yet;
-- provider call spans and token semantic conventions remain separate work;
-- runtime wiring still needs to be implemented across the workflow adapters.
+- the logical span is intentionally coarse;
+- framework step timings are not captured;
+- provider transport spans and token semantic conventions remain separate concerns;
+- there is no network collector or production telemetry backend in the lab milestone;
+- deployment code must provide a configured tracer when external export is required.
 
 ## Verification strategy
 
-The foundation is verified in two layers:
+The completed milestone is verified in three layers:
 
-1. normal unit tests validate observation invariants and the exact safe attribute allowlist without OpenTelemetry;
-2. an isolated OpenTelemetry SDK check uses an in-memory exporter to prove one observation becomes one low-cardinality span with only those attributes.
+1. unit tests validate observation invariants and the exact safe attribute allowlist without OpenTelemetry;
+2. provider-free framework tests prove each runtime emits exactly one final logical observation across first-pass, retry, fallback, incomplete-telemetry, and failure paths relevant to that framework;
+3. an isolated OpenTelemetry SDK 1.44.0 check uses a real tracer and in-memory exporter to prove `OpenTelemetryAnalysisObserver` emits one low-cardinality span with only the seven allowed attributes.
 
-No network exporter is required for this stage.
+MCP v2 compatibility and real STDIO Host/Client checks remain part of the same project quality workflow, protecting the previous phase while observability evolves.
 
 ## References checked
 
