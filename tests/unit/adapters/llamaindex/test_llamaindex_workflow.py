@@ -1,7 +1,10 @@
 """Tests for the native LlamaIndex evaluator-optimizer Workflow."""
 
 import asyncio
+import threading
 from typing import cast
+
+from workflows.errors import WorkflowTimeoutError
 
 from agentic_lab.adapters.fixtures.demo import (
     DEMO_CVE_ID,
@@ -45,6 +48,27 @@ class SequenceAnalyzer:
         assert len(assets) == 2
         self.calls.append(feedback)
         return self._drafts[len(self.calls) - 1]
+
+
+class BlockingAnalyzer:
+    """Block synchronously long enough to expose event-loop timeout starvation."""
+
+    def __init__(self) -> None:
+        self.started = threading.Event()
+        self.release = threading.Event()
+
+    def analyze(
+        self,
+        vulnerability: VulnerabilityEvidence,
+        assets: tuple[AssetInventoryItem, ...],
+        feedback: str | None = None,
+    ) -> LLMAnalysisDraft:
+        assert vulnerability["cve_id"] == DEMO_CVE_ID
+        assert len(assets) == 2
+        assert feedback is None
+        self.started.set()
+        self.release.wait(timeout=0.5)
+        return _correct_draft()
 
 
 class StubUsageRunner:
@@ -182,6 +206,35 @@ def test_workflow_accepts_correct_first_draft_and_applies_policy() -> None:
     assert output.attempt_trace[0].attempt == 1
     assert output.attempt_trace[0].input_feedback is None
     assert output.attempt_trace[0].validation_passed is True
+
+
+def test_workflow_timeout_is_not_starved_by_blocking_sync_analyzer() -> None:
+    analyzer = BlockingAnalyzer()
+    bundle = _evidence_bundle()
+
+    async def run_until_timeout() -> None:
+        workflow = LlamaIndexValidatedAnalysisWorkflow(analyzer, timeout=0.05)
+        loop = asyncio.get_running_loop()
+        started_at = loop.time()
+
+        try:
+            await workflow.run(
+                start_event=ValidatedAnalysisStartEvent(
+                    vulnerability=bundle["vulnerability"],
+                    assets=bundle["assets"],
+                    policy=bundle["policy"],
+                )
+            )
+        except WorkflowTimeoutError:
+            elapsed = loop.time() - started_at
+            assert analyzer.started.is_set()
+            assert elapsed < 0.25
+        else:
+            raise AssertionError("Expected the Workflow orchestration timeout to expire")
+        finally:
+            analyzer.release.set()
+
+    asyncio.run(run_until_timeout())
 
 
 def test_workflow_retries_with_evaluator_feedback_and_recovers() -> None:
