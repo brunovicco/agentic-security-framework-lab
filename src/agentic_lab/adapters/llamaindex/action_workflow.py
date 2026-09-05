@@ -31,13 +31,13 @@ class LlamaIndexGovernedActionWorkflow(Workflow):
     ) -> None:
         """Bind trusted application dependencies outside Workflow event data."""
         super().__init__(timeout=timeout, verbose=False)
-        self._runtime = runtime
+        self._action_runtime = runtime
         self._context = context
 
     @step
     async def execute_governed_action(self, ev: GovernedActionStartEvent) -> StopEvent:
         """Delegate authorization and enforcement to the application runtime."""
-        evidence = self._runtime.execute(
+        evidence = self._action_runtime.execute(
             ev.proposed_action,
             self._context,
         )
@@ -53,13 +53,13 @@ class LlamaIndexGovernedActionRuntime:
         context: ActionContext,
     ) -> None:
         """Store trusted application dependencies outside Workflow input events."""
-        self._runtime = runtime
+        self._action_runtime = runtime
         self._context = context
 
     async def arun(self, proposed_action: ProposedAction) -> ActionExecutionEvidence:
         """Execute one proposed action asynchronously through LlamaIndex Workflow."""
         workflow = LlamaIndexGovernedActionWorkflow(
-            runtime=self._runtime,
+            runtime=self._action_runtime,
             context=self._context,
         )
         raw_output = cast(
