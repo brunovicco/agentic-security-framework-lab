@@ -8,6 +8,31 @@ The earlier five-way benchmark remains valid historical evidence. It must not be
 
 The final evaluation therefore reuses the existing benchmark entry points while changing only their execution workspace and evidence destination.
 
+## Completed Phase 15 evidence
+
+The accepted provider-backed Phase 15 run is persisted immutably at:
+
+```text
+artifacts/final-evaluation/phase15-20260905-v2/
+```
+
+Its manifest records:
+
+- evaluated commit: `dd48c2490fc4ec1c76093577f7944d76a6fbc572`;
+- governed client-facing model alias: `security-analysis`;
+- three repetitions per scenario;
+- five framework variants and the consolidated five-way comparison.
+
+The evidence was merged by PR #106. All five variants reached 100% expected accuracy across 75 framework executions. The run made 76 model calls because LlamaIndex `product-mismatch` iteration 1 exercised two bounded analysis attempts and then the shared deterministic oracle fallback. That anomaly is intentionally preserved as evidence rather than normalized away.
+
+The successful rerun produced no CrewAI proprietary trace prompt, trace link, or trace batch. The final-evaluation composition explicitly disables CrewAI proprietary tracing/telemetry/tracking, including the pinned first-execution collection path, while leaving project-owned OpenTelemetry independent.
+
+Canonical Phase 15 evidence:
+
+- [`manifest.json`](../../artifacts/final-evaluation/phase15-20260905-v2/manifest.json)
+- [five-way human-readable comparison](../../artifacts/final-evaluation/phase15-20260905-v2/benchmarks/comparison/five-way-latest.md)
+- [five-way machine-readable comparison](../../artifacts/final-evaluation/phase15-20260905-v2/benchmarks/comparison/five-way-latest.json)
+
 ## Execution boundary
 
 ```text
@@ -84,15 +109,15 @@ The runner requires a clean committed Git worktree before any provider-backed ex
 
 Generated final evidence makes the worktree dirty only after the benchmark completes, which is expected: the evidence can then be reviewed and committed in a dedicated follow-up change.
 
-## Gateway and secret handling
+## Gateway, telemetry, and secret handling
 
 The final evaluation uses the existing gateway environment contract. It verifies that the gateway endpoint and client credential are configured but never prints their values.
 
-`AGENTIC_LAB_MODEL` is removed from child-process environments so the obsolete direct-provider selector cannot influence the proof. Agno vendor telemetry remains disabled through `AGNO_TELEMETRY=false`.
+`AGENTIC_LAB_MODEL` is removed from child-process environments so the obsolete direct-provider selector cannot influence the proof. The final-evaluation child environment also disables CrewAI proprietary tracing/telemetry/tracking and Agno vendor telemetry. It deliberately does **not** set `OTEL_SDK_DISABLED`, because project-owned OpenTelemetry remains a separate logical observability boundary.
 
 No provider credential is stored in the final-evaluation bundle.
 
-## Running the evaluation
+## Running a new evaluation
 
 With the existing LiteLLM gateway already configured and available:
 
@@ -100,18 +125,24 @@ With the existing LiteLLM gateway already configured and available:
 uv run python scripts/run_final_evaluation.py
 ```
 
-An explicit immutable run identifier may be supplied when useful:
+The runner generates a new UTC run identifier by default. An explicit immutable identifier may be supplied when useful, but an existing identifier cannot be reused:
 
 ```bash
-uv run python scripts/run_final_evaluation.py --run-id phase15-20260905
+uv run python scripts/run_final_evaluation.py --run-id <new-run-id>
 ```
+
+Do not reuse `phase15-20260905-v2`; that identifier belongs to the accepted immutable Phase 15 evidence.
 
 Provider-backed final evaluation is intentionally not part of normal CI. The repository quality gate must remain provider-free and must not require external provider credentials.
 
 ## What this evidence proves
 
-A successful final-evaluation bundle proves that the five current framework entry points can execute the shared evaluation workload under the current committed gateway boundary and can still produce mutually comparable benchmark artifacts.
+The accepted Phase 15 bundle proves that the five current framework entry points executed the shared evaluation workload under the committed centralized gateway boundary and produced mutually comparable benchmark artifacts.
 
-It does not prove statistical significance, production latency SLOs, broad prompt-injection resistance, or production OpenTelemetry exporter readiness.
+It also demonstrates the difference between model quality and system safety: one LlamaIndex execution failed deterministic validation on both allowed LLM attempts, yet the application-owned oracle fallback preserved the expected final result.
+
+It does not prove statistical significance, production latency SLOs, broad prompt-injection resistance, a universal framework ranking, or production OpenTelemetry exporter readiness.
+
+The `security-analysis` alias proves the client-facing governed identity requested by each framework. It is not independent attestation of the provider-native model selected behind the gateway.
 
 OpenTelemetry provider, processor, exporter, and collector configuration remains a deployment composition concern and is not required to establish benchmark comparability.
