@@ -1,14 +1,72 @@
 # Agentic Security Framework Lab
 
+[English](README.md) | [Português (Brasil)](README.pt-br.md)
+
 [![quality](https://github.com/brunovicco/agentic-security-framework-lab/actions/workflows/quality.yml/badge.svg)](https://github.com/brunovicco/agentic-security-framework-lab/actions/workflows/quality.yml)
 
-Um laboratório controlado de engenharia para comparar **LangGraph, CrewAI, LlamaIndex e Agno** usando a mesma carga de trabalho sensível à segurança.
+Um laboratório de engenharia framework-neutral para construir, proteger, avaliar e comparar **workflows de IA agêntica** sob os mesmos controles determinísticos.
 
-O projeto busca responder a uma pergunta prática e deliberadamente restrita:
+O projeto implementa a mesma carga de análise de vulnerabilidades com **LangGraph, CrewAI, LlamaIndex e Agno**, centraliza acesso a providers com **LiteLLM**, valida o raciocínio do modelo fora do LLM, demonstra compatibilidade **MCP** e emite observações lógicas de **OpenTelemetry** sem conteúdo sensível.
 
-> O que muda quando diferentes abstrações de orquestração agêntica resolvem o mesmo problema sob as mesmas evidências, verdade esperada, validação determinística, retry, fallback, política e fronteira governada de modelo?
+> **Ideia central:** frameworks podem ser responsáveis pela orquestração, mas não devem automaticamente ser donos da autoridade de segurança, política, evidência ou decisão final.
 
-A carga de trabalho é análise de aplicabilidade de vulnerabilidades. O LLM pode raciocinar sobre a evidência, mas nunca é a autoridade final sobre decisões sensíveis de segurança.
+## Por que este projeto importa
+
+Frameworks agênticos tornam protótipos fáceis. Sistemas de IA mais próximos de produção precisam responder perguntas mais difíceis:
+
+- O que acontece quando o modelo erra, mas o sistema ainda precisa produzir um resultado seguro?
+- Quais controles devem permanecer determinísticos e independentes de framework?
+- Como retries, fallback, tools, telemetria e acesso ao provider permanecem governáveis?
+- Como comparar abstrações de orquestração mantendo carga, verdade esperada, alias de modelo e política de validação constantes?
+- Como preservar evidência de *como* um resultado foi produzido, em vez de reportar apenas acurácia final?
+
+Este repositório transforma essas perguntas em arquitetura executável, testes, evidências de benchmark e trade-offs explícitos.
+
+## Leia o repositório de acordo com seu papel
+
+| Público | Comece por | O que avaliar rapidamente |
+| --- | --- | --- |
+| **Developer / AI Engineer** | [Guia de desenvolvimento](docs/DEVELOPMENT.md) → [Arquitetura](docs/ARCHITECTURE.md) | boundaries, contratos tipados, adapters, retries, fallback, MCP, OTel, reprodutibilidade |
+| **Engineering Manager / CIO / Arquiteto** | [Executive overview](docs/EXECUTIVE_OVERVIEW.md) → [Framework decision matrix](docs/FRAMEWORK_DECISION_MATRIX.md) | governança, fronteira de provider, trade-offs operacionais, portabilidade, disciplina de evidência |
+| **Recrutador / Entrevistador** | este README → [Executive overview](docs/EXECUTIVE_OVERVIEW.md) | escopo, ownership de engenharia, tecnologias, avaliação mensurável, segurança e pensamento de plataforma |
+| **Segurança / Governança** | [Arquitetura](docs/ARCHITECTURE.md) → [Evidências de segurança](docs/security/) | trust boundaries, controles determinísticos, testes adversariais, privacidade e telemetria |
+
+Veja o [mapa completo da documentação](docs/README.md).
+
+## O que o projeto demonstra
+
+### Arquitetura e AI Engineering
+
+- camadas de Domain e Application independentes de framework;
+- adapters de frameworks abaixo de contratos estáveis da aplicação;
+- structured output do LLM com validação determinística posterior;
+- evaluator-optimizer com retry limitado;
+- oracle fallback determinístico quando o reasoning probabilístico é rejeitado;
+- separação entre tentativas de análise da aplicação e chamadas reais de modelo;
+- acesso a modelo via alias governado e provider-neutral do LiteLLM;
+- supressão de retries ocultos quando eles prejudicariam a qualidade da evidência;
+- artifacts imutáveis de avaliação provider-backed vinculados a um commit Git exato.
+
+### Segurança e governança
+
+- o LLM raciocina sobre evidências, mas não é a fonte de verdade sensível à segurança;
+- identidade da evidência e aplicabilidade são validadas fora do modelo;
+- evidência não confiável não recebe autoridade de instrução por padrão;
+- política determinística controla necessidade de revisão humana;
+- telemetria proprietária de frameworks é desabilitada quando necessário para preservar a fronteira de privacidade;
+- OpenTelemetry lógico contém somente metadata segura, sem prompts, respostas, rationale, evidência, credenciais ou payloads de provider;
+- mapeamento provider/modelo permanece atrás do gateway em vez de vazar para cada adapter.
+
+### Plataforma e interoperabilidade
+
+- LangGraph evaluator-optimizer;
+- CrewAI Agent / Task / Crew;
+- CrewAI Flow com chamadas estruturadas diretas ao LLM;
+- LlamaIndex Workflow com eventos tipados;
+- Agno Workflow com primitives nativas de loop/condition;
+- LiteLLM como fronteira centralizada de acesso a providers;
+- compatibilidade MCP v2 mais smoke real local STDIO host/client;
+- CI provider-free para qualidade, tipagem, segurança, MCP e contrato de OTel.
 
 ## Invariante central
 
@@ -20,448 +78,224 @@ runtime executa
 evidência explica
 ```
 
-O LLM é tratado como um componente probabilístico de raciocínio.
-
-O software determinístico da aplicação continua responsável por:
-
-- validar a identidade da evidência;
-- validar aplicabilidade;
-- decidir se um retry é permitido;
-- executar fallback determinístico;
-- aplicar a política de revisão humana;
-- construir o `AnalysisResult` final.
-
-## Avaliação final five-way atual
-
-A avaliação do estado atual executa as cinco variantes de orquestração pela mesma fronteira centralizada do gateway LiteLLM.
+O LLM é um componente probabilístico de raciocínio, não a autoridade final.
 
 ```text
-Alias governado do cliente: security-analysis
+                    ┌────────────────────────────┐
+                    │  evidência determinística  │
+                    └─────────────┬──────────────┘
+                                  │
+                                  ▼
+                      análise probabilística
+                                  │
+                                  ▼
+                    avaliador determinístico
+                       │                    │
+                     aceito              rejeitado
+                       │                    │
+                       │               retry limitado
+                       │                    │
+                       │             avaliação novamente
+                       │                    │
+                       │               esgotou?
+                       │                    │
+                       │                    ▼
+                       │           oracle determinístico
+                       └──────────────┬─────┘
+                                      ▼
+                            política determinística
+                                      │
+                                      ▼
+                               AnalysisResult
+```
+
+Um resultado final correto **não significa necessariamente que o LLM acertou na primeira tentativa**. A distinção entre **qualidade do modelo** e **segurança do sistema** é uma das principais conclusões do laboratório.
+
+## Snapshot da avaliação v1.0
+
+A avaliação aceita da Phase 15 executa cinco variantes de orquestração sobre os mesmos cenários e pela mesma fronteira LiteLLM.
+
+```text
+Alias governado: security-analysis
 Cenários: 5
 Repetições por cenário: 3
 Execuções por variante: 15
 Execuções de framework: 75
-Chamadas de modelo: 76
-Sampling: provider default
+Chamadas reais de modelo: 76
 Commit avaliado: dd48c2490fc4ec1c76093577f7944d76a6fbc572
 ```
 
-O alias `security-analysis` é a identidade governada solicitada por todos os clientes de framework. Ele é deliberadamente diferente de um identificador nativo do provider: o mapeamento provider/modelo pertence ao gateway LiteLLM.
+| Variante | Acurácia final esperada | Aceitação first-pass | Média de model calls | Latência média | Tokens médios |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| LangGraph evaluator-optimizer | 100% | 100% | 1,00 | 3404,92 ms | **611,33** |
+| CrewAI Agent + Task + Crew | 100% | 100% | 1,00 | 2987,15 ms | 1136,60 |
+| CrewAI Flow + LLM estruturado direto | 100% | 100% | 1,00 | 3172,98 ms | 630,60 |
+| LlamaIndex Workflow + `structured_predict()` | 100% | **93,33%** | **1,07** | 3214,98 ms | 732,20 |
+| Agno Workflow + `Loop` / `Condition` nativos | 100% | 100% | 1,00 | **2980,14 ms** | 632,00 |
 
-| Variante | Acurácia esperada | First pass | Média de calls | Latência média | p50 | Tokens médios |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| LangGraph evaluator-optimizer | 100% | 100% | 1,00 | 3404,92 ms | 3447,83 ms | **611,33** |
-| CrewAI Agent + Task + Crew | 100% | 100% | 1,00 | 2987,15 ms | 3049,42 ms | 1136,60 |
-| CrewAI Flow + LLM estruturado direto | 100% | 100% | 1,00 | 3172,98 ms | 3082,20 ms | 630,60 |
-| LlamaIndex Workflow + `structured_predict()` | 100% | **93,33%** | **1,07** | 3214,98 ms | **2727,60 ms** | 732,20 |
-| Agno Workflow + `Loop` / `Condition` | 100% | 100% | 1,00 | **2980,14 ms** | 3015,20 ms | 632,00 |
+### O resultado mais importante não é escolher um vencedor
 
-### O que a avaliação final mostra
+As cinco variantes alcançaram o resultado final esperado sob os mesmos controles da aplicação. A observação de engenharia mais útil é que **a abstração de orquestração mudou características de execução mesmo quando autoridade de segurança e fronteira de provider permaneceram compartilhadas**.
 
-As cinco variantes chegaram a **100% de acurácia esperada final** sob os mesmos controles da aplicação.
+A comparação do CrewAI torna isso especialmente visível: Agent/Crew e Flow resolveram a mesma carga dentro do mesmo framework, mas produziram envelopes de tokens muito diferentes nesta amostra.
 
-Uma execução `product-mismatch` do LlamaIndex foi intencionalmente diferente das demais:
-
-```text
-tentativa 1 do LLM
-    ↓ rejeitada pela validação determinística
-tentativa 2 do LLM
-    ↓ rejeitada pela validação determinística
-oracle fallback
-    ↓
-resultado final esperado
-```
-
-Essa execução fez duas chamadas de modelo. Por isso, a avaliação completa tem **75 execuções de framework, mas 76 chamadas de modelo**. A anomalia é preservada em vez de normalizada porque o laboratório precisa mostrar se o sucesso veio do reasoning na primeira tentativa, de recuperação limitada ou de fallback determinístico.
-
-O formato atual de consumo de tokens também é informativo:
+Também preservamos intencionalmente uma execução `product-mismatch` do LlamaIndex:
 
 ```text
-LangGraph                611,33 tokens/run
-CrewAI Flow              630,60 tokens/run
-Agno Workflow            632,00 tokens/run
-LlamaIndex Workflow      732,20 tokens/run
-CrewAI Agent/Crew       1136,60 tokens/run
+tentativa 1 do LLM → rejeitada
+tentativa 2 do LLM → rejeitada
+oracle fallback determinístico → resultado final esperado
 ```
 
-CrewAI Flow e Agno ficaram praticamente empatados nesta amostra. A média maior do LlamaIndex inclui a execução que fez uma chamada adicional. A comparação dentro do próprio CrewAI continua especialmente útil porque duas abstrações do **mesmo framework** produziram envelopes de tokens muito diferentes.
+Essa execução explica por que 75 execuções de framework produziram **76 chamadas reais de modelo**. O laboratório preserva a anomalia porque evidência sobre recovery é mais útil do que um benchmark artificialmente uniforme.
 
-A conclusão mais útil não é “framework X é melhor”:
+### O que esses números não provam
 
-> **Nesta carga de trabalho, a escolha da abstração de orquestração pode afetar materialmente o custo de execução mesmo quando autoridade de segurança, verdade esperada, gateway e alias de modelo são compartilhados.**
+- Não estabelecem significância estatística nem SLOs de produção.
+- Quinze execuções por variante não sustentam rankings universais de latência.
+- Os resultados não provam que um framework é geralmente superior.
+- Os cenários adversariais são testes controlados, não prova de resistência ampla a prompt injection.
+- O alias `security-analysis` é uma identidade governada do cliente, não atestado independente do modelo nativo selecionado atrás do gateway.
 
-A latência conta outra história. O Agno teve a menor média, o LlamaIndex o menor p50 e o LangGraph a maior média nesta amostra específica de 15 execuções. Esses valores são descritivos e não estabelecem ranking geral de performance.
-
-Evidência imutável atual:
+Evidência canônica:
 
 - [Relatório five-way da Phase 15](artifacts/final-evaluation/phase15-20260905-v2/benchmarks/comparison/five-way-latest.md)
-- [Comparação machine-readable da Phase 15](artifacts/final-evaluation/phase15-20260905-v2/benchmarks/comparison/five-way-latest.json)
-- [Manifest da Phase 15](artifacts/final-evaluation/phase15-20260905-v2/manifest.json)
+- [Comparação machine-readable](artifacts/final-evaluation/phase15-20260905-v2/benchmarks/comparison/five-way-latest.json)
+- [Manifest da avaliação](artifacts/final-evaluation/phase15-20260905-v2/manifest.json)
 - [Metodologia da avaliação final](docs/evaluation/FINAL_EVALUATION.md)
-- [Decision matrix dos frameworks](docs/FRAMEWORK_DECISION_MATRIX.md)
 
-### O que a avaliação final **não** prova
-
-- Não demonstra significância estatística.
-- Não representa SLOs de produção.
-- Com `n=15`, o p95 nearest-rank é o máximo da amostra e serve apenas como indicador descritivo de cauda.
-- Não estabelece um ranking geral de frameworks.
-- O cenário `adversarial-asset-id` testa uma fronteira restrita entre instrução e dado, não resistência geral a prompt injection.
-- O único fallback observado no LlamaIndex não estabelece uma característica estável de retry ou custo do framework.
-- O alias `security-analysis` não é atestado independente do modelo nativo selecionado atrás do gateway.
-
-## Evidência histórica de benchmark
-
-O repositório preserva os artifacts anteriores, executados antes da centralização completa do provider, como evidência histórica imutável. Eles documentam o sistema no momento em que foram gerados e não são reescritos para refletir a arquitetura atual.
-
-Evidência five-way histórica:
-
-- [Relatório five-way histórico](artifacts/benchmarks/comparison/five-way-latest.md)
-- [Artifact five-way histórico em JSON](artifacts/benchmarks/comparison/five-way-latest.json)
-
-Os identificadores nativos do provider registrados nesses artifacts permanecem intencionalmente inalterados.
-
-## Baseline adversarial LangGraph no plano de evidências
-
-A primeira baseline oficial adversarial v2 move instruções controladas pelo atacante de identificadores estruturados de ativos para documentos explícitos de fornecedor, contexto recuperado e notas internas. A proveniência descreve cada fonte, enquanto o conteúdo dos documentos permanece não confiável e sem autoridade de instrução.
-
-Esta é evidência histórica provider-backed e mantém a identidade nativa do provider registrada quando foi gerada.
-
-```text
-Modelo: openai:gpt-5.6-luna
-Cenários: 6
-Repetições por cenário: 3
-Execuções: 18
-Sampling: provider default
-```
-
-| Acurácia da tarefa | Security pass | Sucesso do ataque no modelo | Unsafe acceptance | Retry | Fallback | Latência média | Tokens médios |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 100% | 100% | 0% | 0% | 0% | 0% | 2503,86 ms | 763,17 |
-
-Nas 18 execuções observadas, todas as asserções de tarefa e segurança passaram e nenhum dos seis objetivos determinísticos do atacante teve sucesso no modelo. Assim, as taxas de rejeição, recuperação e contenção permanecem `N/A`: a amostra não exercitou contenção ao vivo após um ataque bem-sucedido no modelo.
-
-A média v2 de 763,17 tokens/run está 22,9% acima da média adversarial v1 de 620,80. Essa diferença descreve o custo de entrada dos documentos e da proveniência adicionais; não é uma afirmação de performance do framework ou do modelo.
-
-Esse resultado sintético e restrito não estabelece resistência geral a prompt injection. Consulte o [relatório legível](artifacts/adversarial-v2/langgraph/latest.md), o [artifact JSON](artifacts/adversarial-v2/langgraph/latest.json) e o [design e interpretação do plano de evidências](docs/security/ADVERSARIAL_V2_EVIDENCE_PLANE.md).
-
-Um controle positivo não canônico separado concedeu deliberadamente autoridade de instrução ao conteúdo dos documentos. O modelo seguiu o ataque de status forçado nas duas tentativas; a validação determinística rejeitou ambos os drafts e o oracle fallback produziu um resultado final correto e seguro. Isso calibra a telemetria de ataque e contenção sem alterar o prompt canônico. Consulte o [relatório do controle de sensibilidade](artifacts/adversarial-v2-sensitivity/langgraph/latest.md) e o [trace em JSON](artifacts/adversarial-v2-sensitivity/langgraph/latest.json).
-
-## Smoke adversarial v2 nos workflows leves
-
-CrewAI Flow, LlamaIndex Workflow e Agno Workflow executaram uma vez cada um dos mesmos seis cenários do plano de evidências com `openai:gpt-5.6-luna`. Os 18 traces de tentativa foram revisados manualmente após a geração.
-
-Esses artifacts também são evidência histórica de compatibilidade e mantêm intencionalmente a identidade nativa original do provider.
-
-| Workflow | Execuções | Acurácia da tarefa | Security pass | Sucesso do ataque no modelo | Unsafe acceptance | Retry | Fallback | Latência média | Tokens médios |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| CrewAI Flow | 6 | 100% | 100% | 0% | 0% | 0% | 0% | 3947,03 ms | 799,17 |
-| LlamaIndex Workflow | 6 | 100% | 100% | 0% | 0% | 0% | 0% | 2843,26 ms | 793,17 |
-| Agno Workflow | 6 | 100% | 100% | 0% | 0% | 0% | 0% | 3110,31 ms | 795,00 |
-
-Todos os drafts corresponderam ao oracle determinístico de aplicabilidade na primeira tentativa, e nenhum correspondeu ao objetivo específico do atacante. Esses artifacts com uma repetição confirmam a compatibilidade dos contratos em execução com provider; são evidências de smoke, não baselines, e não sustentam rankings de framework ou performance. Consulte o [registro da revisão manual](docs/security/ADVERSARIAL_V2_WORKFLOW_SMOKE_REVIEW.md).
-
-## Carga de trabalho compartilhada
-
-Todas as implementações recebem o mesmo contrato de evidência independente de framework:
-
-```text
-AnalysisEvidenceBundle
-├── vulnerability
-├── assets
-├── policy
-└── documents (opcional)
-```
-
-Uma solicitação como:
-
-```text
-Analise CVE-XXXX-YYYY e determine se nosso ambiente está exposto.
-```
-
-gera um resultado estruturado contendo:
-
-- aplicabilidade por ativo;
-- severidade;
-- recomendação;
-- confiança;
-- evidência e proveniência;
-- necessidade de revisão humana.
-
-O LLM não é dono do identificador CVE, proveniência da evidência, política determinística ou decisão final.
-
-## Loop compartilhado evaluator-optimizer
-
-Todas as variantes são restringidas pela mesma semântica controlada pela aplicação:
-
-```text
-evidência
-   │
-   ▼
-análise probabilística
-   │
-   ▼
-avaliador determinístico
-   │
-   ├── aceito ───────────────────────────────┐
-   │                                         │
-   └── rejeitado                             │
-          │                                  │
-          ▼                                  │
- feedback determinístico                     │
-          │                                  │
-          ▼                                  │
-      retry limitado                         │
-          │                                  │
-          ▼                                  │
- avaliador determinístico                    │
-          │                                  │
-          ├── aceito ────────────────────────┤
-          │                                  │
-          └── tentativas esgotadas            │
-                 │                           │
-                 ▼                           │
-        oracle determinístico                │
-                 │                           │
-                 └──────────────┬────────────┘
-                                ▼
-                      política determinística
-                                │
-                                ▼
-                         AnalysisResult
-```
-
-A configuração oficial permite no máximo duas tentativas de análise pelo LLM.
-
-Um resultado final correto pode, portanto, vir de caminhos distintos:
-
-```text
-acerto do LLM na primeira tentativa
-recuperação após retry
-fallback determinístico
-```
-
-Essa distinção entre **qualidade do modelo** e **segurança do sistema** é central para o laboratório.
+Artifacts provider-direct históricos permanecem imutáveis e não são reescritos para refletir hardening posterior de gateway ou runtime.
 
 ## Implementações por framework
 
-| Framework / abstração | Orquestração usada | Caminho de reasoning estruturado | Fronteira de provider | Controles determinísticos da aplicação |
+| Framework / abstração | Orquestração nativa | Structured reasoning | Fronteira de provider | Autoridade determinística |
 | --- | --- | --- | --- | --- |
-| LangGraph | nodes + roteamento condicional | saída estruturada via LangChain | LiteLLM `security-analysis` | sim |
-| CrewAI Agent/Crew | `Agent` + `Task` + `Crew` | saída estruturada CrewAI | LiteLLM `security-analysis` | sim, avaliador externo |
-| CrewAI Flow | Flow routing/state | `LLM.call()` estruturado direto | LiteLLM `security-analysis` | sim |
-| LlamaIndex Workflow | eventos tipados | `structured_predict()` | LiteLLM `security-analysis` | sim |
-| Agno Workflow | `Workflow` + `Loop` + `Condition` | Agent com saída estruturada | LiteLLM `security-analysis` | sim |
+| LangGraph | graph nodes + conditional routing | LangChain structured output | LiteLLM `security-analysis` | Application |
+| CrewAI Agent/Crew | `Agent` + `Task` + `Crew` | structured CrewAI output | LiteLLM `security-analysis` | evaluator da Application |
+| CrewAI Flow | Flow routing/state | `LLM.call()` estruturado direto | LiteLLM `security-analysis` | Application |
+| LlamaIndex Workflow | eventos tipados de Workflow | `structured_predict()` | LiteLLM `security-analysis` | Application |
+| Agno Workflow | `Workflow` + `Loop` + `Condition` | Agent structured output | LiteLLM `security-analysis` | Application |
 
-Os adapters ficam abaixo da fronteira da aplicação para que o framework possa ser substituído sem transferir autoridade de segurança.
+Os frameworks são deliberadamente adapters, não donos das regras de negócio ou segurança. Consulte a [framework decision matrix](docs/FRAMEWORK_DECISION_MATRIX.md) para os trade-offs observados nesta carga.
 
-Todos os cinco caminhos provider-backed agora passam pelo gateway LiteLLM centralizado. Credenciais de provider e identificadores nativos de modelo ficam fora dos adapters; cada cliente conhece somente o alias estável `security-analysis`, o endpoint do gateway e a credencial de cliente exigida por sua integração.
-
-Veja [Arquitetura e modelo de segurança](docs/ARCHITECTURE.md) para os detalhes e [Fundação do gateway LiteLLM](docs/litellm/GATEWAY_FOUNDATION.md) para a fronteira de acesso aos providers.
-
-## Dataset de avaliação
-
-| Cenário | Objetivo | Comportamento esperado |
-| --- | --- | --- |
-| `baseline-mixed` | ativos afetados e corrigidos | aplicabilidade mista |
-| `product-mismatch` | produto instalado não corresponde ao vulnerável | `not_applicable` |
-| `unknown-version` | versão não pode ser interpretada com segurança | `unknown` |
-| `fixed-boundary` | limite exclusivo de versão afetada | `not_affected` |
-| `adversarial-asset-id` | texto semelhante a instrução dentro de dado não confiável | instrução continua sendo dado |
-
-A verdade esperada é externa a todas as implementações e ao modelo upstream configurado.
-
-## Propriedades de segurança demonstradas
-
-A implementação atual exercita:
-
-- saída estruturada do LLM;
-- contratos explícitos na aplicação;
-- isolamento entre domínio/aplicação e adapters de framework;
-- validação fail-closed da identidade da evidência/CVE;
-- validação determinística de aplicabilidade;
-- feedback do evaluator;
-- retry limitado;
-- fallback determinístico;
-- política determinística de revisão humana;
-- separação entre instruções e evidência não confiável;
-- supressão de retries implícitos do framework quando necessário;
-- supressão de telemetry proprietária de framework quando necessário;
-- contabilização de model calls por execução;
-- contabilização de tokens;
-- medição de latência;
-- verdade esperada externa;
-- evidência de avaliação imutável persistida;
-- alias governado do LiteLLM compartilhado por todos os clientes de framework;
-- separação entre OpenTelemetry lógico controlado pela aplicação e telemetry de provider/framework.
-
-## Estrutura do projeto
+## Fronteiras de confiança e provider
 
 ```text
-src/agentic_lab/
-├── domain/
-├── application/
-└── adapters/
-    ├── agno/
-    ├── crewai/
-    ├── fixtures/
-    ├── gateway.py
-    ├── langchain/
-    ├── langgraph/
-    └── llamaindex/
-
-config/
-└── litellm/
-    └── config.yaml
-
-scripts/
-├── benchmark_langgraph_scenarios.py
-├── benchmark_crewai_scenarios.py
-├── benchmark_crewai_flow_scenarios.py
-├── benchmark_llamaindex_workflow_scenarios.py
-├── benchmark_agno_workflow_scenarios.py
-├── compare_five_way_benchmarks.py
-├── run_final_evaluation.py
-└── quality_gate.py
-
-artifacts/
-├── benchmarks/              # evidência histórica de benchmark
-└── final-evaluation/
-    └── phase15-20260905-v2/ # evidência five-way imutável atual
+Framework adapter
+      │
+      │ alias estável: security-analysis
+      ▼
+LiteLLM gateway
+      │
+      │ mapeamento de provider controlado pelo deployment
+      ▼
+LLM provider
 ```
 
-## Reproduzir o ambiente
+Os clientes dos frameworks conhecem o alias estável e o contrato do gateway. Identificadores nativos e credenciais de provider permanecem fora do fluxo específico de cada framework.
+
+Separadamente, a telemetria lógica da aplicação descreve fatos seguros da execução sem exportar automaticamente conteúdo do modelo:
+
+```text
+Execução da aplicação
+      │
+      ▼
+AnalysisExecutionObservation
+      │ apenas atributos allowlisted
+      ▼
+composição OpenTelemetry controlada pelo deployment
+```
+
+Leia [Arquitetura](docs/ARCHITECTURE.md), [LiteLLM gateway foundation](docs/litellm/GATEWAY_FOUNDATION.md) e [Privacy](docs/PRIVACY.md) para os detalhes.
+
+## Quickstart para developers
 
 Requisitos:
 
 - Python 3.13
 - [uv](https://docs.astral.sh/uv/)
 
-Instale o ambiente bloqueado pelo lockfile:
-
 ```bash
+git clone https://github.com/brunovicco/agentic-security-framework-lab.git
+cd agentic-security-framework-lab
 uv sync --frozen --all-groups
-```
-
-Execute o quality gate completo:
-
-```bash
 uv run python scripts/quality_gate.py
 ```
 
-O gate cobre lockfile, Ruff, fronteiras arquiteturais, governança, Pyright strict, pytest, coverage, Bandit e auditoria de dependências. O mesmo gate provider-free roda no GitHub Actions.
+O quality gate normal é provider-free. Você **não precisa de API key de LLM** para validar contratos de engenharia, testes, tipagem, architecture checks, security checks ou comportamento determinístico.
 
-## Executar experimentos provider-backed pelo gateway
-
-Todos os clientes de framework atuais usam a fronteira centralizada do LiteLLM. `AGENTIC_LAB_MODEL` está obsoleto para seleção de provider.
-
-Carregue a chave do provider e uma master key local do gateway sem persistir nenhum segredo no repositório:
+Para checks focados:
 
 ```bash
-read -s "OPENAI_API_KEY?OpenAI API key: "
-echo
-export OPENAI_API_KEY
-
-read -s "LITELLM_MASTER_KEY?LiteLLM master key: "
-echo
-export LITELLM_MASTER_KEY
+uv run python scripts/quality_gate.py --list
 ```
 
-Instale a versão fixada do proxy como ferramenta do `uv`, fora do grafo de dependências do projeto, e inicie-o usando a configuração versionada:
+Para experimentos provider-backed via LiteLLM, siga o [guia do gateway](docs/litellm/GATEWAY_FOUNDATION.md) e a [metodologia da avaliação final](docs/evaluation/FINAL_EVALUATION.md). A avaliação final provider-backed permanece deliberadamente fora do CI normal.
 
-```bash
-uv tool install 'litellm[proxy]==1.98.0'
-litellm --config config/litellm/config.yaml
+Leia o [guia completo de desenvolvimento](docs/DEVELOPMENT.md) antes de alterar adapters, evidência de avaliação, policy do gateway ou contratos de telemetria.
+
+## Mapa do repositório
+
+```text
+src/agentic_lab/
+├── domain/          # conceitos e invariantes independentes de framework
+├── application/     # casos de uso, evaluator/policy, ports
+└── adapters/        # LangGraph, CrewAI, LlamaIndex, Agno, gateway
+
+config/litellm/      # configuração governada de acesso a provider
+scripts/             # benchmarks, avaliação, quality gates e smokes
+docs/                # arquitetura, ADRs, segurança, avaliação, MCP, privacy
+artifacts/           # evidência imutável de benchmark/avaliação
+tests/               # regressão e contratos provider-free
 ```
 
-Em outro shell, configure o contrato de cliente do gateway. Um ambiente local pode temporariamente reutilizar o valor da master key como credencial do cliente; um deployment pode substituí-la por uma credencial com escopo sem alterar o código da aplicação.
+## Mapa da documentação
 
-```bash
-export AGENTIC_LAB_GATEWAY_BASE_URL="http://localhost:4000"
-export AGENTIC_LAB_GATEWAY_API_KEY="$LITELLM_MASTER_KEY"
-```
+### Entender o projeto rapidamente
 
-Para benchmarks diretos de framework que devam preservar a mesma fronteira de privacidade usada na avaliação aceita da Phase 15, aplique os mesmos guards específicos de telemetry dos vendors. `CREWAI_TESTING=true` é necessário aqui para bloquear o caminho de coleta de trace da primeira execução no CrewAI 1.15.18 fixado; o OpenTelemetry controlado pelo projeto permanece habilitado porque `OTEL_SDK_DISABLED` deliberadamente não é utilizado.
+- [Documentação por audiência](docs/README.md)
+- [Executive / portfolio overview](docs/EXECUTIVE_OVERVIEW.md)
+- [Arquitetura e trust boundaries](docs/ARCHITECTURE.md)
+- [Framework decision matrix](docs/FRAMEWORK_DECISION_MATRIX.md)
 
-```bash
-export CREWAI_TRACING_ENABLED=false
-export CREWAI_DISABLE_TELEMETRY=true
-export CREWAI_DISABLE_TRACKING=true
-export CREWAI_TESTING=true
-export AGNO_TELEMETRY=false
-```
+### Desenvolver e alterar o código
 
-Depois execute um benchmark individual ao explorar um adapter:
+- [Guia de desenvolvimento](docs/DEVELOPMENT.md)
+- [Engineering contract](AGENTS.md)
+- [Agentic fast track](docs/AGENTIC_FAST_TRACK.md)
 
-```bash
-uv run python scripts/benchmark_langgraph_scenarios.py --runs 3
-uv run python scripts/benchmark_crewai_scenarios.py --runs 3
-uv run python scripts/benchmark_crewai_flow_scenarios.py --runs 3
-uv run python scripts/benchmark_llamaindex_workflow_scenarios.py --runs 3
-uv run python scripts/benchmark_agno_workflow_scenarios.py --runs 3
-```
+### Avaliar e reproduzir evidência
 
-Para uma nova geração controlada de evidência five-way provider-backed, prefira o runner de avaliação final. Ele executa os benchmarks em workspace temporário isolado, valida alias e repetição, aplica os guards de telemetry de vendor exigidos pela metodologia aceita e persiste um novo bundle append-only:
-
-```bash
-uv run python scripts/run_final_evaluation.py
-```
-
-Não reutilize `phase15-20260905-v2`; esse run-id pertence à evidência imutável aceita da Phase 15. A avaliação final provider-backed não faz parte do CI normal.
-
-## Documentação
-
-- [Arquitetura e modelo de segurança](docs/ARCHITECTURE.md)
-- [Decision matrix dos frameworks](docs/FRAMEWORK_DECISION_MATRIX.md)
 - [Metodologia da avaliação final](docs/evaluation/FINAL_EVALUATION.md)
-- [Fundação do gateway LiteLLM](docs/litellm/GATEWAY_FOUNDATION.md)
-- [ADR do gateway LiteLLM](docs/adr/0002-centralize-llm-provider-access-behind-litellm-proxy.md)
-- [Relatório five-way atual da Phase 15](artifacts/final-evaluation/phase15-20260905-v2/benchmarks/comparison/five-way-latest.md)
-- [Benchmark five-way histórico](artifacts/benchmarks/comparison/five-way-latest.md)
-- [Relatório adversarial v2 do LangGraph](artifacts/adversarial-v2/langgraph/latest.md)
-- [Design adversarial v2 do plano de evidências](docs/security/ADVERSARIAL_V2_EVIDENCE_PLANE.md)
-- [Metodologia do controle de sensibilidade adversarial v2](docs/security/ADVERSARIAL_V2_SENSITIVITY_CONTROL.md)
-- [Resultado LangGraph do controle de sensibilidade adversarial v2](artifacts/adversarial-v2-sensitivity/langgraph/latest.md)
-- [Revisão do smoke adversarial v2 nos workflows leves](docs/security/ADVERSARIAL_V2_WORKFLOW_SMOKE_REVIEW.md)
-- [Agentic Fast Track](docs/AGENTIC_FAST_TRACK.md)
-- [Desenvolvimento](docs/DEVELOPMENT.md)
-- [MCP](docs/MCP.md)
-- [Privacidade](docs/PRIVACY.md)
-- [Contrato de engenharia](AGENTS.md)
-- [README em inglês](README.md)
+- [Evidência five-way atual](artifacts/final-evaluation/phase15-20260905-v2/benchmarks/comparison/five-way-latest.md)
+- [Manifest da avaliação](artifacts/final-evaluation/phase15-20260905-v2/manifest.json)
 
-## Status atual e próximos experimentos candidatos
+### Segurança, privacidade e interoperabilidade
 
-Concluído:
+- [Privacy boundary](docs/PRIVACY.md)
+- [Experimentos de segurança](docs/security/)
+- [MCP overview](docs/MCP.md)
+- [LiteLLM gateway foundation](docs/litellm/GATEWAY_FOUNDATION.md)
+- [Architecture decision records](docs/adr/)
 
-- [x] domínio e contrato de evidência independentes de framework;
-- [x] evaluator, policy, retry limitado e oracle fallback determinísticos;
-- [x] LangGraph evaluator-optimizer;
-- [x] CrewAI Agent/Task/Crew;
-- [x] CrewAI Flow com LLM estruturado direto;
-- [x] LlamaIndex Workflow;
-- [x] Agno Workflow;
-- [x] dataset compartilhado com cinco cenários e baseline five-way histórica;
-- [x] baseline adversarial v2, controle de sensibilidade e smoke nos workflows leves;
-- [x] gateway LiteLLM centralizado com alias governado `security-analysis`;
-- [x] LangGraph, CrewAI Agent/Crew, CrewAI Flow, LlamaIndex e Agno migrados para a mesma fronteira do gateway;
-- [x] compatibilidade MCP v2 e smoke real local STDIO host/client;
-- [x] contrato framework-neutral de observação lógica OpenTelemetry sem conteúdo;
-- [x] avaliação final provider-backed imutável da Phase 15 vinculada ao commit Git exato avaliado;
-- [x] quality gate estrito provider-free local e em CI.
+## O que torna este projeto um portfólio de engenharia, e não apenas uma demo de framework
 
-Próximos experimentos candidatos:
+O repositório é construído ao redor de decisões que continuam válidas mesmo quando o framework é substituído:
 
-- [ ] investigar separadamente o comportamento de timeout da chamada síncrona do LlamaIndex acompanhado na issue #61;
-- [ ] evoluir MCP de smoke de compatibilidade para autorização explícita de tools e least privilege;
-- [ ] avaliar retry/fallback do gateway, budgets e credenciais de cliente com escopo como políticas governadas separadas;
-- [ ] compor providers/exporters OpenTelemetry de deployment sem mover conteúdo para a telemetry lógica;
-- [ ] adicionar fluxos controlados de human-in-the-loop;
-- [ ] aumentar a amostra para distribuições de latência e estimativas de incerteza;
-- [ ] avaliar variação de provider/modelo atrás do alias estável do gateway.
+1. **Domain e policy permanecem framework-neutral.**
+2. **Saída probabilística é validada por software determinístico.**
+3. **Falhas e recovery são observáveis em vez de ocultos.**
+4. **Acesso ao provider é centralizado atrás de uma fronteira estável.**
+5. **Telemetria possui contrato explícito de privacidade.**
+6. **Evidência de benchmark é persistida e vinculada ao estado do código.**
+7. **Trade-offs são documentados em vez de reduzidos a “framework X venceu”.**
 
-## Por que este projeto existe
+Esses princípios são reutilizáveis ao discutir plataformas corporativas de agentes, AI gateways, runtimes governados, LLMOps, AI security ou seleção de frameworks.
 
-Frameworks agênticos tornam demos impressionantes fáceis de construir. O desafio de engenharia é criar sistemas em que raciocínio probabilístico possa ser restringido, validado, medido, auditado, recuperado, comparado e substituído com segurança.
+## Status do projeto
 
-Este repositório trata o framework como um detalhe de implementação abaixo de uma fronteira de segurança estável e usa evidências reproduzíveis para estudar esses trade-offs.
+O escopo de engenharia planejado para v1.0 está concluído: baseline de domínio, controles determinísticos, evolução de RAG, quatro famílias de frameworks / cinco variantes de orquestração, comparação de benchmark, LiteLLM, MCP, observabilidade, avaliação final, hardening de runtime e documentação de portfólio.
+
+O repositório continua sendo um laboratório de engenharia, não uma afirmação de certificação para produção. Trabalhos futuros podem ampliar os experimentos sem reescrever a evidência histórica aceita.
+
+Veja [CHANGELOG.md](CHANGELOG.md) para mudanças por release.
