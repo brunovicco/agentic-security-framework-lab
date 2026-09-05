@@ -30,6 +30,11 @@ from agentic_lab.application.validated_analysis import (
     AnalysisAttemptEvidence,
     validate_analysis_draft,
 )
+from agentic_lab.observability import (
+    NULL_ANALYSIS_OBSERVER,
+    AnalysisExecutionObservation,
+    AnalysisObserver,
+)
 
 
 class _InvokableGraph(Protocol):
@@ -298,25 +303,48 @@ def build_llm_analysis_graph(
     return cast(_InvokableGraph, builder.compile())
 
 
+def _record_completed_analysis(
+    output: LLMAnalysisGraphOutput,
+    observer: AnalysisObserver,
+) -> None:
+    """Record one safe logical observation after the complete graph returns."""
+    attempts = output["analysis_attempts"]
+    observer.record(
+        AnalysisExecutionObservation(
+            framework="langgraph",
+            workflow="langgraph-evaluator-optimizer",
+            analysis_source=output["analysis_source"],
+            validation_passed=output["validation_passed"],
+            analysis_attempts=attempts,
+            model_calls=attempts,
+            requires_human_review=output["result"].requires_human_review,
+        )
+    )
+
+
 def run_llm_analysis_graph(
     analyzer: VulnerabilityAnalyzer,
     cve_id: str,
+    observer: AnalysisObserver = NULL_ANALYSIS_OBSERVER,
 ) -> LLMAnalysisGraphOutput:
-    """Run the evaluator-optimizer vulnerability-analysis graph."""
+    """Run the evaluator-optimizer graph and observe one completed logical execution."""
     graph = build_llm_analysis_graph(analyzer)
 
     graph_input: LLMAnalysisGraphInput = {
         "cve_id": cve_id,
     }
 
-    return graph.invoke(graph_input)
+    output = graph.invoke(graph_input)
+    _record_completed_analysis(output, observer)
+    return output
 
 
 def run_llm_analysis_graph_with_evidence(
     analyzer: VulnerabilityAnalyzer,
     evidence_bundle: AnalysisEvidenceBundle,
+    observer: AnalysisObserver = NULL_ANALYSIS_OBSERVER,
 ) -> LLMAnalysisGraphOutput:
-    """Run the graph using evidence supplied by the application."""
+    """Run injected evidence and observe one completed logical execution."""
     graph = build_llm_analysis_graph(analyzer)
 
     graph_input: LLMAnalysisGraphInput = {
@@ -324,4 +352,6 @@ def run_llm_analysis_graph_with_evidence(
         "evidence_bundle": evidence_bundle,
     }
 
-    return graph.invoke(graph_input)
+    output = graph.invoke(graph_input)
+    _record_completed_analysis(output, observer)
+    return output
