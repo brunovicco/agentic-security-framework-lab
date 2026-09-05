@@ -14,6 +14,8 @@ _SERVER_NAME = "agentic-security-governed-actions"
 _MUTABLE_TOOL = "acknowledge_finding"
 _STATE_TOOL = "get_finding_acknowledgement_state"
 _FINDING_RESOURCE = "finding:demo-001"
+_LOCAL_CALLER_ID = "local-mcp-host"
+_LOCAL_IDENTITY_SOURCE = "trusted_composition"
 
 
 def _load_server_parameters() -> StdioServerParameters:
@@ -73,8 +75,16 @@ def _assert_runtime_result(
     approval_status: str,
     execution_occurred: bool,
 ) -> None:
-    """Validate the governed runtime outcome transported by MCP."""
+    """Validate the governed runtime outcome and trusted caller source over MCP."""
     document = _require_mapping(payload, "governed execution result")
+    context = _require_mapping(document.get("context"), "action context")
+    expected_context = {
+        "caller_id": _LOCAL_CALLER_ID,
+        "identity_source": _LOCAL_IDENTITY_SOURCE,
+    }
+    if context != expected_context:
+        raise RuntimeError(f"Unexpected trusted action context: {context!r}")
+
     authorization = _require_mapping(document.get("authorization"), "authorization decision")
     if authorization.get("outcome") != outcome:
         raise RuntimeError(f"Unexpected authorization outcome: {authorization!r}")
@@ -184,6 +194,7 @@ async def _smoke() -> dict[str, object]:
             "transport": "stdio",
             "mutable_tool": _MUTABLE_TOOL,
             "state_tool": _STATE_TOOL,
+            "trusted_identity_source": _LOCAL_IDENTITY_SOURCE,
             "blocked_mutations": 3,
             "allowed_mutations": 1,
             "final_execution_count": 1,
