@@ -4,9 +4,11 @@ import pytest
 from pydantic import ValidationError
 
 from agentic_lab.application.action_authorization import (
+    ActionAuthorizationRuleKey,
     ActionAuthorizer,
     ActionContext,
     AuthorizationOutcome,
+    CallerIdentitySource,
     ProposedAction,
     StaticActionAuthorizationPolicy,
 )
@@ -18,12 +20,38 @@ OBSERVER_AGENT = "observer-agent"
 
 
 def _authorizer() -> ActionAuthorizer:
-    rules: dict[tuple[str, str, str, str], AuthorizationOutcome] = {
-        (REMEDIATION_AGENT, "read_vulnerability", VULNERABILITY_RESOURCE, "test"): "allow",
-        (OBSERVER_AGENT, "read_vulnerability", VULNERABILITY_RESOURCE, "test"): "deny",
-        (REMEDIATION_AGENT, "modify_vulnerability", VULNERABILITY_RESOURCE, "test"): "deny",
+    rules: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
         (
             REMEDIATION_AGENT,
+            "trusted_composition",
+            "read_vulnerability",
+            VULNERABILITY_RESOURCE,
+            "test",
+        ): "allow",
+        (
+            REMEDIATION_AGENT,
+            "api_key",
+            "read_vulnerability",
+            VULNERABILITY_RESOURCE,
+            "test",
+        ): "deny",
+        (
+            OBSERVER_AGENT,
+            "trusted_composition",
+            "read_vulnerability",
+            VULNERABILITY_RESOURCE,
+            "test",
+        ): "deny",
+        (
+            REMEDIATION_AGENT,
+            "trusted_composition",
+            "modify_vulnerability",
+            VULNERABILITY_RESOURCE,
+            "test",
+        ): "deny",
+        (
+            REMEDIATION_AGENT,
+            "trusted_composition",
             "create_remediation_task",
             REMEDIATION_RESOURCE,
             "production",
@@ -32,8 +60,11 @@ def _authorizer() -> ActionAuthorizer:
     return StaticActionAuthorizationPolicy(rules)
 
 
-def _context(caller_id: str = REMEDIATION_AGENT) -> ActionContext:
-    return ActionContext(caller_id=caller_id)
+def _context(
+    caller_id: str = REMEDIATION_AGENT,
+    identity_source: CallerIdentitySource = "trusted_composition",
+) -> ActionContext:
+    return ActionContext(caller_id=caller_id, identity_source=identity_source)
 
 
 def _vulnerability_action(action: str, environment: str = "test") -> ProposedAction:
@@ -44,8 +75,8 @@ def _vulnerability_action(action: str, environment: str = "test") -> ProposedAct
     )
 
 
-def test_action_context_records_current_trusted_identity_source() -> None:
-    """Record local composition as the only caller identity provenance currently proven."""
+def test_action_context_records_default_trusted_identity_source() -> None:
+    """Record trusted composition as the default local caller identity provenance."""
     context = _context()
 
     assert context.caller_id == REMEDIATION_AGENT
@@ -53,7 +84,7 @@ def test_action_context_records_current_trusted_identity_source() -> None:
 
 
 def test_action_context_rejects_unimplemented_authenticated_identity_source() -> None:
-    """Reject authentication-like provenance until a real trusted boundary implements it."""
+    """Reject authentication-like provenance unless the trusted boundary implements it."""
     with pytest.raises(ValidationError, match="identity_source"):
         ActionContext.model_validate(
             {
@@ -64,7 +95,7 @@ def test_action_context_rejects_unimplemented_authenticated_identity_source() ->
 
 
 def test_explicitly_allowed_action_is_allowed() -> None:
-    """Allow only an exact caller/action/resource/environment policy match."""
+    """Allow only an exact caller/source/action/resource/environment policy match."""
     decision = _authorizer().authorize(
         _vulnerability_action("read_vulnerability"),
         _context(),
@@ -72,6 +103,45 @@ def test_explicitly_allowed_action_is_allowed() -> None:
 
     assert decision.outcome == "allow"
     assert decision.reason == "explicit_allow"
+
+
+def test_same_caller_and_action_scope_can_differ_by_identity_source() -> None:
+    """Treat identity provenance as an independent least-privilege policy dimension."""
+    trusted_composition = _authorizer().authorize(
+        _vulnerability_action("read_vulnerability"),
+        _context(identity_source="trusted_composition"),
+    )
+    api_key = _authorizer().authorize(
+        _vulnerability_action("read_vulnerability"),
+        _context(identity_source="api_key"),
+    )
+
+    assert trusted_composition.outcome == "allow"
+    assert trusted_composition.reason == "explicit_allow"
+    assert api_key.outcome == "deny"
+    assert api_key.reason == "explicit_deny"
+
+
+def test_identity_source_without_exact_rule_does_not_inherit_other_source_authority() -> None:
+    """Fail closed instead of falling back to a rule for another identity source."""
+    rules: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
+        (
+            REMEDIATION_AGENT,
+            "trusted_composition",
+            "read_vulnerability",
+            VULNERABILITY_RESOURCE,
+            "test",
+        ): "allow",
+    }
+    authorizer = StaticActionAuthorizationPolicy(rules)
+
+    decision = authorizer.authorize(
+        _vulnerability_action("read_vulnerability"),
+        _context(identity_source="api_key"),
+    )
+
+    assert decision.outcome == "deny"
+    assert decision.reason == "no_matching_rule"
 
 
 def test_explicitly_denied_action_is_denied() -> None:
@@ -123,7 +193,7 @@ def test_approval_gated_scope_requires_human_approval() -> None:
 
 
 def test_unknown_action_fails_closed() -> None:
-    """Deny action escalation even when caller, resource, and environment are known."""
+    """Deny action escalation even when caller, source, resource, and environment are known."""
     decision = _authorizer().authorize(
         _vulnerability_action("delete_vulnerability"),
         _context(),
