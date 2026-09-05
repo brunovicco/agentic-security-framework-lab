@@ -38,3 +38,9 @@ jobs:
         run: >-
           uv run --no-project --with "mcp[cli]==2.1.1"
           python scripts/smoke_mcp_stdio_applicability.py
+      - name: OpenTelemetry analysis observation check
+        env:
+          PYTHONPATH: src
+        run: >-
+          uv run --no-project --with "opentelemetry-sdk==1.44.0"
+          python scripts/check_otel_analysis_observation.py
