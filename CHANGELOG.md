@@ -12,6 +12,7 @@ First portfolio-complete release of the Agentic Security Framework Lab.
 - Centralized LiteLLM gateway boundary using governed alias `security-analysis`.
 - MCP 2026-07-28 / Python SDK v2 STDIO integration and real subprocess smoke coverage.
 - Framework-neutral, content-free logical analysis observability with OpenTelemetry compatibility checks.
+- Bilingual English/Portuguese portfolio landing pages, audience-based documentation navigation, executive overview, and expanded developer onboarding.
 
 ### Hardened
 
