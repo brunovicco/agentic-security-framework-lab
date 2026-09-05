@@ -1,10 +1,11 @@
 """Tests for framework-neutral governed action runtime enforcement."""
 
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 import pytest
 
-from agentic_lab.application.action_approval import HumanApprovalEvidence
+from agentic_lab.application.action_approval import ApprovalClaim, HumanApprovalEvidence
 from agentic_lab.application.action_authorization import (
     ActionAuthorizationRuleKey,
     ActionAuthorizer,
@@ -48,22 +49,30 @@ class FailingActionExecutor:
 
 
 class RecordingApprovalProvider:
-    """Claim configured approval evidence once while recording trusted attempts."""
+    """Return one explicit approval claim while recording trusted attempts."""
 
-    def __init__(self, approval: HumanApprovalEvidence | None) -> None:
+    def __init__(
+        self,
+        approval: HumanApprovalEvidence | None,
+        *,
+        claim_status: Literal["claimed", "revoked"] = "claimed",
+    ) -> None:
         self._approval = approval
+        self._claim_status = claim_status
         self.claim_calls = 0
 
     def claim_approval(
         self,
         proposed_action: ProposedAction,
         context: ActionContext,
-    ) -> HumanApprovalEvidence | None:
+    ) -> ApprovalClaim:
         """Consume configured evidence without silently rebinding its scope."""
         self.claim_calls += 1
         approval = self._approval
         self._approval = None
-        return approval
+        if approval is None:
+            return ApprovalClaim(status="missing")
+        return ApprovalClaim(status=self._claim_status, approval=approval)
 
 
 class FixedApprovalClock:
@@ -245,6 +254,34 @@ def test_approval_required_action_is_blocked_when_approval_is_missing() -> None:
     assert evidence.approval_status == "missing"
     assert evidence.human_approval is None
     assert evidence.execution_occurred is False
+
+
+def test_revoked_approval_is_consumed_and_blocked_before_clock() -> None:
+    """Block revoked authority before trusted time or mutable execution is relevant."""
+    executor = RecordingActionExecutor()
+    proposed_action = _remediation_action()
+    context = _context()
+    approval = _approval(proposed_action, context)
+    approval_provider = RecordingApprovalProvider(approval, claim_status="revoked")
+    runtime = GovernedActionRuntime(
+        authorizer=_authorizer(),
+        executor=executor,
+        approval_provider=approval_provider,
+        approval_clock=UnexpectedApprovalClock(),
+    )
+
+    first = runtime.execute(proposed_action, context)
+    second = runtime.execute(proposed_action, context)
+
+    assert first.authorization.outcome == "require_human_approval"
+    assert first.approval_status == "revoked"
+    assert first.human_approval == approval
+    assert first.execution_occurred is False
+    assert second.approval_status == "missing"
+    assert second.human_approval is None
+    assert second.execution_occurred is False
+    assert executor.actions == []
+    assert approval_provider.claim_calls == 2
 
 
 def test_approval_is_valid_at_inclusive_approved_at_boundary() -> None:
