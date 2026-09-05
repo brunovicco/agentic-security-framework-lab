@@ -75,6 +75,7 @@ class _Scenario:
     expected_approval_status: ApprovalStatus
     expected_execution: bool
     approval_expires_at: datetime | None = None
+    revoke_approval: bool = False
 
 
 def _action(
@@ -142,6 +143,17 @@ _SCENARIOS: tuple[_Scenario, ...] = (
         approval_expires_at=_NOW,
     ),
     _Scenario(
+        name="approval-revoked",
+        proposed_action=_action(environment="production"),
+        context=ActionContext(caller_id=_ALLOWED_CALLER),
+        with_approval=True,
+        expected_outcome="require_human_approval",
+        expected_reason="human_approval_required",
+        expected_approval_status="revoked",
+        expected_execution=False,
+        revoke_approval=True,
+    ),
+    _Scenario(
         name="caller-mismatch",
         proposed_action=_action(),
         context=ActionContext(caller_id="unprivileged-agent"),
@@ -199,10 +211,17 @@ def _runtime(
             ),
         )
 
+    approval_provider = InMemoryActionApprovalProvider(approvals)
+    if scenario.revoke_approval:
+        if not approvals:
+            raise AssertionError("revocation scenario requires approval evidence")
+        if not approval_provider.revoke_approval(approvals[0].approval_id):
+            raise AssertionError("expected unclaimed approval revocation to succeed")
+
     return GovernedActionRuntime(
         authorizer=StaticActionAuthorizationPolicy(_RULES),
         executor=executor,
-        approval_provider=InMemoryActionApprovalProvider(approvals),
+        approval_provider=approval_provider,
         approval_clock=FixedApprovalClock(),
     )
 
