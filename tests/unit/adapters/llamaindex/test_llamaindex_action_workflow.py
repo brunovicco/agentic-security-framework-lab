@@ -125,9 +125,7 @@ def test_llamaindex_resource_escalation_fails_closed_before_mutation() -> None:
     """Block a substituted resource before the mutable adapter can execute."""
     executor = InMemoryFindingAcknowledgementExecutor([_FINDING_RESOURCE])
 
-    evidence = _workflow_runtime(executor).run(
-        _action(resource="finding:demo-999")
-    )
+    evidence = _workflow_runtime(executor).run(_action(resource="finding:demo-999"))
 
     assert evidence.authorization.outcome == "deny"
     assert evidence.authorization.reason == "no_matching_rule"
