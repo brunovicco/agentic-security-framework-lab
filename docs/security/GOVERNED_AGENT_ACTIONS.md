@@ -119,6 +119,44 @@ The first provider-free adapter is `StaticApiKeyCallerAuthenticator`. It is inte
 
 This fixture demonstrates the authentication boundary without claiming production secret storage, rotation, throttling, transport binding, or end-user authentication.
 
+### Authentication-first governed execution
+
+Phase 36 composes authentication with the existing governed runtime through `AuthenticatedGovernedActionRuntime`.
+
+The application receives the credential and action proposal as separate inputs:
+
+```text
+CallerCredential + ProposedAction
+        |
+        v
+AuthenticatedGovernedActionRuntime
+        |
+        +-- authentication rejected
+        |       -> no ActionContext
+        |       -> no authorization call
+        |       -> no mutable execution
+        |
+        +-- authentication succeeds
+                -> derived ActionContext only
+                -> GovernedActionRuntime
+                -> authorization
+                -> approval when required
+                -> execution when permitted
+```
+
+The credential itself is not forwarded into `GovernedActionRuntime`, the authorizer, the approval provider, or the executor.
+
+`AuthenticatedActionExecutionEvidence` keeps two facts separate:
+
+```text
+authentication
+execution | none
+```
+
+Rejected authentication must have no action execution evidence. Successful authentication must pair action execution evidence with the exact `ActionContext` produced by authentication. This prevents evidence from silently substituting a different caller after credential verification.
+
+Authentication success is therefore a precondition for authorization, not a permission grant.
+
 ## 3. Deterministic authorization
 
 `StaticActionAuthorizationPolicy` is the current controlled-lab policy implementation.
@@ -146,9 +184,9 @@ reason = no_matching_rule
 
 This means changing only the resource, environment, caller, or action creates a different authorization request.
 
-Authentication and authorization remain separate. A successfully verified API key can establish caller context, but it does not itself grant any action. The caller must still match the deterministic authorization policy in a later composition phase.
+Authentication and authorization remain separate. A successfully verified API key establishes caller context, and the authenticated runtime then passes that context into the unchanged deterministic authorization policy. The policy can still deny the caller.
 
-`identity_source` is not yet a policy dimension. Phase 35 proves authentication independently from runtime composition; source-aware authorization is a separate hardening decision rather than an implicit behavior change.
+`identity_source` is not yet a policy dimension. Source-aware authorization remains a separate hardening decision rather than an implicit behavior change.
 
 ## 4. Human approval is separate authority
 
@@ -187,7 +225,7 @@ The fixture rejects duplicate `approval_id` values and can hold multiple distinc
 
 ## 5. Runtime enforcement
 
-`GovernedActionRuntime` owns the enforcement order:
+`GovernedActionRuntime` owns authorization, approval, and execution enforcement after trusted caller context exists:
 
 ```mermaid
 flowchart TD
@@ -201,6 +239,8 @@ flowchart TD
     X --> E[Return execution evidence]
 ```
 
+When service-caller authentication is used, `AuthenticatedGovernedActionRuntime` sits before this runtime and supplies the context only after credential verification succeeds.
+
 The executor is reached only after the application-owned control path permits it.
 
 The runtime returns `ActionExecutionEvidence` containing independent facts about:
@@ -211,7 +251,7 @@ The runtime returns `ActionExecutionEvidence` containing independent facts about
 - approval status and approval evidence when present;
 - whether execution occurred.
 
-Because evidence embeds the same `ActionContext` used by authorization, the runtime does not create a second identity or provenance channel. Raw credentials are not part of `ActionContext` or `ActionExecutionEvidence`.
+Because evidence embeds the same `ActionContext` used by authorization, the runtime does not create a second identity or provenance channel. Raw credentials are not part of `ActionContext`, `CallerAuthenticationDecision`, `ActionExecutionEvidence`, or `AuthenticatedActionExecutionEvidence`.
 
 This distinction matters because:
 
@@ -252,7 +292,7 @@ None of these adapters contains its own authorization rule table or interprets a
 
 The framework orchestrates. The application decides and enforces.
 
-Existing framework adapters continue to use their explicitly injected local `trusted_composition` context. Phase 35 does not silently add API-key handling inside any framework adapter.
+Existing framework adapters continue to use their explicitly injected local `trusted_composition` context. Phases 35-36 do not silently add API-key handling inside any framework adapter; authenticated service-caller composition remains an application concern.
 
 ### Agno retry hardening
 
@@ -302,14 +342,15 @@ Provider-free adversarial tests additionally exercise:
 - tool/action substitution;
 - unsafe proposals that must not imply unsafe side effects.
 
-Identity tests additionally prove that model-adjacent proposals cannot smuggle `identity_source`, unsupported provenance values are rejected, and an invalid service credential creates no trusted context.
+Identity tests additionally prove that model-adjacent proposals cannot smuggle `identity_source`, unsupported provenance values are rejected, an invalid service credential creates no trusted context, and rejected authentication cannot reach authorization or mutable execution.
 
 Relevant tests:
 
 - `tests/integration/test_adversarial_action_authorization.py`
 - `tests/unit/application/test_action_authorization.py`
 - `tests/unit/application/test_action_identity.py`
-- `tests/unit/adapters/test_action_identity.py`
+- `tests/unit/application/test_authenticated_action_runtime.py`
+- `tests/unit/adapters/test_service_caller_authenticator.py`
 
 These tests validate the implemented authorization and authentication boundaries. They are not a claim of comprehensive prompt-injection, enterprise IAM, or authorization-system coverage.
 
@@ -353,7 +394,7 @@ The compatibility and real STDIO smoke checks verify both returned execution evi
 
 MCP tool annotations are treated only as behavioral metadata. They do not replace application authorization or runtime enforcement.
 
-Phase 35 does not route API-key credentials through MCP STDIO. Remote transport authentication remains a separate increment.
+Phases 35-36 do not route API-key credentials through MCP STDIO. Remote transport authentication remains a separate increment.
 
 ## 11. What the current implementation does not claim
 
@@ -380,7 +421,7 @@ Current non-goals include:
 
 The current MCP `local-mcp-host` identity with `identity_source = trusted_composition` is a deployment-scoped local trust context for the experiment. It must not be described as authenticated user or agent identity.
 
-The Phase 35 `api_key` source proves only a matching synthetic service credential in the controlled fixture. It must not be described as end-user authentication or production remote identity.
+The `api_key` source proves only a matching synthetic service credential in the controlled fixture. Phase 36 proves local authentication-first application composition, not remote authenticated identity propagation.
 
 ## 12. Security invariants
 
@@ -392,23 +433,26 @@ The implemented Governed Agent Actions boundary is designed around these invaria
 4. **Identity provenance is trusted context and cannot be declared by the model.**
 5. **Credential verification is separate from action authorization.**
 6. **Failed authentication produces no trusted `ActionContext`.**
-7. **Raw caller credentials do not enter authorization or execution evidence.**
-8. **`trusted_composition` provenance is not authentication proof.**
-9. **`api_key` identifies only the controlled service credential mechanism.**
-10. **Unknown authorization scopes fail closed.**
-11. **Human approval is separate trusted evidence, not a prompt field.**
-12. **Approval is bound to one exact caller and action scope.**
-13. **One claimed approval cannot be replayed for a second mutable execution.**
-14. **A retry after a claimed approval requires fresh human evidence.**
-15. **Framework adapters do not own policy or enforcement.**
-16. **A denied or unapproved action must not reach the mutable executor.**
-17. **Execution evidence is distinct from authorization evidence.**
-18. **Framework-specific retries must not silently multiply mutable side effects.**
+7. **Failed authentication cannot reach authorization, approval, or mutable execution.**
+8. **Raw caller credentials do not enter authorization or execution evidence.**
+9. **Authenticated execution must use the exact context established by authentication.**
+10. **Authentication success never implies action authorization.**
+11. **`trusted_composition` provenance is not authentication proof.**
+12. **`api_key` identifies only the controlled service credential mechanism.**
+13. **Unknown authorization scopes fail closed.**
+14. **Human approval is separate trusted evidence, not a prompt field.**
+15. **Approval is bound to one exact caller and action scope.**
+16. **One claimed approval cannot be replayed for a second mutable execution.**
+17. **A retry after a claimed approval requires fresh human evidence.**
+18. **Framework adapters do not own policy or enforcement.**
+19. **A denied or unapproved action must not reach the mutable executor.**
+20. **Execution evidence is distinct from authorization evidence.**
+21. **Framework-specific retries must not silently multiply mutable side effects.**
 
 ## 13. How to explain this in an interview
 
 A concise explanation is:
 
-> "The agent can propose a tool action, but the proposal is not authority. I separate caller authentication from authorization: a trusted boundary can establish `ActionContext`, while policy still decides whether that caller can execute the exact action scope. Local composition remains explicitly non-authenticated provenance, and a provider-free API-key fixture proves service-caller credential verification without leaking the credential into runtime evidence. Human approval is yet another separate authority. The same authorization/runtime boundary remains framework-neutral across LangGraph, CrewAI, LlamaIndex, Agno, and MCP."
+> "The agent can propose a tool action, but the proposal is not authority. I separate caller authentication from authorization: a credential is verified first, that derives a trusted `ActionContext`, and only that context reaches the existing deterministic authorization runtime. Failed authentication never reaches policy or execution, while successful authentication can still be denied by policy. The raw credential stays outside authorization and execution evidence. Human approval is another independent authority, and the same governed runtime remains framework-neutral across LangGraph, CrewAI, LlamaIndex, Agno, and MCP."
 
 The important architectural point is not the specific in-memory action or synthetic credential. It is that **authentication, identity context, authorization, approval, and execution are independent control points rather than one model-controlled tool call**.
