@@ -6,9 +6,9 @@
 
 Um laboratório de engenharia framework-neutral para construir, proteger, avaliar e comparar **workflows de IA agêntica** sob os mesmos controles determinísticos.
 
-O projeto implementa a mesma carga de análise de vulnerabilidades com **LangGraph, CrewAI, LlamaIndex e Agno**, centraliza acesso a providers com **LiteLLM**, valida o raciocínio do modelo fora do LLM, demonstra compatibilidade **MCP** e emite observações lógicas de **OpenTelemetry** sem conteúdo sensível.
+O projeto implementa a mesma carga de análise de vulnerabilidades com **LangGraph, CrewAI, LlamaIndex e Agno**, centraliza acesso a providers com **LiteLLM**, valida o raciocínio do modelo fora do LLM, demonstra compatibilidade **MCP**, emite observações lógicas de **OpenTelemetry** sem conteúdo sensível e agora também exercita **ações mutáveis governadas** por uma mesma fronteira de autorização e enforcement da Application.
 
-> **Ideia central:** frameworks podem ser responsáveis pela orquestração, mas não devem automaticamente ser donos da autoridade de segurança, política, evidência ou decisão final.
+> **Ideia central:** frameworks podem ser responsáveis pela orquestração, mas não devem automaticamente ser donos da autoridade de segurança, política, evidência, autorização ou decisão final.
 
 ## Por que este projeto importa
 
@@ -19,6 +19,8 @@ Frameworks agênticos tornam protótipos fáceis. Sistemas de IA mais próximos 
 - Como retries, fallback, tools, telemetria e acesso ao provider permanecem governáveis?
 - Como comparar abstrações de orquestração mantendo carga, verdade esperada, alias de modelo e política de validação constantes?
 - Como preservar evidência de *como* um resultado foi produzido, em vez de reportar apenas acurácia final?
+- O que acontece quando um agente consegue propor uma ação mutável, mas não pode autorizar a si próprio?
+- Como identidade do caller, least privilege, aprovação humana e evidence de execução continuam estáveis quando o framework ou a superfície de tools muda?
 
 Este repositório transforma essas perguntas em arquitetura executável, testes, evidências de benchmark e trade-offs explícitos.
 
@@ -26,10 +28,10 @@ Este repositório transforma essas perguntas em arquitetura executável, testes,
 
 | Público | Comece por | O que avaliar rapidamente |
 | --- | --- | --- |
-| **Developer / AI Engineer** | [Guia de desenvolvimento](docs/DEVELOPMENT.md) → [Arquitetura](docs/ARCHITECTURE.md) | boundaries, contratos tipados, adapters, retries, fallback, MCP, OTel, reprodutibilidade |
-| **Engineering Manager / CIO / Arquiteto** | [Executive overview](docs/EXECUTIVE_OVERVIEW.md) → [Framework decision matrix](docs/FRAMEWORK_DECISION_MATRIX.md) | governança, fronteira de provider, trade-offs operacionais, portabilidade, disciplina de evidência |
-| **Recrutador / Entrevistador** | este README → [Executive overview](docs/EXECUTIVE_OVERVIEW.md) | escopo, ownership de engenharia, tecnologias, avaliação mensurável, segurança e pensamento de plataforma |
-| **Segurança / Governança** | [Arquitetura](docs/ARCHITECTURE.md) → [Evidências de segurança](docs/security/) | trust boundaries, controles determinísticos, testes adversariais, privacidade e telemetria |
+| **Developer / AI Engineer** | [Guia de desenvolvimento](docs/DEVELOPMENT.md) → [Arquitetura](docs/ARCHITECTURE.md) | boundaries, contratos tipados, adapters, retries, fallback, governed actions, MCP, OTel, reprodutibilidade |
+| **Engineering Manager / CIO / Arquiteto** | [Executive overview](docs/EXECUTIVE_OVERVIEW.md) → [Governed Agent Actions](docs/security/GOVERNED_AGENT_ACTIONS.md) | governança, autorização, fronteira de provider, trade-offs operacionais, portabilidade, disciplina de evidência |
+| **Recrutador / Entrevistador** | este README → [Executive overview](docs/EXECUTIVE_OVERVIEW.md) | escopo, ownership de engenharia, tecnologias, avaliação mensurável, segurança de IA e pensamento de plataforma |
+| **Segurança / Governança** | [Arquitetura](docs/ARCHITECTURE.md) → [Governed Agent Actions](docs/security/GOVERNED_AGENT_ACTIONS.md) | trust boundaries, least privilege, HITL, runtime enforcement, testes adversariais, MCP, privacidade e telemetria |
 
 Veja o [mapa completo da documentação](docs/README.md).
 
@@ -44,8 +46,9 @@ Veja o [mapa completo da documentação](docs/README.md).
 - oracle fallback determinístico quando o reasoning probabilístico é rejeitado;
 - separação entre tentativas de análise da aplicação e chamadas reais de modelo;
 - acesso a modelo via alias governado e provider-neutral do LiteLLM;
-- supressão de retries ocultos quando eles prejudicariam a qualidade da evidência;
-- artifacts imutáveis de avaliação provider-backed vinculados a um commit Git exato.
+- supressão de retries ocultos quando eles prejudicariam a qualidade da evidência ou poderiam multiplicar side effects mutáveis;
+- artifacts imutáveis de avaliação provider-backed vinculados a um commit Git exato;
+- orquestração de ações mutáveis portável entre LangGraph, CrewAI, LlamaIndex e Agno sem mover autorização para esses frameworks.
 
 ### Segurança e governança
 
@@ -53,20 +56,26 @@ Veja o [mapa completo da documentação](docs/README.md).
 - identidade da evidência e aplicabilidade são validadas fora do modelo;
 - evidência não confiável não recebe autoridade de instrução por padrão;
 - política determinística controla necessidade de revisão humana;
+- `ProposedAction`, adjacente ao modelo, é separada do `ActionContext` confiável;
+- autorização least-privilege atual avalia exatamente `(caller_id, action, resource, environment)`;
+- scopes desconhecidos falham de forma fechada;
+- `require_human_approval` continua bloqueado até existir evidência de aprovação confiável para exatamente o mesmo caller e action scope;
+- autorização, aprovação e execução real são preservadas como fatos distintos de evidence;
 - telemetria proprietária de frameworks é desabilitada quando necessário para preservar a fronteira de privacidade;
 - OpenTelemetry lógico contém somente metadata segura, sem prompts, respostas, rationale, evidência, credenciais ou payloads de provider;
 - mapeamento provider/modelo permanece atrás do gateway em vez de vazar para cada adapter.
 
 ### Plataforma e interoperabilidade
 
-- LangGraph evaluator-optimizer;
+- LangGraph evaluator-optimizer e `StateGraph` para governed actions;
 - CrewAI Agent / Task / Crew;
-- CrewAI Flow com chamadas estruturadas diretas ao LLM;
-- LlamaIndex Workflow com eventos tipados;
-- Agno Workflow com primitives nativas de loop/condition;
+- CrewAI Flow com chamadas estruturadas diretas ao LLM e Flow de governed action;
+- LlamaIndex Workflow com eventos tipados e Workflow de governed action;
+- Agno Workflow com primitives nativas de loop/condition e Step mutável sem retry automático;
 - LiteLLM como fronteira centralizada de acesso a providers;
-- compatibilidade MCP v2 mais smoke real local STDIO host/client;
-- CI provider-free para qualidade, tipagem, segurança, MCP e contrato de OTel.
+- compatibilidade MCP v2 mais smokes reais locais STDIO para applicability read-only e governed mutable actions;
+- conformance cross-framework de governed actions contra a execução direta da Application;
+- CI provider-free para qualidade, tipagem, segurança, MCP, governed actions e contrato de OTel.
 
 ## Invariante central
 
@@ -80,36 +89,47 @@ evidência explica
 
 O LLM é um componente probabilístico de raciocínio, não a autoridade final.
 
+Para ações mutáveis, o mesmo princípio vira:
+
 ```text
-                    ┌────────────────────────────┐
-                    │  evidência determinística  │
-                    └─────────────┬──────────────┘
-                                  │
-                                  ▼
-                      análise probabilística
-                                  │
-                                  ▼
-                    avaliador determinístico
-                       │                    │
-                     aceito              rejeitado
-                       │                    │
-                       │               retry limitado
-                       │                    │
-                       │             avaliação novamente
-                       │                    │
-                       │               esgotou?
-                       │                    │
-                       │                    ▼
-                       │           oracle determinístico
-                       └──────────────┬─────┘
-                                      ▼
-                            política determinística
-                                      │
-                                      ▼
-                               AnalysisResult
+agente/modelo propõe
+contexto confiável identifica o caller
+política autoriza
+evidência humana aprova quando necessário
+runtime aplica enforcement
+adapter executa
+evidência prova o que aconteceu
 ```
 
-Um resultado final correto **não significa necessariamente que o LLM acertou na primeira tentativa**. A distinção entre **qualidade do modelo** e **segurança do sistema** é uma das principais conclusões do laboratório.
+E uma separação permanece explícita:
+
+```text
+tool disponível != tool autorizado != tool executado
+```
+
+Leia [Governed Agent Actions](docs/security/GOVERNED_AGENT_ACTIONS.md) para o trust model completo da v1.1.
+
+## Snapshot de engenharia v1.1 — Governed Agent Actions
+
+O desenvolvimento pós-v1.0 estende o princípio original de **decisões de análise** para **ações mutáveis de agentes** sem mudar quem possui a autoridade de segurança.
+
+A fronteira controlada atual inclui:
+
+- `ProposedAction(action, resource, environment)` congelada como proposta não confiável;
+- `ActionContext(caller_id)` separado e fornecido por composição/runtime confiável;
+- autorização determinística de scope exato com outcomes `allow`, `deny` e `require_human_approval`;
+- `HumanApprovalEvidence` confiável vinculada exatamente à proposta e ao caller context;
+- `GovernedActionRuntime` como único enforcement point antes da execução mutável;
+- `ActionExecutionEvidence` separando decisão, status de aprovação e execução real;
+- um adapter in-memory seguro para `acknowledge_finding`;
+- adapters de governed action para LangGraph, CrewAI Flow, LlamaIndex Workflow e Agno Workflow;
+- testes adversariais para caller spoofing, fake approval, tool substitution, scope escalation e retry-after-deny;
+- conformance cross-framework comparando evidence completa e side effects observáveis com a execução direta da Application;
+- um servidor MCP STDIO mutável separado, cujo schema não permite ao modelo fornecer identidade de caller ou aprovação confiável.
+
+A matriz de conformance cobre allow exato, deny explícito, approval ausente, approval confiável validado, caller mismatch e resource escalation. Em todos os frameworks, os mesmos security semantics e a mesma contagem de side effects devem coincidir com a baseline direta da Application.
+
+Isso é **evidência provider-free de integração entre Application, frameworks e MCP local**. Não é uma afirmação de identidade remota autenticada, infraestrutura de autorização production-grade, action execution provider-backed ou certificação de produção.
 
 ## Snapshot da avaliação v1.0
 
@@ -168,6 +188,8 @@ Artifacts provider-direct históricos permanecem imutáveis e não são reescrit
 
 ## Implementações por framework
 
+### Carga de análise
+
 | Framework / abstração | Orquestração nativa | Structured reasoning | Fronteira de provider | Autoridade determinística |
 | --- | --- | --- | --- | --- |
 | LangGraph | graph nodes + conditional routing | LangChain structured output | LiteLLM `security-analysis` | Application |
@@ -176,7 +198,16 @@ Artifacts provider-direct históricos permanecem imutáveis e não são reescrit
 | LlamaIndex Workflow | eventos tipados de Workflow | `structured_predict()` | LiteLLM `security-analysis` | Application |
 | Agno Workflow | `Workflow` + `Loop` + `Condition` | Agent structured output | LiteLLM `security-analysis` | Application |
 
-Os frameworks são deliberadamente adapters, não donos das regras de negócio ou segurança. Consulte a [framework decision matrix](docs/FRAMEWORK_DECISION_MATRIX.md) para os trade-offs observados nesta carga.
+### Ação mutável governada
+
+| Framework | Papel do framework | Contexto confiável | Dono de autorização/enforcement |
+| --- | --- | --- | --- |
+| LangGraph | um node de action graph | injetado fora do graph input | `GovernedActionRuntime` |
+| CrewAI Flow | um start determinístico | dependência do construtor, fora do Flow state | `GovernedActionRuntime` |
+| LlamaIndex Workflow | um step com evento tipado | dependência do construtor, fora do StartEvent | `GovernedActionRuntime` |
+| Agno Workflow | um Step Python customizado | dependência injetada, fora do workflow input | `GovernedActionRuntime` |
+
+Os frameworks são deliberadamente adapters, não donos das regras de negócio ou segurança. Consulte a [framework decision matrix](docs/FRAMEWORK_DECISION_MATRIX.md) para os trade-offs da carga de análise e [Governed Agent Actions](docs/security/GOVERNED_AGENT_ACTIONS.md) para a fronteira mutável.
 
 ## Fronteiras de confiança e provider
 
@@ -194,7 +225,29 @@ LLM provider
 
 Os clientes dos frameworks conhecem o alias estável e o contrato do gateway. Identificadores nativos e credenciais de provider permanecem fora do fluxo específico de cada framework.
 
-Separadamente, a telemetria lógica da aplicação descreve fatos seguros da execução sem exportar automaticamente conteúdo do modelo:
+Separadamente, ações mutáveis governadas usam outra cadeia de autoridade:
+
+```text
+proposta de ação não confiável
+      +
+caller context confiável
+      │
+      ▼
+autorização da Application
+      │
+      ├─ deny ──────────────────────► evidence / sem execução
+      │
+      ├─ requer approval ─► validação de approval confiável
+      │                         │
+      │                         └─ ausente/inválido ─► sem execução
+      ▼
+GovernedActionRuntime
+      │
+      ▼
+adapter mutável
+```
+
+Separadamente, a telemetria lógica da aplicação descreve fatos seguros da execução de análise sem exportar automaticamente conteúdo do modelo:
 
 ```text
 Execução da aplicação
@@ -206,7 +259,27 @@ AnalysisExecutionObservation
 composição OpenTelemetry controlada pelo deployment
 ```
 
-Leia [Arquitetura](docs/ARCHITECTURE.md), [LiteLLM gateway foundation](docs/litellm/GATEWAY_FOUNDATION.md) e [Privacy](docs/PRIVACY.md) para os detalhes.
+Leia [Arquitetura](docs/ARCHITECTURE.md), [Governed Agent Actions](docs/security/GOVERNED_AGENT_ACTIONS.md), [LiteLLM gateway foundation](docs/litellm/GATEWAY_FOUNDATION.md) e [Privacy](docs/PRIVACY.md) para os detalhes.
+
+## Fronteira MCP
+
+O projeto mantém dois concerns MCP locais separados:
+
+```text
+agentic-security-applicability      # surface read-only de análise/applicability
+agentic-security-governed-actions   # surface controlada de ação mutável
+```
+
+No tool mutável governado:
+
+- `resource` e `environment` são argumentos não confiáveis;
+- `action` é fixada pelo handler;
+- o `caller_id` local controlado é injetado por composição confiável do server;
+- `caller_id`, `approval_id` e `approver_id` não são argumentos do tool;
+- ToolAnnotations são metadata, não autorização;
+- a evidence retornada é comparada com um segundo tool read-only que observa o estado real no smoke STDIO.
+
+O experimento MCP local não é descrito como identidade autenticada de usuário remoto nem como autorização de produção.
 
 ## Quickstart para developers
 
@@ -222,7 +295,7 @@ uv sync --frozen --all-groups
 uv run python scripts/quality_gate.py
 ```
 
-O quality gate normal é provider-free. Você **não precisa de API key de LLM** para validar contratos de engenharia, testes, tipagem, architecture checks, security checks ou comportamento determinístico.
+O quality gate normal é provider-free. Você **não precisa de API key de LLM** para validar contratos de engenharia, testes, tipagem, architecture checks, security checks, governed actions, MCP ou comportamento determinístico.
 
 Para checks focados:
 
@@ -232,21 +305,21 @@ uv run python scripts/quality_gate.py --list
 
 Para experimentos provider-backed via LiteLLM, siga o [guia do gateway](docs/litellm/GATEWAY_FOUNDATION.md) e a [metodologia da avaliação final](docs/evaluation/FINAL_EVALUATION.md). A avaliação final provider-backed permanece deliberadamente fora do CI normal.
 
-Leia o [guia completo de desenvolvimento](docs/DEVELOPMENT.md) antes de alterar adapters, evidência de avaliação, policy do gateway ou contratos de telemetria.
+Leia o [guia completo de desenvolvimento](docs/DEVELOPMENT.md) antes de alterar adapters, contratos de autorização/runtime, evidência de avaliação, policy do gateway, tools MCP ou contratos de telemetria.
 
 ## Mapa do repositório
 
 ```text
 src/agentic_lab/
 ├── domain/          # conceitos e invariantes independentes de framework
-├── application/     # casos de uso, evaluator/policy, ports
-└── adapters/        # LangGraph, CrewAI, LlamaIndex, Agno, gateway
+├── application/     # casos de uso, evaluator/policy/autorização, ports
+└── adapters/        # LangGraph, CrewAI, LlamaIndex, Agno, gateway/actions
 
 config/litellm/      # configuração governada de acesso a provider
-scripts/             # benchmarks, avaliação, quality gates e smokes
+scripts/             # benchmarks, avaliação, quality gates, servidores/smokes MCP
 docs/                # arquitetura, ADRs, segurança, avaliação, MCP, privacy
 artifacts/           # evidência imutável de benchmark/avaliação
-tests/               # regressão e contratos provider-free
+tests/               # regressão, adversarial, conformance e contratos provider-free
 ```
 
 ## Mapa da documentação
@@ -256,6 +329,7 @@ tests/               # regressão e contratos provider-free
 - [Documentação por audiência](docs/README.md)
 - [Executive / portfolio overview](docs/EXECUTIVE_OVERVIEW.md)
 - [Arquitetura e trust boundaries](docs/ARCHITECTURE.md)
+- [Governed Agent Actions](docs/security/GOVERNED_AGENT_ACTIONS.md)
 - [Framework decision matrix](docs/FRAMEWORK_DECISION_MATRIX.md)
 
 ### Desenvolver e alterar o código
@@ -269,9 +343,11 @@ tests/               # regressão e contratos provider-free
 - [Metodologia da avaliação final](docs/evaluation/FINAL_EVALUATION.md)
 - [Evidência five-way atual](artifacts/final-evaluation/phase15-20260905-v2/benchmarks/comparison/five-way-latest.md)
 - [Manifest da avaliação](artifacts/final-evaluation/phase15-20260905-v2/manifest.json)
+- [Conformance cross-framework de governed actions](tests/integration/test_governed_action_framework_conformance.py)
 
 ### Segurança, privacidade e interoperabilidade
 
+- [Governed Agent Actions](docs/security/GOVERNED_AGENT_ACTIONS.md)
 - [Privacy boundary](docs/PRIVACY.md)
 - [Experimentos de segurança](docs/security/)
 - [MCP overview](docs/MCP.md)
@@ -282,20 +358,23 @@ tests/               # regressão e contratos provider-free
 
 O repositório é construído ao redor de decisões que continuam válidas mesmo quando o framework é substituído:
 
-1. **Domain e policy permanecem framework-neutral.**
+1. **Domain, policy, autorização e enforcement permanecem framework-neutral.**
 2. **Saída probabilística é validada por software determinístico.**
-3. **Falhas e recovery são observáveis em vez de ocultos.**
-4. **Acesso ao provider é centralizado atrás de uma fronteira estável.**
-5. **Telemetria possui contrato explícito de privacidade.**
-6. **Evidência de benchmark é persistida e vinculada ao estado do código.**
-7. **Trade-offs são documentados em vez de reduzidos a “framework X venceu”.**
+3. **Um modelo pode propor uma ação mutável, mas não pode autorizar a si próprio.**
+4. **Falhas e recovery são observáveis em vez de ocultos.**
+5. **Acesso ao provider é centralizado atrás de uma fronteira estável.**
+6. **Telemetria possui contrato explícito de privacidade.**
+7. **Evidência de benchmark é persistida e vinculada ao estado do código.**
+8. **Trade-offs são documentados em vez de reduzidos a “framework X venceu”.**
 
-Esses princípios são reutilizáveis ao discutir plataformas corporativas de agentes, AI gateways, runtimes governados, LLMOps, AI security ou seleção de frameworks.
+Esses princípios são reutilizáveis ao discutir plataformas corporativas de agentes, AI gateways, runtimes governados, LLMOps, AI security, autorização, MCP ou seleção de frameworks.
 
 ## Status do projeto
 
-O escopo de engenharia planejado para v1.0 está concluído: baseline de domínio, controles determinísticos, evolução de RAG, quatro famílias de frameworks / cinco variantes de orquestração, comparação de benchmark, LiteLLM, MCP, observabilidade, avaliação final, hardening de runtime e documentação de portfólio.
+O escopo de engenharia planejado para **v1.0** está concluído: baseline de domínio, controles determinísticos, evolução de RAG, quatro famílias de frameworks / cinco variantes de orquestração, comparação de benchmark, LiteLLM, MCP, observabilidade, avaliação final, hardening de runtime e documentação de portfólio.
 
-O repositório continua sendo um laboratório de engenharia, não uma afirmação de certificação para produção. Trabalhos futuros podem ampliar os experimentos sem reescrever a evidência histórica aceita.
+O desenvolvimento pós-v1.0 está evoluindo a **v1.1 Governed Agent Actions**: autorização de scope exato na Application, trusted caller context, evidence controlada de HITL approval, runtime enforcement, execução mutável segura, conformance em quatro frameworks e uma fronteira MCP local governada.
+
+O repositório continua sendo um laboratório de engenharia, não uma afirmação de certificação para produção. Trabalhos futuros podem ampliar identidade, policy, durabilidade de approvals, side effects externos e audit infrastructure sem reescrever a evidência histórica v1.0 aceita.
 
 Veja [CHANGELOG.md](CHANGELOG.md) para mudanças por release.
