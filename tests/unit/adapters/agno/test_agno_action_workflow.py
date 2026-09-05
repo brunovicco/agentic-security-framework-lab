@@ -8,6 +8,7 @@ from agentic_lab.adapters.fixtures.finding_actions import (
     InMemoryFindingAcknowledgementExecutor,
 )
 from agentic_lab.application.action_authorization import (
+    ActionAuthorizationRuleKey,
     ActionContext,
     AuthorizationOutcome,
     ProposedAction,
@@ -31,21 +32,24 @@ class _FailingExecutor:
 
 
 def _policy() -> StaticActionAuthorizationPolicy:
-    rules: dict[tuple[str, str, str, str], AuthorizationOutcome] = {
+    rules: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
         (
             _ALLOWED_CALLER,
+            "trusted_composition",
             ACKNOWLEDGE_FINDING_ACTION,
             _FINDING_RESOURCE,
             "test",
         ): "allow",
         (
             _ALLOWED_CALLER,
+            "trusted_composition",
             ACKNOWLEDGE_FINDING_ACTION,
             _FINDING_RESOURCE,
             "staging",
         ): "deny",
         (
             _ALLOWED_CALLER,
+            "trusted_composition",
             ACKNOWLEDGE_FINDING_ACTION,
             _FINDING_RESOURCE,
             "production",
