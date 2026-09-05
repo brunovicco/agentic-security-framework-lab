@@ -8,6 +8,7 @@ from agentic_lab.adapters.fixtures.finding_actions import (
 )
 from agentic_lab.application.action_approval import HumanApprovalEvidence
 from agentic_lab.application.action_authorization import (
+    ActionAuthorizationRuleKey,
     ActionContext,
     AuthorizationOutcome,
     ProposedAction,
@@ -22,11 +23,24 @@ REMEDIATION_AGENT = "remediation-agent"
 def _runtime(
     executor: InMemoryFindingAcknowledgementExecutor,
 ) -> GovernedActionRuntime:
-    rules: dict[tuple[str, str, str, str], AuthorizationOutcome] = {
-        (REMEDIATION_AGENT, "acknowledge_finding", FINDING_RESOURCE, "test"): "allow",
-        (REMEDIATION_AGENT, "acknowledge_finding", FINDING_RESOURCE, "staging"): "deny",
+    rules: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
         (
             REMEDIATION_AGENT,
+            "trusted_composition",
+            "acknowledge_finding",
+            FINDING_RESOURCE,
+            "test",
+        ): "allow",
+        (
+            REMEDIATION_AGENT,
+            "trusted_composition",
+            "acknowledge_finding",
+            FINDING_RESOURCE,
+            "staging",
+        ): "deny",
+        (
+            REMEDIATION_AGENT,
+            "trusted_composition",
             "acknowledge_finding",
             FINDING_RESOURCE,
             "production",
@@ -128,9 +142,10 @@ def test_exact_trusted_approval_allows_only_approved_mutation() -> None:
         proposed_action=proposed_action,
         context=context,
     )
-    rules: dict[tuple[str, str, str, str], AuthorizationOutcome] = {
+    rules: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
         (
             REMEDIATION_AGENT,
+            "trusted_composition",
             "acknowledge_finding",
             FINDING_RESOURCE,
             "production",
@@ -171,8 +186,14 @@ def test_scope_escalation_has_zero_side_effect() -> None:
 def test_authorized_but_missing_resource_fails_without_mutation() -> None:
     """Keep authorization distinct from successful tool execution."""
     missing_resource = "finding:missing"
-    rules: dict[tuple[str, str, str, str], AuthorizationOutcome] = {
-        (REMEDIATION_AGENT, "acknowledge_finding", missing_resource, "test"): "allow",
+    rules: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
+        (
+            REMEDIATION_AGENT,
+            "trusted_composition",
+            "acknowledge_finding",
+            missing_resource,
+            "test",
+        ): "allow",
     }
     executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
     runtime = GovernedActionRuntime(
