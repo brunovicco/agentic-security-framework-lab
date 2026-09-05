@@ -1,0 +1,69 @@
+name: phase42-security-regression-sync
+
+on:
+  push:
+    branches:
+      - fix/phase-42-approval-revocation
+    paths:
+      - .github/workflows/phase42-security-regression-sync.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: fix/phase-42-approval-revocation
+      - name: Add revocation adversarial and conformance coverage
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old!r}")
+              file.write_text(text.replace(old, new, 1))
+
+          path = "tests/integration/test_adversarial_action_authorization.py"
+          anchor = '''def test_tool_substitution_is_authorized_as_the_actual_proposed_action() -> None:\n'''
+          revoked_test = '''def test_revoked_unused_human_approval_cannot_authorize_mutation() -> None:\n    """Prevent a valid but explicitly revoked capability from causing a side effect."""\n    executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])\n    proposed_action = _action(environment="production")\n    context = _context()\n    approval = HumanApprovalEvidence(\n        approval_id="approval-revoked-001",\n        approver_id="soc-reviewer",\n        proposed_action=proposed_action,\n        context=context,\n        approved_at=APPROVED_AT,\n        expires_at=EXPIRES_AT,\n    )\n    provider = InMemoryActionApprovalProvider([approval])\n    assert provider.revoke_approval(approval.approval_id) is True\n    runtime = GovernedActionRuntime(\n        authorizer=_policy(),\n        executor=executor,\n        approval_provider=provider,\n        approval_clock=FixedApprovalClock(VALID_NOW),\n    )\n\n    revoked = runtime.execute(proposed_action, context)\n    retry = runtime.execute(proposed_action, context)\n\n    assert revoked.authorization.outcome == "require_human_approval"\n    assert revoked.approval_status == "revoked"\n    assert revoked.human_approval == approval\n    assert revoked.execution_occurred is False\n    assert retry.approval_status == "missing"\n    assert retry.execution_occurred is False\n    assert executor.execution_count == 0\n    assert executor.is_acknowledged(FINDING_RESOURCE) is False\n\n\n'''
+          replace_once(path, anchor, revoked_test + anchor)
+
+          path = "tests/integration/test_governed_action_framework_conformance.py"
+          replace_once(
+              path,
+              '''    expected_execution: bool\n    approval_expires_at: datetime | None = None\n''',
+              '''    expected_execution: bool\n    approval_expires_at: datetime | None = None\n    revoke_approval: bool = False\n''',
+          )
+          expired = '''    _Scenario(\n        name="approval-expired",\n        proposed_action=_action(environment="production"),\n        context=ActionContext(caller_id=_ALLOWED_CALLER),\n        with_approval=True,\n        expected_outcome="require_human_approval",\n        expected_reason="human_approval_required",\n        expected_approval_status="expired",\n        expected_execution=False,\n        approval_expires_at=_NOW,\n    ),\n'''
+          revoked = '''    _Scenario(\n        name="approval-revoked",\n        proposed_action=_action(environment="production"),\n        context=ActionContext(caller_id=_ALLOWED_CALLER),\n        with_approval=True,\n        expected_outcome="require_human_approval",\n        expected_reason="human_approval_required",\n        expected_approval_status="revoked",\n        expected_execution=False,\n        revoke_approval=True,\n    ),\n'''
+          replace_once(path, expired, expired + revoked)
+          replace_once(
+              path,
+              '''    return GovernedActionRuntime(\n        authorizer=StaticActionAuthorizationPolicy(_RULES),\n        executor=executor,\n        approval_provider=InMemoryActionApprovalProvider(approvals),\n        approval_clock=FixedApprovalClock(),\n    )\n''',
+              '''    approval_provider = InMemoryActionApprovalProvider(approvals)\n    if scenario.revoke_approval:\n        if not approvals:\n            raise AssertionError("revocation scenario requires approval evidence")\n        if not approval_provider.revoke_approval(approvals[0].approval_id):\n            raise AssertionError("expected unclaimed approval revocation to succeed")\n\n    return GovernedActionRuntime(\n        authorizer=StaticActionAuthorizationPolicy(_RULES),\n        executor=executor,\n        approval_provider=approval_provider,\n        approval_clock=FixedApprovalClock(),\n    )\n''',
+          )
+          PY
+      - name: Format and commit only security regressions
+        run: |
+          python -m pip install ruff==0.16.5
+          ruff format \
+            tests/integration/test_adversarial_action_authorization.py \
+            tests/integration/test_governed_action_framework_conformance.py
+          git diff --check
+          git diff --exit-code -- . \
+            ':!tests/integration/test_adversarial_action_authorization.py' \
+            ':!tests/integration/test_governed_action_framework_conformance.py'
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            tests/integration/test_adversarial_action_authorization.py \
+            tests/integration/test_governed_action_framework_conformance.py
+          git commit -m "test: add approval revocation security regressions"
+          git push origin HEAD:fix/phase-42-approval-revocation
