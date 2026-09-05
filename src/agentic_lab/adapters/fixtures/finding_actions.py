@@ -28,9 +28,7 @@ class InMemoryFindingAcknowledgementExecutor:
     def execute(self, proposed_action: ProposedAction) -> None:
         """Apply the exact local operation after the caller has authorized it."""
         if proposed_action.action != ACKNOWLEDGE_FINDING_ACTION:
-            raise ValueError(
-                "finding acknowledgement executor received an unsupported action"
-            )
+            raise ValueError("finding acknowledgement executor received an unsupported action")
         if proposed_action.resource not in self._findings:
             raise LookupError("finding does not exist")
 
