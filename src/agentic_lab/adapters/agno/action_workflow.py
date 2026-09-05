@@ -94,8 +94,7 @@ class AgnoGovernedActionRuntime:
             raise RuntimeError("Agno governed action Workflow execution failed")
         if raw_output.status != RunStatus.completed:
             raise RuntimeError(
-                "Agno governed action Workflow ended with unexpected status: "
-                f"{raw_output.status}"
+                f"Agno governed action Workflow ended with unexpected status: {raw_output.status}"
             )
         if state.execution_evidence is None:
             raise RuntimeError("Agno governed action Workflow ended without execution evidence")
