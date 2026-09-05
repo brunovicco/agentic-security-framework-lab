@@ -201,10 +201,10 @@ There is deliberately no compatibility fallback to the older four-field key. Mis
 
 When policy requires approval, `GovernedActionRuntime` asks an `ActionApprovalProvider` to **claim** trusted `HumanApprovalEvidence`.
 
-Approval evidence is bound to the exact:
+Approval evidence is bound to the exact action/context and a bounded validity window:
 
 ```text
-ProposedAction + ActionContext
+ProposedAction + ActionContext + [approved_at, expires_at)
 ```
 
 The runtime records one of these approval states:
@@ -212,9 +212,11 @@ The runtime records one of these approval states:
 - `not_applicable`
 - `missing`
 - `invalid`
+- `not_yet_valid`
+- `expired`
 - `validated`
 
-Only validated, exact-match approval evidence can release an approval-required action for execution.
+Only exact-match approval evidence that is valid at trusted runtime time can become `validated` and release an approval-required action for execution.
 
 The default provider is fail-closed and returns no approval. The in-memory approval provider used by tests contains only explicitly supplied synthetic evidence; it never auto-approves.
 
@@ -230,6 +232,18 @@ This is deliberately fail-closed: a partially failed side effect must not make t
 
 The fixture rejects duplicate `approval_id` values and can hold multiple distinct approvals for the same exact scope when multiple executions were separately approved. This is process-local test evidence, not proof of durable or distributed transactional approval infrastructure.
 
+### Approval freshness
+
+Single-use prevents replay, but it does not by itself prevent stale authority. `HumanApprovalEvidence` therefore requires timezone-aware `approved_at` and `expires_at`, with `expires_at` strictly later than issuance.
+
+`GovernedActionRuntime` owns freshness through an injected application `ApprovalClock`. The provider still owns only atomic claim semantics; frameworks, model output, and approval storage do not decide whether time is valid. The accepted interval is half-open: `approved_at <= trusted_now < expires_at`.
+
+A claimed approval before its issuance becomes `not_yet_valid`; a claim at or after its expiry becomes `expired`. Neither executes. Both capabilities remain consumed, so retry requires new human evidence. A naive clock result is rejected fail-closed.
+
+Tests use deterministic fixed clocks rather than sleeps. The adversarial suite proves that an old unused approval cannot authorize a late mutation, and the framework conformance matrix includes an expired-approval scenario across LangGraph, CrewAI, LlamaIndex, and Agno.
+
+This proves local application-owned temporal enforcement, not durable revocation, distributed clock synchronization, or production approval workflow infrastructure.
+
 ## 5. Runtime enforcement
 
 `GovernedActionRuntime` owns authorization, approval, and execution enforcement after trusted caller context exists:
@@ -242,7 +256,9 @@ flowchart TD
     A -->|allow| X[Execute adapter]
     A -->|require_human_approval| H[Claim one unused trusted approval]
     H -->|missing or invalid| B[Return evidence: no execution]
-    H -->|validated| X
+    H -->|exact scope| T[Validate trusted approval time]
+    T -->|not yet valid or expired| B
+    T -->|validated| X
     X --> E[Return execution evidence]
 ```
 
@@ -255,7 +271,7 @@ The runtime returns `ActionExecutionEvidence` containing independent facts about
 - the proposed action;
 - trusted caller context, including caller identity provenance;
 - authorization decision and reason;
-- approval status and approval evidence when present;
+- approval status, bounded approval evidence, and temporal validity when present;
 - whether execution occurred.
 
 Because evidence embeds the same `ActionContext` used by authorization, the runtime does not create a second identity or provenance channel. Raw credentials are not part of `ActionContext`, `CallerAuthenticationDecision`, `ActionExecutionEvidence`, or `AuthenticatedActionExecutionEvidence`.

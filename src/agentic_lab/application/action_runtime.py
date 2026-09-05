@@ -6,7 +6,9 @@ from pydantic import BaseModel, ConfigDict
 
 from agentic_lab.application.action_approval import (
     NULL_ACTION_APPROVAL_PROVIDER,
+    SYSTEM_APPROVAL_CLOCK,
     ActionApprovalProvider,
+    ApprovalClock,
     ApprovalStatus,
     HumanApprovalEvidence,
 )
@@ -50,11 +52,13 @@ class GovernedActionRuntime:
         authorizer: ActionAuthorizer,
         executor: ActionExecutor,
         approval_provider: ActionApprovalProvider = NULL_ACTION_APPROVAL_PROVIDER,
+        approval_clock: ApprovalClock = SYSTEM_APPROVAL_CLOCK,
     ) -> None:
-        """Bind policy, optional trusted HITL evidence, and execution boundaries."""
+        """Bind policy, trusted HITL evidence, time, and execution boundaries."""
         self._authorizer = authorizer
         self._executor = executor
         self._approval_provider = approval_provider
+        self._approval_clock = approval_clock
 
     def execute(
         self,
@@ -92,6 +96,30 @@ class GovernedActionRuntime:
                     context=context,
                     authorization=decision,
                     approval_status="invalid",
+                    human_approval=approval,
+                    execution_occurred=False,
+                )
+
+            now = self._approval_clock.now()
+            if now.tzinfo is None or now.utcoffset() is None:
+                raise RuntimeError("approval clock must return timezone-aware current time")
+
+            if now < approval.approved_at:
+                return ActionExecutionEvidence(
+                    proposed_action=proposed_action,
+                    context=context,
+                    authorization=decision,
+                    approval_status="not_yet_valid",
+                    human_approval=approval,
+                    execution_occurred=False,
+                )
+
+            if now >= approval.expires_at:
+                return ActionExecutionEvidence(
+                    proposed_action=proposed_action,
+                    context=context,
+                    authorization=decision,
+                    approval_status="expired",
                     human_approval=approval,
                     execution_occurred=False,
                 )

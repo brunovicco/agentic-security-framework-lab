@@ -1,5 +1,7 @@
 """Provider-free adversarial integration tests for governed agent actions."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from pydantic import ValidationError
 
@@ -23,6 +25,20 @@ FINDING_RESOURCE = "finding:demo-001"
 OTHER_FINDING_RESOURCE = "finding:demo-999"
 REMEDIATION_AGENT = "remediation-agent"
 OBSERVER_AGENT = "observer-agent"
+APPROVED_AT = datetime(2026, 9, 5, 20, 0, tzinfo=UTC)
+EXPIRES_AT = APPROVED_AT + timedelta(minutes=15)
+VALID_NOW = APPROVED_AT + timedelta(minutes=5)
+
+
+class FixedApprovalClock:
+    """Return deterministic trusted time for adversarial approval checks."""
+
+    def __init__(self, current_time: datetime) -> None:
+        self._current_time = current_time
+
+    def now(self) -> datetime:
+        """Return the configured timezone-aware current time."""
+        return self._current_time
 
 
 class CountingActionAuthorizer:
@@ -214,11 +230,14 @@ def test_consumed_human_approval_cannot_be_replayed() -> None:
         approver_id="soc-reviewer",
         proposed_action=proposed_action,
         context=context,
+        approved_at=APPROVED_AT,
+        expires_at=EXPIRES_AT,
     )
     runtime = GovernedActionRuntime(
         authorizer=_policy(),
         executor=executor,
         approval_provider=InMemoryActionApprovalProvider([approval]),
+        approval_clock=FixedApprovalClock(VALID_NOW),
     )
 
     first = runtime.execute(proposed_action, context)
@@ -232,6 +251,39 @@ def test_consumed_human_approval_cannot_be_replayed() -> None:
     assert replay.execution_occurred is False
     assert executor.execution_count == 1
     assert executor.is_acknowledged(FINDING_RESOURCE) is True
+
+
+def test_stale_unused_human_approval_cannot_authorize_late_mutation() -> None:
+    """Treat old unconsumed human intent as expired authority, then consume it."""
+    executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
+    proposed_action = _action(environment="production")
+    context = _context()
+    approval = HumanApprovalEvidence(
+        approval_id="approval-stale-001",
+        approver_id="soc-reviewer",
+        proposed_action=proposed_action,
+        context=context,
+        approved_at=APPROVED_AT,
+        expires_at=EXPIRES_AT,
+    )
+    runtime = GovernedActionRuntime(
+        authorizer=_policy(),
+        executor=executor,
+        approval_provider=InMemoryActionApprovalProvider([approval]),
+        approval_clock=FixedApprovalClock(EXPIRES_AT),
+    )
+
+    stale = runtime.execute(proposed_action, context)
+    retry = runtime.execute(proposed_action, context)
+
+    assert stale.authorization.outcome == "require_human_approval"
+    assert stale.approval_status == "expired"
+    assert stale.human_approval == approval
+    assert stale.execution_occurred is False
+    assert retry.approval_status == "missing"
+    assert retry.execution_occurred is False
+    assert executor.execution_count == 0
+    assert executor.is_acknowledged(FINDING_RESOURCE) is False
 
 
 def test_tool_substitution_is_authorized_as_the_actual_proposed_action() -> None:

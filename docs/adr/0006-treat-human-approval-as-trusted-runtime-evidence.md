@@ -14,6 +14,8 @@ The project already separates untrusted `ProposedAction` from trusted `ActionCon
 
 A later hardening review identified an additional requirement: trusted approval evidence for a mutable action must not be reusable indefinitely. A reusable lookup would allow one human decision to authorize repeated identical side effects.
 
+After the single-use capability model was in place, a second temporal gap remained: an approval that had never been claimed could stay valid indefinitely. Old human intent must not authorize a much later mutable side effect merely because the approval was still unused.
+
 ## Decision
 
 Human approval is represented as separate trusted application evidence.
@@ -23,7 +25,9 @@ Human approval is represented as separate trusted application evidence.
 - one exact `ProposedAction`;
 - one exact trusted `ActionContext`;
 - a synthetic approval identifier;
-- a synthetic approver identifier.
+- a synthetic approver identifier;
+- one timezone-aware issuance instant `approved_at`;
+- one timezone-aware exclusive expiry instant `expires_at`.
 
 The identifiers are useful local audit evidence in this lab, but they are not authentication or IAM attestations.
 
@@ -33,20 +37,38 @@ The port exposes `claim_approval(...)`, not a reusable read operation. A success
 
 The runtime consults approval evidence only when deterministic policy returns `require_human_approval`.
 
-The runtime then records one of four low-cardinality approval states:
+The runtime then records one of six low-cardinality approval states:
 
 ```text
 not_applicable
 missing
 invalid
+not_yet_valid
+expired
 validated
 ```
 
-A matching, validated approval satisfies the runtime precondition and permits execution while preserving the original authorization outcome `require_human_approval` in execution evidence.
+A matching approval must also be valid at the runtime's trusted current time. Only `validated` evidence satisfies the runtime precondition and permits execution while preserving the original authorization outcome `require_human_approval` in execution evidence.
 
 An explicit `deny` is terminal. The approval provider is not consulted for denied actions, so human approval cannot override policy denial. Normal `allow` outcomes also do not claim approval.
 
 The runtime defensively checks that claimed approval evidence matches the exact proposed action and trusted caller context. A provider returning approval for another scope therefore fails closed even if the provider itself is buggy.
+
+### Temporal validity
+
+Approval validity uses the half-open interval:
+
+```text
+[approved_at, expires_at)
+```
+
+The evidence model requires timezone-aware timestamps and rejects `expires_at <= approved_at`. `GovernedActionRuntime` owns freshness enforcement through an injected `ApprovalClock`; the approval provider does not decide whether evidence is temporally valid. Production composition uses a UTC clock while tests inject deterministic fixed time.
+
+If trusted current time is before `approved_at`, the runtime records `not_yet_valid`. If current time is equal to or later than `expires_at`, it records `expired`. Both outcomes block execution. A clock returning a naive datetime is rejected as an invalid trusted temporal boundary.
+
+Temporal validation happens only after policy requires HITL, one approval has been claimed, and exact action/context binding has been confirmed. Normal `allow`, terminal `deny`, missing approval, and scope-mismatch paths therefore do not depend on time unnecessarily.
+
+A future-dated or expired approval is already claimed when temporal failure is discovered, so it stays consumed. Retry requires fresh human evidence rather than waiting for or resurrecting the same capability.
 
 ### Single-use and failure semantics
 
@@ -128,7 +150,8 @@ Rejected because the current increment only needs to prove trusted approval sepa
 ### Trade-offs
 
 - synthetic approver identity is not authentication proof;
-- approval persistence, expiry, revocation, and multi-party approval are not modeled yet;
+- durable approval persistence, revocation, and multi-party approval are not modeled yet;
+- temporal validity is enforced locally, but this does not prove clock synchronization or distributed expiry enforcement across processes;
 - the in-memory claim operation is process-local and does not prove distributed transactional atomicity;
 - the in-memory provider is controlled lab infrastructure only.
 
@@ -147,11 +170,13 @@ model claim of approval != trusted human approval
 
 policy deny + human approval = deny
 
-require_human_approval + missing/invalid approval = no execution
+require_human_approval + missing/invalid/not-yet-valid/expired approval = no execution
+
+valid approval time = approved_at <= trusted_now < expires_at
 
 one claimed approval = at most one execution attempt
 
 consumed approval + retry = new approval required
 ```
 
-Refs #131, #145
+Refs #131, #145, #163

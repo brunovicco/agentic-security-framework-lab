@@ -1,5 +1,7 @@
 """Component integration tests for governed mutable action execution."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from agentic_lab.adapters.fixtures.action_approvals import InMemoryActionApprovalProvider
@@ -18,6 +20,17 @@ from agentic_lab.application.action_runtime import GovernedActionRuntime
 
 FINDING_RESOURCE = "finding:demo-001"
 REMEDIATION_AGENT = "remediation-agent"
+APPROVED_AT = datetime(2026, 9, 5, 20, 0, tzinfo=UTC)
+VALID_NOW = APPROVED_AT + timedelta(minutes=5)
+EXPIRES_AT = APPROVED_AT + timedelta(minutes=15)
+
+
+class FixedApprovalClock:
+    """Return deterministic trusted time for component integration."""
+
+    def now(self) -> datetime:
+        """Return one valid instant inside the approval window."""
+        return VALID_NOW
 
 
 def _runtime(
@@ -141,6 +154,8 @@ def test_exact_trusted_approval_allows_only_approved_mutation() -> None:
         approver_id="soc-reviewer",
         proposed_action=proposed_action,
         context=context,
+        approved_at=APPROVED_AT,
+        expires_at=EXPIRES_AT,
     )
     rules: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
         (
@@ -155,6 +170,7 @@ def test_exact_trusted_approval_allows_only_approved_mutation() -> None:
         authorizer=StaticActionAuthorizationPolicy(rules),
         executor=executor,
         approval_provider=InMemoryActionApprovalProvider([approval]),
+        approval_clock=FixedApprovalClock(),
     )
 
     evidence = runtime.execute(proposed_action, context)

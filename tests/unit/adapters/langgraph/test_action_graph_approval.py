@@ -1,5 +1,7 @@
 """LangGraph regression proving trusted approval stays runtime-owned."""
 
+from datetime import UTC, datetime, timedelta
+
 from agentic_lab.adapters.fixtures.action_approvals import InMemoryActionApprovalProvider
 from agentic_lab.adapters.fixtures.finding_actions import (
     InMemoryFindingAcknowledgementExecutor,
@@ -17,6 +19,17 @@ from agentic_lab.application.action_runtime import GovernedActionRuntime
 
 FINDING_RESOURCE = "finding:demo-001"
 REMEDIATION_AGENT = "remediation-agent"
+APPROVED_AT = datetime(2026, 9, 5, 20, 0, tzinfo=UTC)
+VALID_NOW = APPROVED_AT + timedelta(minutes=5)
+EXPIRES_AT = APPROVED_AT + timedelta(minutes=15)
+
+
+class FixedApprovalClock:
+    """Return deterministic trusted time while LangGraph delegates enforcement."""
+
+    def now(self) -> datetime:
+        """Return one valid instant inside the approval window."""
+        return VALID_NOW
 
 
 def test_langgraph_executes_validated_approval_without_hitl_logic_in_graph() -> None:
@@ -32,6 +45,8 @@ def test_langgraph_executes_validated_approval_without_hitl_logic_in_graph() -> 
         approver_id="soc-reviewer",
         proposed_action=proposed_action,
         context=context,
+        approved_at=APPROVED_AT,
+        expires_at=EXPIRES_AT,
     )
     rules: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
         (
@@ -47,6 +62,7 @@ def test_langgraph_executes_validated_approval_without_hitl_logic_in_graph() -> 
         authorizer=StaticActionAuthorizationPolicy(rules),
         executor=executor,
         approval_provider=InMemoryActionApprovalProvider([approval]),
+        approval_clock=FixedApprovalClock(),
     )
 
     output = run_governed_action_graph(runtime, context, proposed_action)

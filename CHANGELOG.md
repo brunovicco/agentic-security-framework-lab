@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Hardened
+
+- Human approval evidence now carries required timezone-aware `approved_at` and `expires_at` timestamps, with a positive validity window enforced at the evidence boundary.
+- `GovernedActionRuntime` validates approval freshness against an application-owned trusted clock using the half-open interval `[approved_at, expires_at)`.
+- Future-dated and expired approvals fail closed as `not_yet_valid` and `expired`; a claimed temporal failure remains consumed so retry requires fresh human evidence.
+- Normal `allow` and terminal `deny` paths neither claim HITL evidence nor consult approval time.
+
+### Evidence
+
+- Deterministic runtime tests cover inclusive issuance, exclusive expiry, future-dated evidence, invalid clock output, anti-replay after temporal failure, and executor-failure semantics without sleeps or wall-clock-dependent tests.
+- The adversarial suite proves an old unused approval cannot authorize a late mutable action, and cross-framework conformance proves expired approval semantics remain identical across the direct runtime, LangGraph, CrewAI, LlamaIndex, and Agno.
+- Approval freshness evidence remains provider-free local/CI evidence; durable approval storage, revocation, multi-party workflow, and distributed transactional atomicity remain outside the current scope.
+
 ## 1.2.0 - 2026-09-05
 
 ### Added
