@@ -112,6 +112,7 @@ It does not retain credential material. The contract rejects contradictory evide
 The first provider-free adapter is `StaticApiKeyCallerAuthenticator`. It is intentionally a controlled fixture:
 
 - configured synthetic high-entropy API keys are reduced to SHA-256 digests during construction;
+- trusted composition can instead provide precomputed SHA-256 verification material, avoiding retention of an expected plaintext key before construction;
 - the adapter retains digests and caller ids rather than configured plaintext keys;
 - presented digests are compared with `hmac.compare_digest()`;
 - an unknown credential returns `rejected` and no `ActionContext`;
@@ -406,7 +407,35 @@ The compatibility and real STDIO smoke checks verify both returned execution evi
 
 MCP tool annotations are treated only as behavioral metadata. They do not replace application authorization or runtime enforcement.
 
-Phases 35-37 do not route API-key credentials through MCP STDIO. Remote transport authentication remains a separate increment.
+### Host-injected authenticated STDIO boundary
+
+Phase 38 adds a separate provider-free MCP v2 STDIO server for authenticated governed actions. It is intentionally not registered in project `.codex/config.toml`: authentication material belongs to the trusted host/process environment rather than model-visible Tool arguments or checked-in server configuration.
+
+The host supplies two separate values to the subprocess environment: a presented synthetic service credential and precomputed SHA-256 verification material. The server captures the presented credential, removes that raw value from the process environment, constructs `CallerCredential`, and invokes `AuthenticatedGovernedActionRuntime`.
+
+The model-visible mutable Tool still accepts only:
+
+```text
+resource
+environment
+```
+
+It cannot supply `credential`, `api_key`, `caller_id`, `identity_source`, `approval_id`, or `approver_id`. The authenticated context is created only after credential verification and carries:
+
+```text
+caller_id       = local-api-key-client
+identity_source = api_key
+```
+
+The exact source-aware policy then independently decides the action. Real subprocess STDIO smoke coverage proves three isolated host cases:
+
+- missing presented credential -> fail-closed Tool error and zero observable mutation;
+- invalid presented credential -> `rejected / credential_rejected`, no execution evidence, and zero observable mutation;
+- valid presented credential -> authentication succeeds, while `staging` is still denied, `production` still requires missing human approval, and only exact `test` scope executes.
+
+A separate read-only state Tool verifies mutation independently after each path. Smoke credentials are generated at runtime, the expected plaintext credential is not committed, and the raw presented credential is not included in returned authentication, authorization, or execution evidence.
+
+This proves local host-injected service authentication across a real MCP v2 STDIO subprocess. It does not prove remote MCP identity propagation, transport-bound authentication, OAuth/OIDC/JWT/mTLS, production secret management, or end-user identity.
 
 ## 11. What the current implementation does not claim
 
@@ -434,7 +463,7 @@ Current non-goals include:
 
 The current MCP `local-mcp-host` identity with `identity_source = trusted_composition` is a deployment-scoped local trust context for the experiment. It must not be described as authenticated user or agent identity.
 
-The `api_key` source proves only a matching synthetic service credential in the controlled fixture. Phases 36-37 prove local authentication-first application composition and source-aware authorization, not remote authenticated identity propagation.
+The `api_key` source proves only a matching synthetic service credential in the controlled fixture. Phase 38 additionally proves local host-injected authentication across a real MCP v2 STDIO subprocess, while still making no claim of remote authenticated identity propagation or transport-bound authentication.
 
 ## 12. Security invariants
 
@@ -463,11 +492,14 @@ The implemented Governed Agent Actions boundary is designed around these invaria
 21. **A denied or unapproved action must not reach the mutable executor.**
 22. **Execution evidence is distinct from authorization evidence.**
 23. **Framework-specific retries must not silently multiply mutable side effects.**
+24. **Host credential material is separate from model-controlled MCP Tool input.**
+25. **Missing or rejected host authentication cannot produce mutable side effects.**
+26. **Local STDIO host injection must not be described as remote or transport-bound authentication.**
 
 ## 13. How to explain this in an interview
 
 A concise explanation is:
 
-> "Once I had two trusted identity sources, caller ID alone stopped being a sufficient authorization key. I kept authentication separate: a credential first derives a trusted `ActionContext`, then authorization matches the exact caller, identity source, action, resource, and environment. There is no cross-source fallback, so an API-key-authenticated caller does not inherit authority granted to the same caller ID under local trusted composition. Failed authentication never reaches policy, successful authentication can still be denied, human approval remains a separate authority, and the same runtime semantics hold across LangGraph, CrewAI, LlamaIndex, Agno, and MCP."
+> "Once I had two trusted identity sources, caller ID alone stopped being a sufficient authorization key. I kept authentication separate: a credential first derives a trusted `ActionContext`, then authorization matches the exact caller, identity source, action, resource, and environment. There is no cross-source fallback, so an API-key-authenticated caller does not inherit authority granted to the same caller ID under local trusted composition. At the MCP boundary, the host injects credential material outside the Tool schema, so the model still proposes only action scope. Failed authentication never reaches policy, successful authentication can still be denied, human approval remains a separate authority, and the same runtime semantics hold across LangGraph, CrewAI, LlamaIndex, Agno, and MCP."
 
 The important architectural point is not the specific in-memory action or synthetic credential. It is that **authentication, identity provenance, authorization, approval, and execution are independent control points rather than one model-controlled tool call**.
