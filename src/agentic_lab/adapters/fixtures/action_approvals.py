@@ -2,11 +2,13 @@
 
 from collections import defaultdict, deque
 from collections.abc import Iterable
+from typing import Literal
 
-from agentic_lab.application.action_approval import HumanApprovalEvidence
+from agentic_lab.application.action_approval import ApprovalClaim, HumanApprovalEvidence
 from agentic_lab.application.action_authorization import ActionContext, ProposedAction
 
 ApprovalKey = tuple[str, str, str, str]
+ApprovalLifecycleState = Literal["available", "revoked", "claimed"]
 
 
 def _approval_key(
@@ -22,33 +24,50 @@ def _approval_key(
 
 
 class InMemoryActionApprovalProvider:
-    """Claim explicitly supplied synthetic approvals as single-use capabilities."""
+    """Claim or revoke explicitly supplied synthetic approval capabilities."""
 
     def __init__(self, approvals: Iterable[HumanApprovalEvidence] = ()) -> None:
         """Load trusted approval evidence without allowing duplicate approval IDs."""
         queues: defaultdict[ApprovalKey, deque[HumanApprovalEvidence]] = defaultdict(deque)
-        seen_approval_ids: set[str] = set()
+        approval_states: dict[str, ApprovalLifecycleState] = {}
 
         for approval in approvals:
-            if approval.approval_id in seen_approval_ids:
+            if approval.approval_id in approval_states:
                 raise ValueError(f"duplicate approval_id: {approval.approval_id}")
-            seen_approval_ids.add(approval.approval_id)
+            approval_states[approval.approval_id] = "available"
             queues[_approval_key(approval.proposed_action, approval.context)].append(approval)
 
         self._approvals = dict(queues)
+        self._approval_states = approval_states
 
     def claim_approval(
         self,
         proposed_action: ProposedAction,
         context: ActionContext,
-    ) -> HumanApprovalEvidence | None:
-        """Remove and return one approval for the exact scope so it cannot be replayed."""
+    ) -> ApprovalClaim:
+        """Remove and report one approval capability for the exact requested scope."""
         key = _approval_key(proposed_action, context)
         approvals = self._approvals.get(key)
         if not approvals:
-            return None
+            return ApprovalClaim(status="missing")
 
         approval = approvals.popleft()
         if not approvals:
             del self._approvals[key]
-        return approval
+
+        state = self._approval_states[approval.approval_id]
+        if state == "revoked":
+            return ApprovalClaim(status="revoked", approval=approval)
+        if state != "available":
+            raise RuntimeError(f"approval is not claimable: {approval.approval_id}")
+
+        self._approval_states[approval.approval_id] = "claimed"
+        return ApprovalClaim(status="claimed", approval=approval)
+
+    def revoke_approval(self, approval_id: str) -> bool:
+        """Revoke one exact approval only while its single-use capability is unclaimed."""
+        if self._approval_states.get(approval_id) != "available":
+            return False
+
+        self._approval_states[approval_id] = "revoked"
+        return True
