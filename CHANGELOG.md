@@ -40,6 +40,7 @@
 - Governed trusted-composition MCP compatibility and real STDIO checks prove the same protocol-error boundary for action-level executor failure: safe `ActionExecutionFailureEvidence` remains in error `data`, the controlled failing resource shows zero observed fixture mutation without rewriting `external_side_effect_state=unknown`, and a subsequent valid mutation succeeds.
 - The MCP protocol guard removes this failure class from the normal model-correctable Tool-result channel; it does not prove that every host will avoid programmatic retry and does not provide idempotency, rollback, compensation, or distributed transaction semantics.
 - Agno failure regression coverage proves a mutable executor is attempted exactly once and callers receive the original governed failure evidence with exact context/action/authorization, `execution_attempted=true`, `failure_reason=executor_error`, and `external_side_effect_state=unknown`; raw executor text remains only in the local exception cause.
+- Cross-framework governed-failure conformance now proves direct runtime, LangGraph, CrewAI, LlamaIndex, and Agno preserve baseline-equivalent `ActionExecutionFailureEvidence` for an authorized executor failure, with exactly one attempt and raw executor text confined to the local exception cause.
 
 ## 1.3.0 - 2026-09-05
 

@@ -483,14 +483,18 @@ The controlled matrix covers:
 | caller mismatch | fail-closed `deny` | none |
 | identity-source mismatch | fail-closed `deny` | none |
 | resource escalation | fail-closed `deny` | none |
+| authorized executor failure | `GovernedActionExecutionError` with baseline-equivalent `ActionExecutionFailureEvidence` | external side-effect state remains `unknown`; exactly one attempt |
 
 For every framework, the suite compares:
 
-- the complete `ActionExecutionEvidence` object;
+- the complete `ActionExecutionEvidence` object for successful and pre-executor paths;
+- the complete `ActionExecutionFailureEvidence` object for the authorized executor-failure path;
 - observable in-memory state;
-- successful execution count.
+- successful execution or executor-attempt count, as applicable.
 
 The identity-source mismatch scenario uses the same allowed caller and action scope but changes only the trusted context from `trusted_composition` to `api_key`. Because no API-key-specific rule exists in that fixture, the direct runtime and all four framework adapters must return `deny / no_matching_rule` with zero side effects.
+
+The executor-failure scenario uses the exact allowed action and a deterministic executor that raises only after invocation. The direct application runtime establishes the failure baseline, and every framework must surface `GovernedActionExecutionError` with equal structured evidence, exactly one executor attempt, and the raw executor message absent from both structured evidence and the governed error text. The raw exception remains only as the local Python cause, while `external_side_effect_state` remains `unknown`.
 
 This is **provider-free cross-framework conformance evidence**. It does not prove production security, provider behavior, remote identity propagation, or statistical performance.
 
