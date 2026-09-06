@@ -1,0 +1,104 @@
+name: phase54-doc-sync
+
+on:
+  push:
+    branches:
+      - test/phase-54-cross-framework-executor-failure-conformance
+    paths:
+      - .github/workflows/phase54-doc-sync.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync-docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Update only Phase 54 documentation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected exactly one match, found {count}")
+              return text.replace(old, new, 1)
+
+          changelog_path = Path("CHANGELOG.md")
+          changelog = changelog_path.read_text()
+          evidence_anchor = "- Agno failure regression coverage proves a mutable executor is attempted exactly once and callers receive the original governed failure evidence with exact context/action/authorization, `execution_attempted=true`, `failure_reason=executor_error`, and `external_side_effect_state=unknown`; raw executor text remains only in the local exception cause."
+          changelog = replace_once(
+              changelog,
+              evidence_anchor,
+              evidence_anchor + "\n- Cross-framework governed-failure conformance now proves direct runtime, LangGraph, CrewAI, LlamaIndex, and Agno preserve baseline-equivalent `ActionExecutionFailureEvidence` for an authorized executor failure, with exactly one attempt and raw executor text confined to the local exception cause.",
+              "CHANGELOG evidence",
+          )
+          changelog_path.write_text(changelog)
+
+          security_path = Path("docs/security/GOVERNED_AGENT_ACTIONS.md")
+          security = security_path.read_text()
+          matrix_anchor = "| resource escalation | fail-closed `deny` | none |"
+          security = replace_once(
+              security,
+              matrix_anchor,
+              matrix_anchor + "\n| authorized executor failure | `GovernedActionExecutionError` with baseline-equivalent `ActionExecutionFailureEvidence` | external side-effect state remains `unknown`; exactly one attempt |",
+              "security conformance matrix",
+          )
+          compare_block = (
+              "- the complete `ActionExecutionEvidence` object;\n"
+              "- observable in-memory state;\n"
+              "- successful execution count."
+          )
+          compare_replacement = (
+              "- the complete `ActionExecutionEvidence` object for successful and pre-executor paths;\n"
+              "- the complete `ActionExecutionFailureEvidence` object for the authorized executor-failure path;\n"
+              "- observable in-memory state;\n"
+              "- successful execution or executor-attempt count, as applicable."
+          )
+          security = replace_once(
+              security,
+              compare_block,
+              compare_replacement,
+              "security conformance comparisons",
+          )
+          source_paragraph = "The identity-source mismatch scenario uses the same allowed caller and action scope but changes only the trusted context from `trusted_composition` to `api_key`. Because no API-key-specific rule exists in that fixture, the direct runtime and all four framework adapters must return `deny / no_matching_rule` with zero side effects."
+          failure_paragraph = (
+              source_paragraph
+              + "\n\nThe executor-failure scenario uses the exact allowed action and a deterministic executor that raises only after invocation. The direct application runtime establishes the failure baseline, and every framework must surface `GovernedActionExecutionError` with equal structured evidence, exactly one executor attempt, and the raw executor message absent from both structured evidence and the governed error text. The raw exception remains only as the local Python cause, while `external_side_effect_state` remains `unknown`."
+          )
+          security = replace_once(
+              security,
+              source_paragraph,
+              failure_paragraph,
+              "security failure conformance paragraph",
+          )
+          security_path.write_text(security)
+          PY
+      - name: Guard documentation scope
+        shell: bash
+        run: |
+          git diff --check
+          mapfile -t changed < <(git diff --name-only | sort)
+          expected=(
+            CHANGELOG.md
+            docs/security/GOVERNED_AGENT_ACTIONS.md
+          )
+          mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
+          if [[ "${changed[*]}" != "${expected_sorted[*]}" ]]; then
+            printf 'Unexpected changed files:\n%s\n' "${changed[*]}"
+            exit 1
+          fi
+      - name: Commit documentation only
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md docs/security/GOVERNED_AGENT_ACTIONS.md
+          git diff --cached --check
+          git commit -m "docs: document cross-framework failure conformance"
+          git push
