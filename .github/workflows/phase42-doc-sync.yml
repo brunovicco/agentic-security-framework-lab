@@ -1,0 +1,127 @@
+name: phase42-doc-sync
+
+on:
+  push:
+    branches:
+      - fix/phase-42-approval-revocation
+    paths:
+      - .github/workflows/phase42-doc-sync.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: fix/phase-42-approval-revocation
+      - name: Document explicit approval revocation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old!r}")
+              file.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "CHANGELOG.md",
+              "- Normal `allow` and terminal `deny` paths neither claim HITL evidence nor consult approval time.\n",
+              "- Normal `allow` and terminal `deny` paths neither claim HITL evidence nor consult approval time.\n- Approval claims now distinguish `missing`, `claimed`, and `revoked`, keeping absence, transferred authority, and withdrawn authority as separate runtime facts.\n- Trusted control-plane code can revoke one exact still-unclaimed approval by immutable `approval_id`; revocation is sticky, blocks before freshness/execution, and cannot retroactively cancel an approval already claimed by a runtime attempt.\n",
+          )
+          replace_once(
+              "CHANGELOG.md",
+              "- Approval freshness evidence remains provider-free local/CI evidence; durable approval storage, revocation, multi-party workflow, and distributed transactional atomicity remain outside the current scope.\n",
+              "- Approval freshness and revocation evidence remain provider-free local/CI evidence; durable/distributed revocation, durable approval storage, multi-party workflow, and distributed transactional atomicity remain outside the current scope.\n- Revocation regressions prove zero mutable side effects for revoked approval, sticky non-reuse on retry, and identical `revoked` semantics across direct runtime, LangGraph, CrewAI, LlamaIndex, and Agno.\n",
+          )
+
+          path = "docs/adr/0006-treat-human-approval-as-trusted-runtime-evidence.md"
+          replace_once(
+              path,
+              "After the single-use capability model was in place, a second temporal gap remained: an approval that had never been claimed could stay valid indefinitely. Old human intent must not authorize a much later mutable side effect merely because the approval was still unused.\n",
+              "After the single-use capability model was in place, a second temporal gap remained: an approval that had never been claimed could stay valid indefinitely. Old human intent must not authorize a much later mutable side effect merely because the approval was still unused.\n\nAfter freshness was enforced, a third lifecycle gap remained: a still-valid approval could not be explicitly withdrawn before use. Trusted control-plane intent needs a way to revoke an unused capability without turning revocation into model input or rewriting authorization policy.\n",
+          )
+          replace_once(
+              path,
+              "The port exposes `claim_approval(...)`, not a reusable read operation. A successful claim transfers one unused approval capability to one runtime attempt. The controlled in-memory provider removes the claimed approval from its available set, so the same evidence cannot be replayed.\n",
+              "The port exposes `claim_approval(...)`, not a reusable read operation. It returns an explicit `ApprovalClaim` with `missing`, `claimed`, or `revoked` status. A successful `claimed` result transfers one unused approval capability to one runtime attempt. The controlled in-memory provider removes that queued capability from future claims, so the same evidence cannot be replayed.\n\n`ActionApprovalRevoker` is a separate trusted control-plane port. It can revoke one exact `approval_id` only while that capability is still unclaimed. Revocation does not mutate `HumanApprovalEvidence`, does not come from `ProposedAction`, and does not override deterministic authorization policy.\n",
+          )
+          replace_once(
+              path,
+              "The runtime then records one of six low-cardinality approval states:\n\n```text\nnot_applicable\nmissing\ninvalid\nnot_yet_valid\nexpired\nvalidated\n```\n",
+              "The runtime then records one of seven low-cardinality approval states:\n\n```text\nnot_applicable\nmissing\ninvalid\nnot_yet_valid\nexpired\nrevoked\nvalidated\n```\n",
+          )
+          replace_once(
+              path,
+              "### Single-use and failure semantics\n",
+              "### Explicit revocation\n\nA valid, unused approval is not irrevocable authority. Trusted control-plane code may call `revoke_approval(approval_id)` before claim. The controlled provider changes that capability from `available` to `revoked`; repeated revocation attempts return false instead of manufacturing new lifecycle state.\n\nWhen the revoked capability reaches its exact queued claim position, `claim_approval(...)` returns `ApprovalClaim(status=\"revoked\", approval=...)`. `GovernedActionRuntime` preserves the original `require_human_approval` policy decision, records approval status `revoked`, and blocks before consulting approval time or invoking the mutable executor. The revoked capability is then absent from later claims, so retry receives `missing` unless another distinct approval exists.\n\nRevocation is deliberately pre-claim only. Once a capability has already been claimed, `revoke_approval(...)` returns false and cannot retroactively cancel the runtime attempt to which authority was transferred. Solving cancellation after claim would require a different coordination model and is outside this process-local experiment.\n\nRevocation targets immutable approval identity, not broad action scope. Revoking one approval does not revoke a second distinct approval for the same action/context.\n\n### Single-use and failure semantics\n",
+          )
+          replace_once(
+              path,
+              "Each approval is a single-use capability. A matching claim removes that exact approval from the provider. Multiple unique approvals may be supplied for the same scope when multiple independent executions were separately approved.\n",
+              "Each approval is a single-use capability with process-local lifecycle state `available`, `revoked`, or `claimed`. A matching claim removes that queued capability from future use. Multiple unique approvals may be supplied for the same scope when multiple independent executions were separately approved.\n",
+          )
+          replace_once(
+              path,
+              "- executor failure does not silently restore an already claimed approval;\n",
+              "- executor failure does not silently restore an already claimed approval;\n- trusted control-plane code can withdraw one still-unclaimed approval without exposing revocation to model-controlled inputs;\n- revoked approval is distinguishable from missing, invalid, expired, and validated evidence;\n",
+          )
+          replace_once(
+              path,
+              "- durable approval persistence, revocation, and multi-party approval are not modeled yet;\n",
+              "- durable approval persistence, durable/distributed revocation, and multi-party approval are not modeled yet;\n- process-local revocation cannot retroactively cancel an approval after its capability has been claimed;\n",
+          )
+          replace_once(
+              path,
+              "require_human_approval + missing/invalid/not-yet-valid/expired approval = no execution\n",
+              "require_human_approval + missing/invalid/not-yet-valid/expired/revoked approval = no execution\n\nvalid + unused approval != irrevocable authority\n\nrevoked unclaimed approval = no execution\n",
+          )
+          replace_once(path, "Refs #131, #145, #163", "Refs #131, #145, #163, #165")
+
+          path = "docs/security/GOVERNED_AGENT_ACTIONS.md"
+          replace_once(
+              path,
+              "- `expired`\n- `validated`\n",
+              "- `expired`\n- `revoked`\n- `validated`\n",
+          )
+          replace_once(
+              path,
+              "`ActionApprovalProvider.claim_approval(...)` returns one unused approval at most once. The controlled in-memory provider removes a matching approval when it is claimed. A second identical request therefore receives `missing` unless a second, distinct human approval was supplied for that same scope.\n",
+              "`ActionApprovalProvider.claim_approval(...)` returns an explicit claim outcome: `missing`, `claimed`, or `revoked`. The controlled in-memory provider removes the matching queued capability when its claim position is encountered. A second identical request therefore receives `missing` unless a second, distinct human approval was supplied for that same scope.\n",
+          )
+          replace_once(
+              path,
+              "This proves local application-owned temporal enforcement, not durable revocation, distributed clock synchronization, or production approval workflow infrastructure.\n\n## 5. Runtime enforcement\n",
+              "This proves local application-owned temporal enforcement, not distributed clock synchronization or production approval workflow infrastructure.\n\n### Approval revocation\n\nFreshness limits how long authority can live, but it does not let trusted control-plane code withdraw a still-valid approval before use. Phase 42 adds `ActionApprovalRevoker` as a separate trusted boundary for that lifecycle operation. Revocation is addressed by immutable `approval_id`; it is not a field in `ProposedAction` and is not controlled by an orchestration framework or model.\n\nThe controlled in-memory provider tracks each capability as `available`, `revoked`, or `claimed`. `revoke_approval(...)` succeeds only while the exact capability is still available. When a revoked capability reaches its queued claim position, the provider returns explicit `revoked` evidence, and `GovernedActionRuntime` blocks before freshness checks or mutable execution. A retry cannot reuse the revoked capability.\n\nRevocation is intentionally not retroactive after claim. Once a runtime attempt has claimed the capability, later revocation returns false; cancellation of an already-running or externally coordinated side effect would require a different distributed control protocol. Revoking one approval id also leaves other distinct approvals for the same scope untouched.\n\nAdversarial coverage proves a revoked, otherwise fresh production approval produces zero side effects, while cross-framework conformance proves direct runtime, LangGraph, CrewAI, LlamaIndex, and Agno preserve the same `revoked` result. This is provider-free process-local evidence, not durable or distributed revocation infrastructure.\n\n## 5. Runtime enforcement\n",
+          )
+          replace_once(
+              path,
+              "    H -->|missing or invalid| B[Return evidence: no execution]\n    H -->|exact scope| T[Validate trusted approval time]\n",
+              "    H -->|missing or invalid| B[Return evidence: no execution]\n    H -->|revoked| B\n    H -->|claimed exact scope| T[Validate trusted approval time]\n",
+          )
+          replace_once(
+              path,
+              "- approval status, bounded approval evidence, and temporal validity when present;\n",
+              "- approval status, claim lifecycle, bounded approval evidence, and temporal validity when present;\n",
+          )
+          PY
+      - name: Commit only expected documentation files
+        run: |
+          git diff --check
+          git diff --exit-code -- . \
+            ':!CHANGELOG.md' \
+            ':!docs/adr/0006-treat-human-approval-as-trusted-runtime-evidence.md' \
+            ':!docs/security/GOVERNED_AGENT_ACTIONS.md'
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add CHANGELOG.md \
+            docs/adr/0006-treat-human-approval-as-trusted-runtime-evidence.md \
+            docs/security/GOVERNED_AGENT_ACTIONS.md
+          git commit -m "docs: document explicit approval revocation"
+          git push origin HEAD:fix/phase-42-approval-revocation
