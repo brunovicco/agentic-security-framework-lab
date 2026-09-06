@@ -6,17 +6,21 @@ import os
 import secrets
 from hashlib import sha256
 
-from mcp import ClientSession, StdioServerParameters
+from mcp import ClientSession, MCPError, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.types import INTERNAL_ERROR
 
 _SERVER_NAME = "agentic-security-authenticated-governed-actions"
 _MUTABLE_TOOL = "acknowledge_finding"
 _STATE_TOOL = "get_finding_acknowledgement_state"
 _FINDING_RESOURCE = "finding:demo-001"
+_FAILURE_RESOURCE = "finding:missing"
 _CALLER_ID = "local-api-key-client"
 _IDENTITY_SOURCE = "api_key"
 _CREDENTIAL_ENV = "AGENTIC_SECURITY_CALLER_API_KEY"
 _VERIFICATION_DIGEST_ENV = "AGENTIC_SECURITY_ALLOWED_API_KEY_SHA256"
+_PROTOCOL_FAILURE_MESSAGE = "governed action execution outcome is unknown"
+_RAW_EXECUTOR_ERROR = "finding does not exist"
 
 
 def _server_parameters(
@@ -153,6 +157,64 @@ def _assert_authenticated_execution(
         raise RuntimeError(f"Unexpected execution flag: {execution.get('execution_occurred')!r}")
 
 
+def _assert_uncertain_execution_protocol_error(error: MCPError, credential: str) -> None:
+    """Require host-only structured evidence for one uncertain mutable execution."""
+    if error.error.code != INTERNAL_ERROR:
+        raise RuntimeError(f"Unexpected uncertain-execution MCP code: {error.error.code!r}")
+    if error.error.message != _PROTOCOL_FAILURE_MESSAGE:
+        raise RuntimeError(f"Unexpected uncertain-execution MCP message: {error.error.message!r}")
+
+    data = _require_mapping(error.error.data, "uncertain execution MCP data")
+    serialized_data = json.dumps(data, sort_keys=True)
+    if credential in serialized_data:
+        raise RuntimeError("Raw host credential leaked into uncertain-execution MCP data")
+    if _RAW_EXECUTOR_ERROR in serialized_data:
+        raise RuntimeError("Raw executor error leaked into uncertain-execution MCP data")
+
+    failure = _require_mapping(
+        data.get("authenticated_execution_failure"),
+        "authenticated execution failure",
+    )
+    authentication = _require_mapping(failure.get("authentication"), "failure authentication")
+    expected_context = {
+        "caller_id": _CALLER_ID,
+        "identity_source": _IDENTITY_SOURCE,
+    }
+    if authentication.get("outcome") != "authenticated":
+        raise RuntimeError(f"Unexpected failure authentication: {authentication!r}")
+    if authentication.get("reason") != "credential_verified":
+        raise RuntimeError(f"Unexpected failure authentication: {authentication!r}")
+    if _require_mapping(authentication.get("context"), "failure auth context") != expected_context:
+        raise RuntimeError("Failure authentication context diverged from expected identity")
+
+    execution_failure = _require_mapping(
+        failure.get("execution_failure"),
+        "execution failure evidence",
+    )
+    if _require_mapping(execution_failure.get("context"), "failure execution context") != expected_context:
+        raise RuntimeError("Failure execution context diverged from authenticated identity")
+    action = _require_mapping(execution_failure.get("proposed_action"), "failed action")
+    expected_action = {
+        "action": _MUTABLE_TOOL,
+        "resource": _FAILURE_RESOURCE,
+        "environment": "test",
+    }
+    if action != expected_action:
+        raise RuntimeError(f"Unexpected failed action evidence: {action!r}")
+    authorization = _require_mapping(
+        execution_failure.get("authorization"),
+        "failure authorization",
+    )
+    if authorization != {"outcome": "allow", "reason": "explicit_allow"}:
+        raise RuntimeError(f"Unexpected failure authorization: {authorization!r}")
+    if execution_failure.get("execution_attempted") is not True:
+        raise RuntimeError("Uncertain execution must record executor invocation")
+    if execution_failure.get("external_side_effect_state") != "unknown":
+        raise RuntimeError("Uncertain execution must preserve unknown side-effect state")
+    if execution_failure.get("failure_reason") != "executor_error":
+        raise RuntimeError("Uncertain execution must preserve executor_error reason")
+
+
 async def _read_state(session: ClientSession) -> dict[str, object]:
     """Read observable state through the separate read-only Tool."""
     result = await session.call_tool(_STATE_TOOL, {})
@@ -165,11 +227,12 @@ async def _call_action(
     session: ClientSession,
     *,
     environment: str,
+    resource: str = _FINDING_RESOURCE,
 ) -> object:
     """Call the model-visible action Tool with scope only."""
     return await session.call_tool(
         _MUTABLE_TOOL,
-        {"resource": _FINDING_RESOURCE, "environment": environment},
+        {"resource": resource, "environment": environment},
     )
 
 
@@ -261,6 +324,21 @@ async def _valid_credential_case() -> None:
         )
         _assert_state(await _read_state(session), acknowledged=False, execution_count=0)
 
+        try:
+            uncertain = await _call_action(
+                session,
+                environment="test",
+                resource=_FAILURE_RESOURCE,
+            )
+        except MCPError as exc:
+            _assert_uncertain_execution_protocol_error(exc, credential)
+        else:
+            raise RuntimeError(
+                "Uncertain mutable execution must raise a host-only MCP protocol error; "
+                f"received Tool result is_error={getattr(uncertain, 'is_error', None)!r}"
+            )
+        _assert_state(await _read_state(session), acknowledged=False, execution_count=0)
+
         allowed = await _call_action(session, environment="test")
         if allowed.is_error:
             raise RuntimeError(f"Authenticated allowed action returned error: {allowed.content}")
@@ -277,7 +355,7 @@ async def _valid_credential_case() -> None:
 
 
 async def _smoke() -> dict[str, object]:
-    """Exercise missing, invalid, and valid host authentication through real STDIO."""
+    """Exercise missing, invalid, valid, and uncertain execution through real STDIO."""
     await _missing_credential_case()
     await _invalid_credential_case()
     await _valid_credential_case()
@@ -291,6 +369,9 @@ async def _smoke() -> dict[str, object]:
         "invalid_credential_side_effects": 0,
         "valid_denied_side_effects": 0,
         "valid_approval_required_side_effects": 0,
+        "uncertain_execution_protocol_error": True,
+        "uncertain_execution_model_visible_tool_error": False,
+        "uncertain_execution_observed_fixture_mutations": 0,
         "valid_allowed_side_effects": 1,
     }
 
