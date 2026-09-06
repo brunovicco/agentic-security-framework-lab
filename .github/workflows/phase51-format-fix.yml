@@ -1,0 +1,46 @@
+name: phase51-format-fix
+
+on:
+  push:
+    branches:
+      - fix/phase-51-mcp-uncertain-execution-failure
+    paths:
+      - .github/workflows/phase51-format-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: fix/phase-51-mcp-uncertain-execution-failure
+      - name: Apply Ruff-requested formatting
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/smoke_mcp_stdio_authenticated_action.py")
+          text = path.read_text()
+          old = '    if _require_mapping(execution_failure.get("context"), "failure execution context") != expected_context:\n'
+          new = (
+              '    if (\n'
+              '        _require_mapping(execution_failure.get("context"), "failure execution context")\n'
+              '        != expected_context\n'
+              '    ):\n'
+          )
+          if text.count(old) != 1:
+              raise SystemExit(f"expected one Ruff target, found {text.count(old)}")
+          path.write_text(text.replace(old, new, 1))
+          PY
+          git diff --check
+          test "$(git diff --name-only)" = "scripts/smoke_mcp_stdio_authenticated_action.py"
+      - name: Commit formatting fix
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add scripts/smoke_mcp_stdio_authenticated_action.py
+          git commit -m "style: format authenticated MCP failure smoke"
+          git push origin HEAD:fix/phase-51-mcp-uncertain-execution-failure
