@@ -11,6 +11,7 @@
 - Approval claims now distinguish `missing`, `claimed`, and `revoked`, keeping absence, transferred authority, and withdrawn authority as separate runtime facts.
 - Trusted control-plane code can revoke one exact still-unclaimed approval by immutable `approval_id`; revocation is sticky, blocks before freshness/execution, and cannot retroactively cancel an approval already claimed by a runtime attempt.
 - The controlled approval provider now partitions claims by exact `(caller_id, identity_source, action, resource, environment)` scope, preventing one identity provenance from dequeuing approval authority issued for another provenance.
+- Process-local approval claim and revocation transitions now share one synchronization boundary, making queue removal and lifecycle-state changes linearizable within one provider instance under concurrent callers.
 
 ### Evidence
 
@@ -19,6 +20,8 @@
 - Approval freshness and revocation evidence remain provider-free local/CI evidence; durable/distributed revocation, durable approval storage, multi-party workflow, and distributed transactional atomicity remain outside the current scope.
 - Revocation regressions prove zero mutable side effects for revoked approval, sticky non-reuse on retry, and identical `revoked` semantics across direct runtime, LangGraph, CrewAI, LlamaIndex, and Agno.
 - Source-confusion regressions prove an approval-gated request under the wrong identity source receives `missing` without consuming the correct-source approval, which remains available for the intended context and executes at most once.
+- Concurrency regressions use barriers rather than sleeps to prove eight simultaneous claims transfer one approval exactly once, claim-vs-revoke races produce only linearizable outcomes, and eight concurrent approval-gated runtime attempts cause exactly one mutable execution.
+- Approval concurrency evidence is process-local only; it does not prove cross-process/distributed atomicity or transactional coupling between approval state and external side effects.
 
 ## 1.2.0 - 2026-09-05
 

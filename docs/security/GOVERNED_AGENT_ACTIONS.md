@@ -247,6 +247,18 @@ The adversarial regression configures both `trusted_composition` and `api_key` f
 same caller_id != same approval capability when identity_source differs
 ```
 
+### Approval process-local concurrency safety
+
+Sequential anti-replay is not enough when multiple agent/runtime attempts can race for the same single-use approval. The controlled in-memory provider therefore protects its source-aware queue and lifecycle dictionary with one process-local lock. Claim and revocation transitions are serialized together instead of relying on the Python GIL or incidental container-operation atomicity.
+
+Barrier-coordinated tests prove eight simultaneous claims yield exactly one `claimed` and seven `missing` results. A concurrent claim-vs-revoke race permits only the two linearizable orderings: claim-first (`claimed` plus failed later revocation) or revoke-first (successful revocation plus a `revoked` claim). A direct runtime integration also proves eight concurrent approval-gated executions with one approval produce exactly one `validated` side effect.
+
+```text
+one approval capability + concurrent claims <= one claimed runtime attempt
+```
+
+This is a process-local guarantee for one provider instance. It does not prove cross-process/distributed locking, durable-store atomicity, or transactional coupling between approval consumption and an external side effect. Those require storage-specific coordination outside this controlled fixture.
+
 ### Approval freshness
 
 Single-use prevents replay, but it does not by itself prevent stale authority. `HumanApprovalEvidence` therefore requires timezone-aware `approved_at` and `expires_at`, with `expires_at` strictly later than issuance.

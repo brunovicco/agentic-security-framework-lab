@@ -18,6 +18,8 @@ After the single-use capability model was in place, a second temporal gap remain
 
 After freshness was enforced, a third lifecycle gap remained: a still-valid approval could not be explicitly withdrawn before use. Trusted control-plane intent needs a way to revoke an unused capability without turning revocation into model input or rewriting authorization policy.
 
+After source-aware lifecycle isolation, one process-local concurrency gap remained: claim and revocation were compound operations across approval queues and lifecycle state without an explicit synchronization boundary. Sequential anti-replay semantics are insufficient when multiple runtime attempts can race for the same capability.
+
 ## Decision
 
 Human approval is represented as separate trusted application evidence.
@@ -61,6 +63,8 @@ The runtime defensively checks that claimed approval evidence matches the exact 
 
 The controlled in-memory provider also partitions approval queues by the full source-aware key `(caller_id, identity_source, action, resource, environment)`. This prevents a request under one trusted identity provenance from dequeuing or consuming approval evidence issued for the same caller id and action scope under another provenance. Runtime exact-context validation remains in place as defense in depth rather than being replaced by provider indexing.
 
+The provider serializes its queue mutation and lifecycle-state transition with one process-local lock. `claim_approval(...)` therefore removes one queued capability and marks it claimed as one linearizable operation; `revoke_approval(...)` uses the same boundary. Concurrent callers can observe either claim-first or revoke-first ordering, but they cannot reuse one approval or produce contradictory lifecycle state inside one provider instance.
+
 ### Temporal validity
 
 Approval validity uses the half-open interval:
@@ -86,6 +90,18 @@ When the revoked capability reaches its exact queued claim position, `claim_appr
 Revocation is deliberately pre-claim only. Once a capability has already been claimed, `revoke_approval(...)` returns false and cannot retroactively cancel the runtime attempt to which authority was transferred. Solving cancellation after claim would require a different coordination model and is outside this process-local experiment.
 
 Revocation targets immutable approval identity, not broad action scope. Revoking one approval does not revoke a second distinct approval for the same action/context.
+
+### Process-local concurrency semantics
+
+Single-use authority must remain single-use when multiple runtime attempts arrive concurrently. The controlled provider uses one lock for both the source-aware queue and lifecycle dictionary so compound claim/revoke transitions are serialized together rather than relying on Python interpreter scheduling details.
+
+Tests coordinate threads with barriers instead of sleeps. Eight simultaneous claims for one approval yield exactly one `claimed` result and seven `missing` results. A claim-vs-revoke race has only two legal linearizable outcomes: claim wins and later revocation returns false, or revocation wins and the queued claim reports `revoked`. Eight concurrent approval-gated `GovernedActionRuntime` attempts with one capability produce exactly one `validated` execution and seven `missing` results.
+
+This guarantee is intentionally process-local. The lock does not coordinate multiple processes, durable approval stores, remote workers, or an external side effect transaction. A production distributed provider would need its own atomic storage/coordination primitive while preserving the same application contract.
+
+```text
+one approval capability + concurrent claims <= one claimed runtime attempt
+```
 
 ### Single-use and failure semantics
 
@@ -116,7 +132,7 @@ This produces stronger evidence than collapsing both into a final allow flag.
 
 `InMemoryActionApprovalProvider` exists only for deterministic controlled experiments. It begins with the approvals explicitly supplied to it and never auto-approves an action based on model output, action content, or policy outcome.
 
-Each approval is a single-use capability with process-local lifecycle state `available`, `revoked`, or `claimed`. Queues are partitioned by exact caller id, identity source, action, resource, and environment. A matching source-aware claim removes that queued capability from future use. Multiple unique approvals may be supplied for the same exact source-aware scope when multiple independent executions were separately approved.
+Each approval is a single-use capability with process-local lifecycle state `available`, `revoked`, or `claimed`. Queues are partitioned by exact caller id, identity source, action, resource, and environment. A matching source-aware claim removes that queued capability from future use. One process-local lock protects queue removal and lifecycle transitions together under concurrent claim/revoke calls. Multiple unique approvals may be supplied for the same exact source-aware scope when multiple independent executions were separately approved.
 
 The fixture proves trust-boundary and anti-replay mechanics; it is not production HITL infrastructure.
 
@@ -157,7 +173,7 @@ Rejected because the current increment only needs to prove trusted approval sepa
 - missing approval remains fail-closed;
 - approval cannot be forged inside the model proposal schema;
 - approvals are exact-scope, principal-bound, and isolated by trusted identity source before claim;
-- one approval cannot be replayed for repeated mutable executions;
+- one approval cannot be replayed for repeated or concurrent mutable executions within one provider instance;
 - explicit deny stays terminal;
 - normal allow does not consume HITL evidence;
 - executor failure does not silently restore an already claimed approval;
@@ -172,7 +188,8 @@ Rejected because the current increment only needs to prove trusted approval sepa
 - durable approval persistence, durable/distributed revocation, and multi-party approval are not modeled yet;
 - process-local revocation cannot retroactively cancel an approval after its capability has been claimed;
 - temporal validity is enforced locally, but this does not prove clock synchronization or distributed expiry enforcement across processes;
-- the in-memory claim operation is process-local and does not prove distributed transactional atomicity;
+- the in-memory claim/revoke lock is process-local and does not prove cross-process or distributed transactional atomicity;
+- one global fixture lock favors simple correctness over parallel claim throughput and is not presented as a distributed scaling design;
 - the in-memory provider is controlled lab infrastructure only.
 
 Those omissions are deliberate. They should be introduced only when a concrete experiment needs them.
@@ -202,7 +219,9 @@ valid approval time = approved_at <= trusted_now < expires_at
 
 one claimed approval = at most one execution attempt
 
+one approval capability + concurrent claims <= one claimed runtime attempt
+
 consumed approval + retry = new approval required
 ```
 
-Refs #131, #145, #163, #165, #167
+Refs #131, #145, #163, #165, #167, #169
