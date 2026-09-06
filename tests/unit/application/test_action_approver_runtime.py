@@ -3,6 +3,8 @@
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
+import pytest
+
 from agentic_lab.application.action_approval import (
     ApprovalClaim,
     ApprovalClaimStatus,
@@ -19,7 +21,7 @@ from agentic_lab.application.action_authorization import (
     ProposedAction,
     StaticActionAuthorizationPolicy,
 )
-from agentic_lab.application.action_runtime import GovernedActionRuntime
+from agentic_lab.application.action_runtime import ActionExecutionEvidence, GovernedActionRuntime
 
 CALLER_ID = "remediation-agent"
 APPROVER_ID = "soc-reviewer"
@@ -387,3 +389,60 @@ def test_revoked_approval_does_not_consult_approver_authorization() -> None:
     assert evidence.approver_authorization is None
     assert evidence.execution_occurred is False
     assert executor.actions == []
+
+
+def test_unauthorized_status_requires_deny_approver_decision() -> None:
+    """Reject evidence that calls an explicitly allowed approver unauthorized."""
+    action = _action()
+    context = _context()
+    with pytest.raises(ValueError, match="requires a deny decision"):
+        ActionExecutionEvidence(
+            proposed_action=action,
+            context=context,
+            authorization=_caller_authorizer().authorize(action, context),
+            approval_status="unauthorized_approver",
+            human_approval=_approval(action, context),
+            approver_authorization=ApproverAuthorizationDecision(
+                outcome="allow",
+                reason="explicit_allow",
+            ),
+            execution_occurred=False,
+        )
+
+
+def test_validated_status_requires_allow_approver_decision() -> None:
+    """Reject evidence that records validated approval after an approver deny."""
+    action = _action()
+    context = _context()
+    with pytest.raises(ValueError, match="validated approval status requires an allow decision"):
+        ActionExecutionEvidence(
+            proposed_action=action,
+            context=context,
+            authorization=_caller_authorizer().authorize(action, context),
+            approval_status="validated",
+            human_approval=_approval(action, context),
+            approver_authorization=ApproverAuthorizationDecision(
+                outcome="deny",
+                reason="explicit_deny",
+            ),
+            execution_occurred=False,
+        )
+
+
+def test_pre_approver_status_cannot_carry_approver_decision() -> None:
+    """Keep missing approval evidence separate from approver authorization facts."""
+    action = _action()
+    context = _context()
+    with pytest.raises(ValueError, match="missing approval status cannot carry"):
+        ActionExecutionEvidence(
+            proposed_action=action,
+            context=context,
+            authorization=_caller_authorizer().authorize(action, context),
+            approval_status="missing",
+            human_approval=None,
+            approver_authorization=ApproverAuthorizationDecision(
+                outcome="deny",
+                reason="no_matching_rule",
+            ),
+            execution_occurred=False,
+        )
