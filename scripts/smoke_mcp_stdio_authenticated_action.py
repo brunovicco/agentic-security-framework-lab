@@ -191,7 +191,10 @@ def _assert_uncertain_execution_protocol_error(error: MCPError, credential: str)
         failure.get("execution_failure"),
         "execution failure evidence",
     )
-    if _require_mapping(execution_failure.get("context"), "failure execution context") != expected_context:
+    if (
+        _require_mapping(execution_failure.get("context"), "failure execution context")
+        != expected_context
+    ):
         raise RuntimeError("Failure execution context diverged from authenticated identity")
     action = _require_mapping(execution_failure.get("proposed_action"), "failed action")
     expected_action = {
