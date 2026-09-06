@@ -394,7 +394,6 @@ def test_revoked_unused_human_approval_cannot_authorize_mutation() -> None:
     assert executor.is_acknowledged(FINDING_RESOURCE) is False
 
 
-
 def test_unentitled_human_approver_cannot_authorize_mutation() -> None:
     """Reject exact live approval when the trusted approver lacks exact entitlement."""
     executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
