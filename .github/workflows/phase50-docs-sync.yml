@@ -83,9 +83,26 @@ jobs:
           adr = adr.replace(evolution_anchor, evolution_insert, 1)
 
           invariant_anchor = (
-              "same caller_id != same authority when identity_source differs\n```\n"
+              "## Security invariants\n\n"
+              "```text\n"
+              "credential verification != authorization\n"
+              "failed authentication -> no ActionContext\n"
+              "failed authentication -> no authorization/runtime invocation\n"
+              "raw credential not in authorization/runtime evidence\n"
+              "api_key source != end-user identity\n"
+              "authenticated != authorized\n"
+              "same caller_id != same authority when identity_source differs\n"
+              "```\n"
           )
           invariant_insert = (
+              "## Security invariants\n\n"
+              "```text\n"
+              "credential verification != authorization\n"
+              "failed authentication -> no ActionContext\n"
+              "failed authentication -> no authorization/runtime invocation\n"
+              "raw credential not in authorization/runtime evidence\n"
+              "api_key source != end-user identity\n"
+              "authenticated != authorized\n"
               "same caller_id != same authority when identity_source differs\n"
               "authenticated execution failure != authentication evidence loss\n"
               "authenticated failure context == credential-derived ActionContext\n"
@@ -95,7 +112,7 @@ jobs:
               "```\n"
           )
           if adr.count(invariant_anchor) != 1:
-              raise SystemExit(f"expected one ADR invariant anchor, found {adr.count(invariant_anchor)}")
+              raise SystemExit(f"expected one ADR invariant block, found {adr.count(invariant_anchor)}")
           adr = adr.replace(invariant_anchor, invariant_insert, 1)
           refs_anchor = "Refs #152, #154, #156\n"
           if adr.count(refs_anchor) != 1:
