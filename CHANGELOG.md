@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- A framework-neutral `ActionApproverAuthorizer` independently decides whether the trusted `approver_id` named by claimed human evidence is entitled for the exact `(approver_id, caller_id, identity_source, action, resource, environment)` scope.
+- `ActionExecutionEvidence` records approver authorization separately from caller authorization and approval lifecycle evidence.
+
+### Hardened
+
+- Missing approver policy and unknown approver scope fail closed; trusted approval evidence no longer implies global approver authority.
+- Claimed approval from an unauthorized approver is consumed, blocks before freshness or mutable execution, and is recorded as `unauthorized_approver`.
+- Approver decisions and execution evidence reject contradictory outcome/reason or approval-status/approver-decision combinations.
+
+### Evidence
+
+- Deterministic unit tests cover exact allow/deny, all six scope dimensions, default fail-closed behavior, runtime ordering, and evidence consistency.
+- Adversarial coverage proves an exact, live approval from an unentitled reviewer causes zero side effects and cannot be replayed.
+- Cross-framework conformance includes `unauthorized_approver`, proving direct runtime, LangGraph, CrewAI, LlamaIndex, and Agno preserve the same application-owned decision without framework-specific HITL policy.
+- Approver authorization remains provider-free local/CI evidence; the lab does not claim human authentication, workforce IAM, signed approval attestation, role hierarchy, or multi-party approval.
+
 ## 1.3.0 - 2026-09-05
 
 ### Hardened

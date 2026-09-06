@@ -9,6 +9,9 @@ from agentic_lab.adapters.fixtures.finding_actions import (
     InMemoryFindingAcknowledgementExecutor,
 )
 from agentic_lab.application.action_approval import HumanApprovalEvidence
+from agentic_lab.application.action_approver_authorization import (
+    StaticActionApproverAuthorizationPolicy,
+)
 from agentic_lab.application.action_authorization import (
     ActionAuthorizationRuleKey,
     ActionContext,
@@ -70,6 +73,18 @@ def test_concurrent_runtime_attempts_consume_one_approval_once() -> None:
         executor=executor,
         approval_provider=InMemoryActionApprovalProvider([approval]),
         approval_clock=FixedApprovalClock(),
+        approver_authorizer=StaticActionApproverAuthorizationPolicy(
+            {
+                (
+                    "soc-reviewer",
+                    context.caller_id,
+                    context.identity_source,
+                    proposed_action.action,
+                    proposed_action.resource,
+                    proposed_action.environment,
+                ): "allow"
+            }
+        ),
     )
     participants = 8
     barrier = Barrier(participants)
@@ -85,6 +100,9 @@ def test_concurrent_runtime_attempts_consume_one_approval_once() -> None:
     statuses = [item.approval_status for item in evidence]
     assert statuses.count("validated") == 1
     assert statuses.count("missing") == participants - 1
+    validated = next(item for item in evidence if item.approval_status == "validated")
+    assert validated.approver_authorization is not None
+    assert validated.approver_authorization.outcome == "allow"
     assert sum(item.execution_occurred for item in evidence) == 1
     assert executor.execution_count == 1
     assert executor.is_acknowledged(FINDING_RESOURCE) is True

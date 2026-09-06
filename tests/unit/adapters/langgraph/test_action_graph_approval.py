@@ -8,6 +8,9 @@ from agentic_lab.adapters.fixtures.finding_actions import (
 )
 from agentic_lab.adapters.langgraph.action_graph import run_governed_action_graph
 from agentic_lab.application.action_approval import HumanApprovalEvidence
+from agentic_lab.application.action_approver_authorization import (
+    StaticActionApproverAuthorizationPolicy,
+)
 from agentic_lab.application.action_authorization import (
     ActionAuthorizationRuleKey,
     ActionContext,
@@ -63,6 +66,18 @@ def test_langgraph_executes_validated_approval_without_hitl_logic_in_graph() -> 
         executor=executor,
         approval_provider=InMemoryActionApprovalProvider([approval]),
         approval_clock=FixedApprovalClock(),
+        approver_authorizer=StaticActionApproverAuthorizationPolicy(
+            {
+                (
+                    "soc-reviewer",
+                    REMEDIATION_AGENT,
+                    "trusted_composition",
+                    "acknowledge_finding",
+                    FINDING_RESOURCE,
+                    "production",
+                ): "allow"
+            }
+        ),
     )
 
     output = run_governed_action_graph(runtime, context, proposed_action)
@@ -71,6 +86,8 @@ def test_langgraph_executes_validated_approval_without_hitl_logic_in_graph() -> 
     assert evidence.authorization.outcome == "require_human_approval"
     assert evidence.approval_status == "validated"
     assert evidence.human_approval == approval
+    assert evidence.approver_authorization is not None
+    assert evidence.approver_authorization.outcome == "allow"
     assert evidence.execution_occurred is True
     assert executor.is_acknowledged(FINDING_RESOURCE) is True
     assert executor.execution_count == 1

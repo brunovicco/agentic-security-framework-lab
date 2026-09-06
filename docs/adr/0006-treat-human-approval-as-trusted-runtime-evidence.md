@@ -20,6 +20,8 @@ After freshness was enforced, a third lifecycle gap remained: a still-valid appr
 
 After source-aware lifecycle isolation, one process-local concurrency gap remained: claim and revocation were compound operations across approval queues and lifecycle state without an explicit synchronization boundary. Sequential anti-replay semantics are insufficient when multiple runtime attempts can race for the same capability.
 
+After the lifecycle was hardened, a separate authority gap remained: trusted approval evidence identifies an `approver_id`, but provenance from a trusted approval source does not prove that this human is entitled to approve every caller/action scope. Approver identity evidence and approver authorization must remain distinct.
+
 ## Decision
 
 Human approval is represented as separate trusted application evidence.
@@ -43,12 +45,13 @@ The port exposes `claim_approval(...)`, not a reusable read operation. It return
 
 The runtime consults approval evidence only when deterministic policy returns `require_human_approval`.
 
-The runtime then records one of seven low-cardinality approval states:
+The runtime then records one of eight low-cardinality approval states:
 
 ```text
 not_applicable
 missing
 invalid
+unauthorized_approver
 not_yet_valid
 expired
 revoked
@@ -65,6 +68,30 @@ The controlled in-memory provider also partitions approval queues by the full so
 
 The provider serializes its queue mutation and lifecycle-state transition with one process-local lock. `claim_approval(...)` therefore removes one queued capability and marks it claimed as one linearizable operation; `revoke_approval(...)` uses the same boundary. Concurrent callers can observe either claim-first or revoke-first ordering, but they cannot reuse one approval or produce contradictory lifecycle state inside one provider instance.
 
+### Independent approver authorization
+
+A claimed approval is trusted evidence that a human decision was recorded; it is not by itself proof that the named human may approve the requested scope. `ActionApproverAuthorizer` is therefore a separate application port from caller authorization and from the approval provider.
+
+The controlled `StaticActionApproverAuthorizationPolicy` evaluates one exact key:
+
+```text
+(approver_id, caller_id, identity_source, action, resource, environment)
+```
+
+Rules are explicit `allow` or `deny`; an unknown key fails closed with `deny / no_matching_rule`. The default approver authorizer also denies, so configuring trusted approval evidence without approver policy cannot silently grant global approval authority. There are no wildcards, role inheritance, nearest-match rules, or model-generated approver decisions.
+
+`GovernedActionRuntime` consults approver authorization only after deterministic caller policy requires HITL, one approval has been claimed, exact action/context binding has passed, and the capability is not revoked. A deny records `unauthorized_approver` and blocks before freshness or mutable execution. Because the capability was already claimed, retry requires fresh human evidence rather than reusing approval from an unauthorized approver.
+
+This ordering preserves independent facts:
+
+```text
+caller authorization != trusted approval evidence != approver authorization
+```
+
+Normal caller `allow`, caller `deny`, missing approval, invalid binding, and revoked approval paths do not consult approver authorization unnecessarily. Time validation is reached only after an explicit approver allow.
+
+The current approver identifier remains synthetic trusted lab evidence, not human authentication. This phase proves deterministic entitlement separation; it does not claim OIDC/workforce IAM, directory-backed roles, signed human attestations, self-approval controls, or multi-party/quorum workflow.
+
 ### Temporal validity
 
 Approval validity uses the half-open interval:
@@ -77,7 +104,7 @@ The evidence model requires timezone-aware timestamps and rejects `expires_at <=
 
 If trusted current time is before `approved_at`, the runtime records `not_yet_valid`. If current time is equal to or later than `expires_at`, it records `expired`. Both outcomes block execution. A clock returning a naive datetime is rejected as an invalid trusted temporal boundary.
 
-Temporal validation happens only after policy requires HITL, one approval has been claimed, and exact action/context binding has been confirmed. Normal `allow`, terminal `deny`, missing approval, and scope-mismatch paths therefore do not depend on time unnecessarily.
+Temporal validation happens only after policy requires HITL, one approval has been claimed, exact action/context binding has been confirmed, revocation has been ruled out, and the approver has been explicitly authorized. Normal `allow`, terminal `deny`, missing approval, scope-mismatch, revoked, and unauthorized-approver paths therefore do not depend on time unnecessarily.
 
 A future-dated or expired approval is already claimed when temporal failure is discovered, so it stays consumed. Retry requires fresh human evidence rather than waiting for or resurrecting the same capability.
 
@@ -179,12 +206,12 @@ Rejected because the current increment only needs to prove trusted approval sepa
 - executor failure does not silently restore an already claimed approval;
 - trusted control-plane code can withdraw one still-unclaimed approval without exposing revocation to model-controlled inputs;
 - revoked approval is distinguishable from missing, invalid, expired, and validated evidence;
-- authorization outcome, approval status, and execution occurrence remain independently observable;
+- caller authorization, approval lifecycle, approver authorization, and execution occurrence remain independently observable;
 - frameworks continue consuming the governed runtime without duplicating HITL policy.
 
 ### Trade-offs
 
-- synthetic approver identity is not authentication proof;
+- synthetic approver identity is not authentication proof, and exact approver policy is not workforce IAM;
 - durable approval persistence, durable/distributed revocation, and multi-party approval are not modeled yet;
 - process-local revocation cannot retroactively cancel an approval after its capability has been claimed;
 - temporal validity is enforced locally, but this does not prove clock synchronization or distributed expiry enforcement across processes;
@@ -207,7 +234,11 @@ model claim of approval != trusted human approval
 
 policy deny + human approval = deny
 
-require_human_approval + missing/invalid/not-yet-valid/expired/revoked approval = no execution
+require_human_approval + missing/invalid/unauthorized-approver/not-yet-valid/expired/revoked approval = no execution
+
+trusted approval evidence != authorized approver
+
+caller authorization != approver authorization
 
 valid + unused approval != irrevocable authority
 
@@ -224,4 +255,4 @@ one approval capability + concurrent claims <= one claimed runtime attempt
 consumed approval + retry = new approval required
 ```
 
-Refs #131, #145, #163, #165, #167, #169
+Refs #131, #145, #163, #165, #167, #169, #174
