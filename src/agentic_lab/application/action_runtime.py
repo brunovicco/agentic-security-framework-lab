@@ -34,7 +34,7 @@ class ActionExecutor(Protocol):
 
 
 class ActionExecutionEvidence(BaseModel):
-    """Record authorization, approval, and execution outcomes independently."""
+    """Record one structurally valid governed-action security state."""
 
     model_config = ConfigDict(
         frozen=True,
@@ -50,23 +50,93 @@ class ActionExecutionEvidence(BaseModel):
     execution_occurred: bool
 
     @model_validator(mode="after")
-    def validate_approver_authorization_consistency(self) -> Self:
-        """Keep approver entitlement evidence aligned with the approval runtime status."""
+    def validate_state_machine_consistency(self) -> Self:
+        """Reject evidence states the governed runtime can never legally emit."""
+        outcome = self.authorization.outcome
         status = self.approval_status
-        decision = self.approver_authorization
+        approval = self.human_approval
+        approver_decision = self.approver_authorization
+        executed = self.execution_occurred
+
+        if outcome == "deny":
+            if status != "not_applicable":
+                raise ValueError("deny authorization requires not_applicable approval status")
+            if approval is not None or approver_decision is not None:
+                raise ValueError("deny authorization cannot carry human approval evidence")
+            if executed:
+                raise ValueError("deny authorization cannot record execution")
+            return self
+
+        if outcome == "allow":
+            if status != "not_applicable":
+                raise ValueError("allow authorization requires not_applicable approval status")
+            if approval is not None or approver_decision is not None:
+                raise ValueError("allow authorization cannot carry human approval evidence")
+            if not executed:
+                raise ValueError(
+                    "allow authorization requires successful direct execution evidence"
+                )
+            return self
+
+        if status == "not_applicable":
+            raise ValueError("require_human_approval cannot use not_applicable approval status")
+
+        if status == "missing":
+            if approval is not None or approver_decision is not None:
+                raise ValueError("missing approval status cannot carry approval evidence")
+            if executed:
+                raise ValueError("missing approval status cannot record execution")
+            return self
+
+        if approval is None:
+            raise ValueError(f"{status} approval status requires human approval evidence")
+
+        binding_matches = (
+            approval.proposed_action == self.proposed_action and approval.context == self.context
+        )
+        if status == "invalid":
+            if binding_matches:
+                raise ValueError("invalid approval status requires mismatched approval binding")
+            if approver_decision is not None:
+                raise ValueError("invalid approval status cannot carry approver authorization")
+            if executed:
+                raise ValueError("invalid approval status cannot record execution")
+            return self
+
+        if not binding_matches:
+            raise ValueError(
+                f"{status} approval status requires exact-bound human approval evidence"
+            )
+
+        if status == "revoked":
+            if approver_decision is not None:
+                raise ValueError("revoked approval status cannot carry approver authorization")
+            if executed:
+                raise ValueError("revoked approval status cannot record execution")
+            return self
+
         if status == "unauthorized_approver":
-            if decision is None or decision.outcome != "deny":
-                raise ValueError("unauthorized_approver status requires a deny decision")
+            if approver_decision is None or approver_decision.outcome != "deny":
+                raise ValueError("unauthorized_approver status requires a deny approver decision")
+            if executed:
+                raise ValueError("unauthorized_approver status cannot record execution")
             return self
 
-        if status in {"not_yet_valid", "expired", "validated"}:
-            if decision is None or decision.outcome != "allow":
-                raise ValueError(f"{status} approval status requires an allow decision")
+        if status in {"not_yet_valid", "expired"}:
+            if approver_decision is None or approver_decision.outcome != "allow":
+                raise ValueError(f"{status} approval status requires an allow approver decision")
+            if executed:
+                raise ValueError(f"{status} approval status cannot record execution")
             return self
 
-        if decision is not None:
-            raise ValueError(f"{status} approval status cannot carry approver authorization")
-        return self
+        if status == "validated":
+            if approver_decision is None or approver_decision.outcome != "allow":
+                raise ValueError("validated approval status requires an allow approver decision")
+            if not executed:
+                raise ValueError("validated approval status requires execution evidence")
+            return self
+
+        raise ValueError(f"unsupported approval status: {status}")
 
 
 class GovernedActionRuntime:

@@ -7,6 +7,7 @@ from agentic_lab.application.action_authorization import (
     ActionAuthorizationRuleKey,
     ActionAuthorizer,
     ActionContext,
+    AuthorizationDecision,
     AuthorizationOutcome,
     CallerIdentitySource,
     ProposedAction,
@@ -227,6 +228,35 @@ def test_unauthorized_environment_fails_closed() -> None:
 
     assert decision.outcome == "deny"
     assert decision.reason == "no_matching_rule"
+
+
+@pytest.mark.parametrize(
+    ("outcome", "reason", "message"),
+    [
+        ("allow", "explicit_deny", "allow authorization requires explicit_allow"),
+        ("allow", "no_matching_rule", "allow authorization requires explicit_allow"),
+        ("deny", "explicit_allow", "deny authorization requires"),
+        ("deny", "human_approval_required", "deny authorization requires"),
+        (
+            "require_human_approval",
+            "explicit_allow",
+            "require_human_approval authorization requires human_approval_required",
+        ),
+        (
+            "require_human_approval",
+            "no_matching_rule",
+            "require_human_approval authorization requires human_approval_required",
+        ),
+    ],
+)
+def test_authorization_decision_rejects_contradictory_outcome_and_reason(
+    outcome: AuthorizationOutcome,
+    reason: str,
+    message: str,
+) -> None:
+    """Keep persisted caller authorization evidence internally consistent."""
+    with pytest.raises(ValidationError, match=message):
+        AuthorizationDecision.model_validate({"outcome": outcome, "reason": reason})
 
 
 def test_proposed_action_cannot_smuggle_caller_identity() -> None:

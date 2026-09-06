@@ -12,6 +12,8 @@
 - Missing approver policy and unknown approver scope fail closed; trusted approval evidence no longer implies global approver authority.
 - Claimed approval from an unauthorized approver is consumed, blocks before freshness or mutable execution, and is recorded as `unauthorized_approver`.
 - Approver decisions and execution evidence reject contradictory outcome/reason or approval-status/approver-decision combinations.
+- `AuthorizationDecision` now rejects caller outcome/reason pairs that deterministic policy cannot emit, including `allow` with a deny reason or `require_human_approval` without `human_approval_required`.
+- `ActionExecutionEvidence` now validates the complete governed-action state machine: caller deny is terminal, direct allow is HITL-free and executed, and every HITL lifecycle state requires exactly the human evidence, approver decision, binding, and execution flag that the runtime can legally produce.
 
 ### Evidence
 
@@ -19,6 +21,8 @@
 - Adversarial coverage proves an exact, live approval from an unentitled reviewer causes zero side effects and cannot be replayed.
 - Cross-framework conformance includes `unauthorized_approver`, proving direct runtime, LangGraph, CrewAI, LlamaIndex, and Agno preserve the same application-owned decision without framework-specific HITL policy.
 - Approver authorization remains provider-free local/CI evidence; the lab does not claim human authentication, workforce IAM, signed approval attestation, role hierarchy, or multi-party approval.
+- Evidence-model regressions enumerate every legal governed-action state and reject impossible combinations such as deny-plus-execution, allow-plus-HITL, mismatched `invalid` evidence, temporal states without approver allow, and `validated` without execution.
+- This is structural evidence integrity only; it does not provide cryptographic signing, tamper-proof persistence, or transactional proof for an external side effect.
 
 ## 1.3.0 - 2026-09-05
 

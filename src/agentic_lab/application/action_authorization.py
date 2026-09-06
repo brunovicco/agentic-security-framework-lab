@@ -1,9 +1,9 @@
 """Framework-neutral deterministic authorization for proposed agent actions."""
 
 from collections.abc import Mapping
-from typing import Literal, Protocol
+from typing import Literal, Protocol, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 AuthorizationOutcome = Literal[
     "allow",
@@ -61,6 +61,25 @@ class AuthorizationDecision(BaseModel):
 
     outcome: AuthorizationOutcome
     reason: AuthorizationReason
+
+    @model_validator(mode="after")
+    def validate_reason_consistency(self) -> Self:
+        """Reject authorization outcome/reason pairs the policy cannot legally emit."""
+        if self.outcome == "allow":
+            if self.reason != "explicit_allow":
+                raise ValueError("allow authorization requires explicit_allow reason")
+            return self
+
+        if self.outcome == "require_human_approval":
+            if self.reason != "human_approval_required":
+                raise ValueError(
+                    "require_human_approval authorization requires human_approval_required reason"
+                )
+            return self
+
+        if self.reason not in {"explicit_deny", "no_matching_rule"}:
+            raise ValueError("deny authorization requires explicit_deny or no_matching_rule reason")
+        return self
 
 
 class ActionAuthorizer(Protocol):
