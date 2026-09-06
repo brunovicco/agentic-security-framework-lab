@@ -5,9 +5,13 @@ from collections.abc import Iterable
 from typing import Literal
 
 from agentic_lab.application.action_approval import ApprovalClaim, HumanApprovalEvidence
-from agentic_lab.application.action_authorization import ActionContext, ProposedAction
+from agentic_lab.application.action_authorization import (
+    ActionContext,
+    CallerIdentitySource,
+    ProposedAction,
+)
 
-ApprovalKey = tuple[str, str, str, str]
+ApprovalKey = tuple[str, CallerIdentitySource, str, str, str]
 ApprovalLifecycleState = Literal["available", "revoked", "claimed"]
 
 
@@ -17,6 +21,7 @@ def _approval_key(
 ) -> ApprovalKey:
     return (
         context.caller_id,
+        context.identity_source,
         proposed_action.action,
         proposed_action.resource,
         proposed_action.environment,
