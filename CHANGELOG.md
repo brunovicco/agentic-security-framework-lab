@@ -23,6 +23,7 @@
 - Authentication-first composition now re-wraps governed executor failures with the exact `credential_verified` evidence and rejects rejected-authentication or context-substitution combinations without copying credential or raw executor content.
 - Authenticated MCP mutable execution now maps only post-executor `AuthenticatedGovernedActionExecutionError` states to host-visible `MCPError` protocol failures, preventing an uncertain side-effect outcome from becoming an ordinary model-visible Tool error that invites self-directed retry.
 - The trusted-composition governed MCP mutable boundary now applies the same fail-closed transport classification to post-executor `GovernedActionExecutionError`, preserving safe action-level failure evidence while keeping raw executor text out of MCP protocol data.
+- Agno governed mutable execution now preserves the original `GovernedActionExecutionError` across `RunStatus.error` instead of replacing application-owned failure provenance with a generic framework error; the existing `max_retries=0` boundary remains unchanged.
 
 ### Evidence
 
@@ -38,6 +39,7 @@
 - Exact isolated `mcp[cli]==2.1.1` compatibility and real STDIO checks prove uncertain authenticated mutable execution raises a protocol `MCPError`, not `CallToolResult(is_error=true)`, while preserving safe authenticated failure evidence in error `data`, zero observed fixture mutation for the failing resource, and a subsequent valid mutation.
 - Governed trusted-composition MCP compatibility and real STDIO checks prove the same protocol-error boundary for action-level executor failure: safe `ActionExecutionFailureEvidence` remains in error `data`, the controlled failing resource shows zero observed fixture mutation without rewriting `external_side_effect_state=unknown`, and a subsequent valid mutation succeeds.
 - The MCP protocol guard removes this failure class from the normal model-correctable Tool-result channel; it does not prove that every host will avoid programmatic retry and does not provide idempotency, rollback, compensation, or distributed transaction semantics.
+- Agno failure regression coverage proves a mutable executor is attempted exactly once and callers receive the original governed failure evidence with exact context/action/authorization, `execution_attempted=true`, `failure_reason=executor_error`, and `external_side_effect_state=unknown`; raw executor text remains only in the local exception cause.
 
 ## 1.3.0 - 2026-09-05
 

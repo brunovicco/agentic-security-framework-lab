@@ -9,6 +9,7 @@ from agno.workflow.types import HumanReview, OnError, StepInput, StepOutput
 from agentic_lab.application.action_authorization import ActionContext, ProposedAction
 from agentic_lab.application.action_runtime import (
     ActionExecutionEvidence,
+    GovernedActionExecutionError,
     GovernedActionRuntime,
 )
 
@@ -18,10 +19,11 @@ AGNO_ACTION_WORKFLOW_TELEMETRY = False
 
 @dataclass(slots=True)
 class _AgnoGovernedActionState:
-    """Hold model-safe action state while Agno orchestrates execution."""
+    """Bridge application-owned execution outcomes across Agno orchestration."""
 
     proposed_action: ProposedAction
     execution_evidence: ActionExecutionEvidence | None = None
+    execution_error: GovernedActionExecutionError | None = None
 
 
 def _fail_closed_review() -> HumanReview:
@@ -37,10 +39,15 @@ def _action_step(
     """Build one native Agno Step around the application-owned runtime."""
 
     def execute(_: StepInput) -> StepOutput:
-        evidence = action_runtime.execute(
-            state.proposed_action,
-            context,
-        )
+        try:
+            evidence = action_runtime.execute(
+                state.proposed_action,
+                context,
+            )
+        except GovernedActionExecutionError as exc:
+            state.execution_error = exc
+            raise
+
         state.execution_evidence = evidence
         return StepOutput(content=evidence)
 
@@ -91,6 +98,8 @@ class AgnoGovernedActionRuntime:
         raw_output = workflow.run(input="governed action execution")
 
         if raw_output.status == RunStatus.error:
+            if state.execution_error is not None:
+                raise state.execution_error
             raise RuntimeError("Agno governed action Workflow execution failed")
         if raw_output.status != RunStatus.completed:
             raise RuntimeError(
