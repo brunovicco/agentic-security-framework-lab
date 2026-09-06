@@ -66,6 +66,8 @@ The latter is rejected at the host/protocol boundary rather than returned as a n
 
 This does not create a universal no-retry guarantee. A host can still choose to retry protocol errors in its own code. The boundary only prevents this uncertain mutable outcome from being delivered through the normal model-visible Tool-result error channel. No idempotency key, rollback, compensation, two-phase commit, or distributed transaction is introduced.
 
+Phase 52 applies the same transport classification to the existing local trusted-composition governed server. It catches only `GovernedActionExecutionError`, maps it to `MCPError(INTERNAL_ERROR)`, and serializes safe `ActionExecutionFailureEvidence` under `data.execution_failure`. The application still owns authorization and failure semantics; this adapter mapping adds no policy and does not infer that a zero mutation observed in the controlled fixture changes the external side-effect state from `unknown`.
+
 ## Local caller identity
 
 `local-mcp-host` is a trusted **composition value for this local lab process**. It is not proof that a remote user, model, agent, tenant, or client has authenticated as that identity.
@@ -94,6 +96,7 @@ The adapter must preserve these properties:
 - observable mutation is verified separately through a read-only state Tool.
 - a post-executor failure whose external side-effect state is `unknown` is kept out of the normal model-visible Tool-result retry channel;
 - MCP protocol failure data preserves safe authenticated governed evidence without raw credential or raw executor-error content.
+- the trusted-composition governed variant preserves safe action-level failure evidence without raw executor-error content.
 
 ## Alternatives considered
 
@@ -135,3 +138,5 @@ Costs and limits:
 Phase 25 evidence is provider-free MCP v2 protocol-adapter integration evidence. It is not evidence of remote production readiness, authentication, durable persistence, or benchmark performance.
 
 Phase 51 adds provider-free MCP v2.1.1 protocol-failure evidence for the authenticated local STDIO boundary: compatibility and real subprocess checks prove the uncertain post-executor path raises `MCPError`, carries safe structured failure `data`, produces no observed mutation in the controlled missing-resource fixture, and does not appear as a normal model-visible Tool error. This is not proof that an external side effect could not have partially or fully committed, nor that a host will never retry a protocol error.
+
+Phase 52 extends that provider-free MCP v2.1.1 protocol-failure evidence to the trusted-composition governed STDIO boundary. Compatibility and real subprocess checks prove `GovernedActionExecutionError` arrives as `MCPError` with safe `ActionExecutionFailureEvidence`, not as a normal model-visible Tool error; zero observed fixture mutation remains separate from the runtime's deliberately `unknown` external side-effect state.

@@ -581,7 +581,9 @@ A separate read-only state Tool verifies mutation independently after each path.
 
 ### Uncertain mutable failure is host-visible, not model-correctable
 
-A post-executor failure needs different transport semantics from a normal model-correctable Tool error. If an authenticated governed executor raises after invocation, `AuthenticatedGovernedActionExecutionError` says the execution was attempted but the external side-effect state is `unknown`. Treating that as an ordinary MCP Tool result with `is_error=true` would put the failure into the channel a model can use for self-correction and retry.
+A post-executor failure needs different transport semantics from a normal model-correctable Tool error. If either governed executor raises after invocation, its typed failure evidence says execution was attempted but the external side-effect state is `unknown`. Treating that as an ordinary MCP Tool result with `is_error=true` would put the failure into the channel a model can use for self-correction and retry.
+
+The trusted-composition governed MCP handler maps only `GovernedActionExecutionError` to `MCPError(INTERNAL_ERROR)` with a generic message and safe `ActionExecutionFailureEvidence` under `data.execution_failure`. Raw executor exception text is not copied into that protocol data.
 
 The authenticated MCP handler therefore maps only this governed failure class to `MCPError(INTERNAL_ERROR)` with a generic message and safe `AuthenticatedActionExecutionFailureEvidence` in protocol error `data`. The raw host credential and raw executor exception text are not included in that structured data.
 
@@ -593,11 +595,13 @@ executor invoked + exception + external side-effect state unknown
 
 The exact isolated MCP 2.1.1 compatibility check and real STDIO smoke prove the client receives `MCPError`, not `CallToolResult(is_error=true)`, for the controlled authorized missing-resource case. The separate state Tool observes zero fixture mutations for that case, and a later valid action still executes exactly once. Zero observed fixture mutation is not used to rewrite the runtime's `unknown` external side-effect evidence.
 
+The trusted-composition governed MCP compatibility check and real STDIO smoke prove the same protocol boundary with action-level failure evidence. Its controlled missing-resource case is explicitly authorized so the executor is invoked before it raises; the separately observed zero mutation likewise does not rewrite `external_side_effect_state=unknown`, and a subsequent valid mutation still succeeds.
+
 Other paths keep their existing meanings. Explicit deny, missing human approval, and invalid credentials remain structured governed/authentication results because they stop before the mutable executor. Missing host credential remains the existing host-configuration Tool error.
 
 This boundary prevents model-directed retry through the normal Tool-result error channel for this specific uncertain failure. It does **not** prove that every MCP host will avoid programmatic retry of protocol errors, and it does not provide idempotency, rollback, compensation, two-phase commit, or distributed transaction guarantees.
 
-This proves local host-injected service authentication and fail-closed uncertain-execution transport behavior across a real MCP v2 STDIO subprocess. It does not prove remote MCP identity propagation, transport-bound authentication, OAuth/OIDC/JWT/mTLS, production secret management, or end-user identity.
+Together these checks prove fail-closed uncertain-execution transport behavior across both local governed MCP v2 STDIO boundaries. The authenticated variant additionally proves local host-injected service authentication. Neither proves remote MCP identity propagation, transport-bound authentication, OAuth/OIDC/JWT/mTLS, production secret management, or end-user identity.
 
 ## 11. What the current implementation does not claim
 
@@ -657,8 +661,9 @@ The implemented Governed Agent Actions boundary is designed around these invaria
 24. **Host credential material is separate from model-controlled MCP Tool input.**
 25. **Missing or rejected host authentication cannot produce mutable side effects.**
 26. **Local STDIO host injection must not be described as remote or transport-bound authentication.**
-27. **An authenticated post-executor failure with unknown side-effect state must not be returned through the normal model-visible MCP Tool-error result channel.**
+27. **A governed post-executor failure with unknown side-effect state must not be returned through the normal model-visible MCP Tool-error result channel.**
 28. **MCP protocol failure evidence must not copy raw caller credentials or raw executor exception text.**
+29. **Zero observed fixture mutation must not rewrite an uncertain post-executor side-effect state from `unknown`.**
 
 ## 13. How to explain this in an interview
 

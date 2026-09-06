@@ -22,6 +22,7 @@
 - Failed HITL executor attempts do not restore consumed approval authority, and structured failure evidence excludes raw executor exception content by construction.
 - Authentication-first composition now re-wraps governed executor failures with the exact `credential_verified` evidence and rejects rejected-authentication or context-substitution combinations without copying credential or raw executor content.
 - Authenticated MCP mutable execution now maps only post-executor `AuthenticatedGovernedActionExecutionError` states to host-visible `MCPError` protocol failures, preventing an uncertain side-effect outcome from becoming an ordinary model-visible Tool error that invites self-directed retry.
+- The trusted-composition governed MCP mutable boundary now applies the same fail-closed transport classification to post-executor `GovernedActionExecutionError`, preserving safe action-level failure evidence while keeping raw executor text out of MCP protocol data.
 
 ### Evidence
 
@@ -35,6 +36,7 @@
 - Failure evidence deliberately reports the external side-effect state as `unknown`; the lab does not claim rollback, compensation, idempotent retry, two-phase commit, or distributed transaction semantics.
 - Authenticated-failure regressions prove base-error compatibility, exact credential-derived context binding, rejected-credential short-circuiting, nested governed/original exception chaining, and absence of the raw API key from structured failure evidence.
 - Exact isolated `mcp[cli]==2.1.1` compatibility and real STDIO checks prove uncertain authenticated mutable execution raises a protocol `MCPError`, not `CallToolResult(is_error=true)`, while preserving safe authenticated failure evidence in error `data`, zero observed fixture mutation for the failing resource, and a subsequent valid mutation.
+- Governed trusted-composition MCP compatibility and real STDIO checks prove the same protocol-error boundary for action-level executor failure: safe `ActionExecutionFailureEvidence` remains in error `data`, the controlled failing resource shows zero observed fixture mutation without rewriting `external_side_effect_state=unknown`, and a subsequent valid mutation succeeds.
 - The MCP protocol guard removes this failure class from the normal model-correctable Tool-result channel; it does not prove that every host will avoid programmatic retry and does not provide idempotency, rollback, compensation, or distributed transaction semantics.
 
 ## 1.3.0 - 2026-09-05
