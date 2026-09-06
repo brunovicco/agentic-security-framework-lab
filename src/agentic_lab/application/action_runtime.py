@@ -1,6 +1,6 @@
 """Framework-neutral runtime enforcement for proposed agent actions."""
 
-from typing import Protocol, Self
+from typing import Literal, Protocol, Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -139,6 +139,60 @@ class ActionExecutionEvidence(BaseModel):
         raise ValueError(f"unsupported approval status: {status}")
 
 
+class ActionExecutionFailureEvidence(BaseModel):
+    """Record authority and uncertainty after an authorized executor call raises."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    proposed_action: ProposedAction
+    context: ActionContext
+    authorization: AuthorizationDecision
+    approval_status: ApprovalStatus
+    human_approval: HumanApprovalEvidence | None
+    approver_authorization: ApproverAuthorizationDecision | None = None
+    execution_attempted: Literal[True] = True
+    external_side_effect_state: Literal["unknown"] = "unknown"
+    failure_reason: Literal["executor_error"] = "executor_error"
+
+    @model_validator(mode="after")
+    def validate_failure_state_consistency(self) -> Self:
+        """Require authority that could legally cross the executor boundary."""
+        outcome = self.authorization.outcome
+        approval = self.human_approval
+        approver_decision = self.approver_authorization
+
+        if outcome == "allow":
+            if self.approval_status != "not_applicable":
+                raise ValueError("direct execution failure requires not_applicable approval status")
+            if approval is not None or approver_decision is not None:
+                raise ValueError("direct execution failure cannot carry HITL evidence")
+            return self
+
+        if outcome != "require_human_approval":
+            raise ValueError("execution failure evidence requires executable caller authorization")
+        if self.approval_status != "validated":
+            raise ValueError("HITL execution failure requires validated approval status")
+        if approval is None:
+            raise ValueError("HITL execution failure requires human approval evidence")
+        if approval.proposed_action != self.proposed_action or approval.context != self.context:
+            raise ValueError("HITL execution failure requires exact-bound human approval evidence")
+        if approver_decision is None or approver_decision.outcome != "allow":
+            raise ValueError("HITL execution failure requires an allow approver decision")
+        return self
+
+
+class GovernedActionExecutionError(RuntimeError):
+    """Surface an executor exception together with safe governed failure evidence."""
+
+    def __init__(self, evidence: ActionExecutionFailureEvidence) -> None:
+        """Keep the public error generic while exposing structured evidence separately."""
+        super().__init__("governed action executor failed")
+        self.evidence = evidence
+
+
 class GovernedActionRuntime:
     """Enforce caller authorization and trusted approved authority before execution."""
 
@@ -253,7 +307,14 @@ class GovernedActionRuntime:
                     execution_occurred=False,
                 )
 
-            self._executor.execute(proposed_action)
+            self._execute_or_raise(
+                proposed_action=proposed_action,
+                context=context,
+                authorization=decision,
+                approval_status="validated",
+                human_approval=approval,
+                approver_authorization=approver_decision,
+            )
             return ActionExecutionEvidence(
                 proposed_action=proposed_action,
                 context=context,
@@ -264,7 +325,14 @@ class GovernedActionRuntime:
                 execution_occurred=True,
             )
 
-        self._executor.execute(proposed_action)
+        self._execute_or_raise(
+            proposed_action=proposed_action,
+            context=context,
+            authorization=decision,
+            approval_status="not_applicable",
+            human_approval=None,
+            approver_authorization=None,
+        )
         return ActionExecutionEvidence(
             proposed_action=proposed_action,
             context=context,
@@ -273,3 +341,27 @@ class GovernedActionRuntime:
             human_approval=None,
             execution_occurred=True,
         )
+
+    def _execute_or_raise(
+        self,
+        *,
+        proposed_action: ProposedAction,
+        context: ActionContext,
+        authorization: AuthorizationDecision,
+        approval_status: ApprovalStatus,
+        human_approval: HumanApprovalEvidence | None,
+        approver_authorization: ApproverAuthorizationDecision | None,
+    ) -> None:
+        """Call the executor and preserve safe evidence if that invocation raises."""
+        try:
+            self._executor.execute(proposed_action)
+        except Exception as exc:
+            evidence = ActionExecutionFailureEvidence(
+                proposed_action=proposed_action,
+                context=context,
+                authorization=authorization,
+                approval_status=approval_status,
+                human_approval=human_approval,
+                approver_authorization=approver_authorization,
+            )
+            raise GovernedActionExecutionError(evidence) from exc
