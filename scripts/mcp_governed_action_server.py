@@ -1,7 +1,8 @@
 """Expose a governed mutable action through an isolated MCP v2 server."""
 
+from mcp import MCPError
 from mcp.server import MCPServer
-from mcp.types import ToolAnnotations
+from mcp.types import INTERNAL_ERROR, ToolAnnotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from agentic_lab.adapters.fixtures.finding_actions import (
@@ -15,11 +16,16 @@ from agentic_lab.application.action_authorization import (
     ProposedAction,
     StaticActionAuthorizationPolicy,
 )
-from agentic_lab.application.action_runtime import ActionExecutionEvidence, GovernedActionRuntime
+from agentic_lab.application.action_runtime import (
+    ActionExecutionEvidence,
+    GovernedActionExecutionError,
+    GovernedActionRuntime,
+)
 
 _SERVER_NAME = "agentic-security-governed-actions"
 _LOCAL_CALLER_ID = "local-mcp-host"
 _FINDING_RESOURCE = "finding:demo-001"
+_FAILURE_RESOURCE = "finding:missing"
 
 
 class FindingAcknowledgementState(BaseModel):
@@ -45,6 +51,13 @@ _rules: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
         "trusted_composition",
         ACKNOWLEDGE_FINDING_ACTION,
         _FINDING_RESOURCE,
+        "test",
+    ): "allow",
+    (
+        _LOCAL_CALLER_ID,
+        "trusted_composition",
+        ACKNOWLEDGE_FINDING_ACTION,
+        _FAILURE_RESOURCE,
         "test",
     ): "allow",
     (
@@ -87,7 +100,16 @@ def acknowledge_finding(
         resource=resource,
         environment=environment,
     )
-    return _runtime.execute(proposed_action, _context)
+    try:
+        return _runtime.execute(proposed_action, _context)
+    except GovernedActionExecutionError as exc:
+        raise MCPError(
+            code=INTERNAL_ERROR,
+            message="governed action execution outcome is unknown",
+            data={
+                "execution_failure": exc.evidence.model_dump(mode="json"),
+            },
+        ) from exc
 
 
 @mcp.tool(
