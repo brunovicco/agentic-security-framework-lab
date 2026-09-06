@@ -233,6 +233,20 @@ This is deliberately fail-closed: a partially failed side effect must not make t
 
 The fixture rejects duplicate `approval_id` values and can hold multiple distinct approvals for the same exact scope when multiple executions were separately approved. This is process-local test evidence, not proof of durable or distributed transactional approval infrastructure.
 
+### Approval identity-source isolation
+
+Authorization already distinguishes trusted identity provenance through `(caller_id, identity_source, action, resource, environment)`. Approval lookup follows the same boundary: the controlled provider partitions queues by that exact five-field scope rather than by caller id and action scope alone.
+
+This matters even though `GovernedActionRuntime` independently compares the complete claimed `ActionContext`. A four-field queue would still allow an approval-gated request under one source to dequeue an approval issued for another source, fail later as `invalid`, and consume the single-use capability before the intended caller could use it. Source-aware partitioning prevents that logical denial-of-service path before claim.
+
+The runtime exact-context check remains as defense in depth. Provider partitioning prevents cross-source consumption; runtime validation prevents incorrectly returned evidence from becoming authority if a provider implementation is defective.
+
+The adversarial regression configures both `trusted_composition` and `api_key` for the same caller/action/resource/environment as legitimately `require_human_approval`. The wrong-source attempt receives `missing` with zero side effects, while the original approval remains available and is validated exactly once under its intended source.
+
+```text
+same caller_id != same approval capability when identity_source differs
+```
+
 ### Approval freshness
 
 Single-use prevents replay, but it does not by itself prevent stale authority. `HumanApprovalEvidence` therefore requires timezone-aware `approved_at` and `expires_at`, with `expires_at` strictly later than issuance.
