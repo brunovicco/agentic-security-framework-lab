@@ -59,6 +59,8 @@ An explicit `deny` is terminal. The approval provider is not consulted for denie
 
 The runtime defensively checks that claimed approval evidence matches the exact proposed action and trusted caller context. A provider returning approval for another scope therefore fails closed even if the provider itself is buggy.
 
+The controlled in-memory provider also partitions approval queues by the full source-aware key `(caller_id, identity_source, action, resource, environment)`. This prevents a request under one trusted identity provenance from dequeuing or consuming approval evidence issued for the same caller id and action scope under another provenance. Runtime exact-context validation remains in place as defense in depth rather than being replaced by provider indexing.
+
 ### Temporal validity
 
 Approval validity uses the half-open interval:
@@ -114,7 +116,7 @@ This produces stronger evidence than collapsing both into a final allow flag.
 
 `InMemoryActionApprovalProvider` exists only for deterministic controlled experiments. It begins with the approvals explicitly supplied to it and never auto-approves an action based on model output, action content, or policy outcome.
 
-Each approval is a single-use capability with process-local lifecycle state `available`, `revoked`, or `claimed`. A matching claim removes that queued capability from future use. Multiple unique approvals may be supplied for the same scope when multiple independent executions were separately approved.
+Each approval is a single-use capability with process-local lifecycle state `available`, `revoked`, or `claimed`. Queues are partitioned by exact caller id, identity source, action, resource, and environment. A matching source-aware claim removes that queued capability from future use. Multiple unique approvals may be supplied for the same exact source-aware scope when multiple independent executions were separately approved.
 
 The fixture proves trust-boundary and anti-replay mechanics; it is not production HITL infrastructure.
 
@@ -154,7 +156,7 @@ Rejected because the current increment only needs to prove trusted approval sepa
 
 - missing approval remains fail-closed;
 - approval cannot be forged inside the model proposal schema;
-- approvals are exact-scope and principal-bound;
+- approvals are exact-scope, principal-bound, and isolated by trusted identity source before claim;
 - one approval cannot be replayed for repeated mutable executions;
 - explicit deny stays terminal;
 - normal allow does not consume HITL evidence;
@@ -194,6 +196,8 @@ valid + unused approval != irrevocable authority
 
 revoked unclaimed approval = no execution
 
+same caller_id + different identity_source != same approval capability
+
 valid approval time = approved_at <= trusted_now < expires_at
 
 one claimed approval = at most one execution attempt
@@ -201,4 +205,4 @@ one claimed approval = at most one execution attempt
 consumed approval + retry = new approval required
 ```
 
-Refs #131, #145, #163, #165
+Refs #131, #145, #163, #165, #167

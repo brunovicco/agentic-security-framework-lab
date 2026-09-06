@@ -10,6 +10,7 @@
 - Normal `allow` and terminal `deny` paths neither claim HITL evidence nor consult approval time.
 - Approval claims now distinguish `missing`, `claimed`, and `revoked`, keeping absence, transferred authority, and withdrawn authority as separate runtime facts.
 - Trusted control-plane code can revoke one exact still-unclaimed approval by immutable `approval_id`; revocation is sticky, blocks before freshness/execution, and cannot retroactively cancel an approval already claimed by a runtime attempt.
+- The controlled approval provider now partitions claims by exact `(caller_id, identity_source, action, resource, environment)` scope, preventing one identity provenance from dequeuing approval authority issued for another provenance.
 
 ### Evidence
 
@@ -17,6 +18,7 @@
 - The adversarial suite proves an old unused approval cannot authorize a late mutable action, and cross-framework conformance proves expired approval semantics remain identical across the direct runtime, LangGraph, CrewAI, LlamaIndex, and Agno.
 - Approval freshness and revocation evidence remain provider-free local/CI evidence; durable/distributed revocation, durable approval storage, multi-party workflow, and distributed transactional atomicity remain outside the current scope.
 - Revocation regressions prove zero mutable side effects for revoked approval, sticky non-reuse on retry, and identical `revoked` semantics across direct runtime, LangGraph, CrewAI, LlamaIndex, and Agno.
+- Source-confusion regressions prove an approval-gated request under the wrong identity source receives `missing` without consuming the correct-source approval, which remains available for the intended context and executes at most once.
 
 ## 1.2.0 - 2026-09-05
 

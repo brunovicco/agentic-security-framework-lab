@@ -6,7 +6,11 @@ import pytest
 
 from agentic_lab.adapters.fixtures.action_approvals import InMemoryActionApprovalProvider
 from agentic_lab.application.action_approval import ApprovalClaim, HumanApprovalEvidence
-from agentic_lab.application.action_authorization import ActionContext, ProposedAction
+from agentic_lab.application.action_authorization import (
+    ActionContext,
+    CallerIdentitySource,
+    ProposedAction,
+)
 
 FINDING_RESOURCE = "finding:demo-001"
 APPROVED_AT = datetime(2026, 9, 5, 20, 0, tzinfo=UTC)
@@ -21,18 +25,22 @@ def _action(resource: str = FINDING_RESOURCE) -> ProposedAction:
     )
 
 
-def _context(caller_id: str = "remediation-agent") -> ActionContext:
-    return ActionContext(caller_id=caller_id)
+def _context(
+    caller_id: str = "remediation-agent",
+    identity_source: CallerIdentitySource = "trusted_composition",
+) -> ActionContext:
+    return ActionContext(caller_id=caller_id, identity_source=identity_source)
 
 
 def _approval(
     approval_id: str = "approval-001",
+    identity_source: CallerIdentitySource = "trusted_composition",
 ) -> HumanApprovalEvidence:
     return HumanApprovalEvidence(
         approval_id=approval_id,
         approver_id="soc-reviewer",
         proposed_action=_action(),
-        context=_context(),
+        context=_context(identity_source=identity_source),
         approved_at=APPROVED_AT,
         expires_at=EXPIRES_AT,
     )
@@ -73,6 +81,21 @@ def test_different_resource_or_caller_does_not_claim_approval() -> None:
         status="claimed",
         approval=approval,
     )
+
+
+def test_different_identity_source_does_not_claim_or_consume_approval() -> None:
+    """Keep one caller id isolated across trusted identity provenance boundaries."""
+    approval = _approval(identity_source="trusted_composition")
+    provider = InMemoryActionApprovalProvider([approval])
+
+    assert provider.claim_approval(
+        _action(),
+        _context(identity_source="api_key"),
+    ) == ApprovalClaim(status="missing")
+    assert provider.claim_approval(
+        _action(),
+        _context(identity_source="trusted_composition"),
+    ) == ApprovalClaim(status="claimed", approval=approval)
 
 
 def test_distinct_approvals_can_authorize_distinct_executions_of_same_scope() -> None:
@@ -134,6 +157,23 @@ def test_revoking_one_approval_does_not_revoke_distinct_capability_for_same_scop
         status="claimed",
         approval=second,
     )
+
+
+def test_revoked_and_claimed_lifecycle_is_isolated_by_identity_source() -> None:
+    """Keep lifecycle state independent across source-specific approval queues."""
+    trusted = _approval("approval-trusted", identity_source="trusted_composition")
+    api_key = _approval("approval-api-key", identity_source="api_key")
+    provider = InMemoryActionApprovalProvider([trusted, api_key])
+
+    assert provider.revoke_approval(trusted.approval_id) is True
+    assert provider.claim_approval(
+        _action(),
+        _context(identity_source="api_key"),
+    ) == ApprovalClaim(status="claimed", approval=api_key)
+    assert provider.claim_approval(
+        _action(),
+        _context(identity_source="trusted_composition"),
+    ) == ApprovalClaim(status="revoked", approval=trusted)
 
 
 def test_unknown_approval_id_cannot_be_revoked() -> None:
