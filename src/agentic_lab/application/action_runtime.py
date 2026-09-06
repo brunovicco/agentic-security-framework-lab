@@ -73,7 +73,9 @@ class ActionExecutionEvidence(BaseModel):
             if approval is not None or approver_decision is not None:
                 raise ValueError("allow authorization cannot carry human approval evidence")
             if not executed:
-                raise ValueError("allow authorization requires successful direct execution evidence")
+                raise ValueError(
+                    "allow authorization requires successful direct execution evidence"
+                )
             return self
 
         if status == "not_applicable":
@@ -89,7 +91,10 @@ class ActionExecutionEvidence(BaseModel):
         if approval is None:
             raise ValueError(f"{status} approval status requires human approval evidence")
 
-        binding_matches = approval.proposed_action == self.proposed_action and approval.context == self.context
+        binding_matches = (
+            approval.proposed_action == self.proposed_action
+            and approval.context == self.context
+        )
         if status == "invalid":
             if binding_matches:
                 raise ValueError("invalid approval status requires mismatched approval binding")
@@ -100,7 +105,9 @@ class ActionExecutionEvidence(BaseModel):
             return self
 
         if not binding_matches:
-            raise ValueError(f"{status} approval status requires exact-bound human approval evidence")
+            raise ValueError(
+                f"{status} approval status requires exact-bound human approval evidence"
+            )
 
         if status == "revoked":
             if approver_decision is not None:

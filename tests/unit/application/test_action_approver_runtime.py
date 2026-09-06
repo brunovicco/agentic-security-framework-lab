@@ -395,7 +395,7 @@ def test_unauthorized_status_requires_deny_approver_decision() -> None:
     """Reject evidence that calls an explicitly allowed approver unauthorized."""
     action = _action()
     context = _context()
-    with pytest.raises(ValueError, match="requires a deny decision"):
+    with pytest.raises(ValueError, match="requires a deny approver decision"):
         ActionExecutionEvidence(
             proposed_action=action,
             context=context,
@@ -414,7 +414,7 @@ def test_validated_status_requires_allow_approver_decision() -> None:
     """Reject evidence that records validated approval after an approver deny."""
     action = _action()
     context = _context()
-    with pytest.raises(ValueError, match="validated approval status requires an allow decision"):
+    with pytest.raises(ValueError, match="validated approval status requires an allow approver decision"):
         ActionExecutionEvidence(
             proposed_action=action,
             context=context,
