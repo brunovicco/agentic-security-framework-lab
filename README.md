@@ -61,7 +61,7 @@ See the [complete documentation map](docs/README.md).
 - exact least-privilege authorization evaluates `(caller_id, identity_source, action, resource, environment)` with no fallback across identity sources;
 - unknown action scopes fail closed;
 - `require_human_approval` remains blocked until separately sourced approval evidence is validated for the exact caller/action scope;
-- approval authority is bounded, single-use, revocable before claim, time-limited, and source-isolated in the controlled provider;
+- approval authority is bounded, single-use, revocable before claim, time-limited, and source-isolated in the controlled **single-process** provider;
 - approver authorization independently checks whether the trusted reviewer may approve exactly the requested scope;
 - authorization, approval lifecycle, approver authorization, execution, and authentication are preserved as separate evidence facts;
 - post-executor exceptions become typed governed failure evidence with `execution_attempted=true` and `external_side_effect_state=unknown`, without copying raw executor text into structured evidence;
@@ -122,9 +122,9 @@ It takes the opposite stance: assume the injection succeeded. Assume that untrus
 
 In read-only analysis, it buys a proposed conclusion that a deterministic evaluator checks against external evidence and rejects if wrong, with deterministic oracle fallback behind it.
 
-For mutable actions, it buys a `ProposedAction` — untrusted proposal data. It does not buy caller identity, which is trusted context injected outside model-visible input. It does not buy an authorization decision, which is deterministic, exact, and identity-source-aware. It does not buy human approval evidence, which is separately sourced and bound to the exact caller and scope. It does not buy approver authority, which is checked independently. And it does not buy execution, which only occurs after a single enforcement point has evaluated all of those facts.
+For mutable actions, it buys a `ProposedAction` — untrusted proposal data. It does not buy caller identity, which is trusted context injected outside model-visible input. It does not buy an authorization decision, which is deterministic, exact, and identity-source-aware. It does not buy human approval evidence, which is separately sourced and bound to the exact caller and scope. It does not buy approver authority, which is checked independently. And it does not buy execution by itself, which only occurs after a single enforcement point has evaluated all of those facts.
 
-A fully successful injection therefore produces a proposal that fails closed.
+A fully successful injection therefore **does not acquire additional authority by itself**. If the proposal is outside the authorized scope or requires approval evidence that does not exist, the runtime fails closed. If the proposal is already within authority legitimately granted to the caller and satisfies every required control, it can still execute — which is why least privilege, exact scope, and safe tool design remain essential even when the model is removed from the authority path.
 
 The `adversarial-asset-id` scenario and the adversarial v2 document suite exercise this boundary at specific points. They are controlled tests, not proof of broad prompt-injection resistance — and under this threat model that is not what they are intended to prove. Detection is a mitigation. Removing the model from the authority path is a structural property, and that is what this repository is built around.
 
@@ -137,7 +137,7 @@ The current controlled boundary includes:
 - frozen `ProposedAction(action, resource, environment)` as untrusted proposal data;
 - trusted, separate `ActionContext(caller_id, identity_source)` supplied by composition/runtime code or authentication;
 - deterministic exact-scope authorization with `allow`, `deny`, and `require_human_approval` outcomes;
-- trusted `HumanApprovalEvidence` bound to the exact proposal and caller context, with timezone-aware validity and single-use claim semantics;
+- trusted `HumanApprovalEvidence` bound to the exact proposal and caller context, with timezone-aware validity and single-use claim semantics in the controlled single-process provider;
 - explicit approval outcomes for missing, revoked, invalid, unauthorized approver, not-yet-valid, expired, and validated states;
 - separate approver authorization for exact scope `(approver_id, caller_id, identity_source, action, resource, environment)`;
 - a service-caller authentication composition that establishes `api_key` caller context outside model/tool input, before identity-source-aware authorization;
@@ -155,7 +155,18 @@ The current controlled boundary includes:
 
 The cross-framework conformance matrix covers exact allow, explicit deny, missing/validated approval, unauthorized approver, expired/revoked approval, caller mismatch, identity-source mismatch, resource escalation, and authorized executor failure. For every framework, normal execution evidence and post-executor failure evidence must match the direct application baseline, with exactly one executor attempt in the controlled failure scenario.
 
-This is **provider-free Application/framework/MCP integration evidence**. It does not claim authenticated remote-user identity, OAuth/OIDC/JWT/mTLS, durable or distributed approvals, production-grade IAM/policy infrastructure, idempotency, rollback/compensation, provider-backed mutable execution, signed/tamper-proof audit evidence, or production certification.
+This is **provider-free Application/framework/MCP integration evidence**. It does not claim authenticated remote-user identity, OAuth/OIDC/JWT/mTLS, durable or distributed approvals, production-grade IAM/policy infrastructure, an external PDP, idempotency, rollback/compensation, provider-backed mutable execution, signed/tamper-proof audit evidence, or production certification.
+
+## Declared architecture boundaries
+
+The current contracts are intentionally small. The following limitations are not left as implicit omissions: they are recorded as accepted architecture decisions with a future design and explicit revisit triggers.
+
+- [ADR 0009 — Tamper-evident execution evidence](docs/adr/0009-tamper-evident-execution-evidence.md): current evidence preserves execution facts and authority provenance in memory, but it **does not prove that a record was not altered after it was produced**. Evidence persistence is the trigger to revisit canonicalization, chaining, and signed checkpoints.
+- [ADR 0010 — Approval authority is single-process](docs/adr/0010-approval-authority-is-single-process.md): single-use, revocation-before-claim, and temporal validity are guarantees of the current controlled provider **within one process**. Future distribution requires atomic claim semantics, fail-closed behavior under store unavailability, and real concurrency tests.
+- [ADR 0011 — Uncertain external side effects: idempotency and reconciliation](docs/adr/0011-uncertain-external-side-effects-idempotency-and-reconciliation.md): `external_side_effect_state=unknown` remains terminal in lab scope. Idempotency keys, probes, and reconciliation become meaningful only when a real externally mutable executor exists.
+- [ADR 0012 — Exact-scope authorization and the external PDP boundary](docs/adr/0012-exact-scope-authorization-and-external-pdp-boundary.md): the exact in-process authorizer remains the reference implementation. A future external PDP must preserve behavioral equivalence with the existing conformance matrix, including `identity_source` isolation and fail-closed behavior when the PDP is unavailable.
+
+These ADRs document **boundaries and evolution criteria**, not already-implemented capabilities.
 
 ## v1.0 evaluation snapshot — cost and execution path under constant accuracy
 
@@ -276,7 +287,7 @@ Application execution
      │
      ▼
 AnalysisExecutionObservation
-     │ safe allowlisted attributes only
+     │ allowlisted safe attributes only
      ▼
 deployment-owned OpenTelemetry composition
 ```
@@ -285,7 +296,7 @@ Read [Architecture](docs/ARCHITECTURE.md), [Governed Agent Actions](docs/securit
 
 ## MCP boundary
 
-The project keeps versioned read and trusted-composition mutation concerns separate, plus an isolated authenticated experiment used by compatibility/smoke tests:
+The project keeps versioned read-only and trusted-composition mutation concerns separate, plus an isolated authenticated experiment used by compatibility/smoke tests:
 
 ```text
 agentic-security-applicability                  # read-only analysis/applicability surface
@@ -297,17 +308,17 @@ For the governed mutable tool:
 
 - `resource` and `environment` are untrusted tool arguments;
 - `action` is fixed by the handler;
-- the controlled local `caller_id` is injected by trusted server-composition code;
+- the controlled local `caller_id` is injected by trusted server composition code;
 - `caller_id`, `approval_id`, and `approver_id` are not tool arguments;
 - tool annotations are metadata, not authorization;
-- returned execution evidence is checked against a separate read-only state tool in the real STDIO smoke;
+- returned execution evidence is cross-checked against a separate read-only state tool in the real STDIO smoke;
 - the authenticated experiment receives synthetic credential material only from the trusted host/process environment and keeps it outside the Tool schema;
-- after a governed executor has been invoked and raises, the trusted-composition and authenticated servers map only typed governed failure to an `MCPError` protocol failure with safe evidence;
+- after a governed executor has been invoked and raises, the trusted-composition and authenticated servers map only the typed governed failure into an `MCPError` protocol failure carrying safe evidence;
 - this protocol classification prevents the uncertain side-effect state from becoming a normal model-visible `CallToolResult(is_error=true)` retry channel, but it does not prevent a host from implementing its own programmatic retry.
 
-The local MCP experiments are intentionally not described as authenticated remote-user identity, transport-bound identity, production IAM, or production authorization. `external_side_effect_state=unknown` is preserved even when the controlled fixture observes zero mutation.
+The local MCP experiments intentionally do not claim authenticated remote-user identity, transport-bound identity, production IAM, or production authorization. `external_side_effect_state=unknown` is preserved even when the controlled fixture observes zero mutation.
 
-## Developer quickstart
+## Developer quick start
 
 Requirements:
 
@@ -321,7 +332,7 @@ uv sync --frozen --all-groups
 uv run python scripts/quality_gate.py
 ```
 
-The normal quality gate runs without a provider. You **do not** need an LLM API key to validate engineering contracts, tests, typing, architecture checks, security checks, governed-action behavior, MCP compatibility, or deterministic behavior.
+The normal quality gate runs provider-free. You **do not** need an LLM API key to validate the engineering contracts, tests, typing, architecture checks, security checks, governed-action behavior, MCP compatibility, or deterministic behavior.
 
 For focused development:
 
@@ -329,7 +340,7 @@ For focused development:
 uv run python scripts/quality_gate.py --list
 ```
 
-For real-provider experiments through LiteLLM, follow the [gateway foundation guide](docs/litellm/GATEWAY_FOUNDATION.md) and the [final-evaluation methodology](docs/evaluation/FINAL_EVALUATION.md). Provider-backed final evaluation is intentionally separate from normal CI.
+For real-provider experiments through LiteLLM, follow the [gateway foundation guide](docs/litellm/GATEWAY_FOUNDATION.md) and [final-evaluation methodology](docs/evaluation/FINAL_EVALUATION.md). Provider-backed final evaluation is intentionally separate from normal CI.
 
 Read the full [development guide](docs/DEVELOPMENT.md) before changing framework adapters, authorization/runtime contracts, evaluation evidence, gateway policy, MCP tools, or telemetry contracts.
 
@@ -386,21 +397,21 @@ The repository is intentionally built around engineering decisions that survive 
 
 1. **Domain, policy, authorization, and enforcement remain framework-neutral.**
 2. **Probabilistic output is validated by deterministic software.**
-3. **A model may propose a mutable action, but it cannot authorize itself.**
+3. **A model may propose a mutable action but cannot authorize itself.**
 4. **Failure behavior is observable rather than hidden.**
 5. **Provider access is centralized behind a stable boundary.**
 6. **Telemetry has an explicit privacy contract.**
-7. **Benchmark evidence is persisted and tied to source-code state.**
-8. **Trade-offs are documented instead of reduced to "framework X won."**
+7. **Benchmark evidence is persisted and tied to source state.**
+8. **Trade-offs are documented instead of being reduced to “framework X won.”**
 
-These are the parts intended to be reusable when reasoning about enterprise agent platforms, AI gateways, governed runtimes, LLMOps, AI security, authorization, MCP, or framework selection.
+These are the pieces intended to be reusable when reasoning about enterprise agent platforms, AI gateways, governed runtimes, LLMOps, AI security, authorization, MCP, or framework selection.
 
 ## Project status
 
 The planned **v1.0** engineering scope is complete: domain baseline, deterministic controls, RAG progression, four framework families/five orchestration variants, benchmark comparison, LiteLLM, MCP, observability, final evaluation, runtime hardening, and portfolio documentation.
 
-Published post-v1.0 milestones are **v1.1 Governed Agent Actions**, **v1.2 Trusted Caller Identity**, and **v1.3 Human Approval Lifecycle**. Current `main` additionally hardens approver authorization, governed executor-failure evidence, authenticated failure composition, transport handling for uncertain MCP execution, Agno failure-provenance preservation, and cross-framework failure conformance.
+Published post-v1.0 milestones are **v1.1 Governed Agent Actions**, **v1.2 Trusted Caller Identity**, and **v1.3 Human Approval Lifecycle**. Current `main` additionally hardens approver authorization, governed executor-failure evidence, authenticated failure composition, MCP transport handling for uncertain execution, Agno failure-provenance preservation, and cross-framework failure conformance.
 
-This remains an engineering lab, not a claim of production certification. Durable/distributed approval, transport-bound remote identity, production IAM, idempotency/rollback, external side-effect transactionality, and signed/tamper-evident audit infrastructure remain explicit non-goals until a concrete experiment requires them. Each of these boundaries is recorded as an architecture decision record with its intended design and revisit triggers instead of remaining an unexamined omission. Historical provider-backed evidence and published release metadata are not rewritten by hardening on current `main`.
+This remains an engineering lab, not a production-certification claim. Durable/distributed approval, transport-bound remote identity, production IAM, an external PDP, idempotency/rollback, external-side-effect transactionality, and signed/tamper-evident evidence infrastructure remain explicit non-goals until a concrete experiment requires them. Those boundaries are documented in [ADRs 0009–0012](docs/adr), including intended designs, limits on current claims, and revisit triggers. Historical provider-backed evidence and published release metadata are not rewritten by current-`main` hardening.
 
 See [CHANGELOG.md](CHANGELOG.md) for release-level changes.
