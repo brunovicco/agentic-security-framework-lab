@@ -58,7 +58,7 @@ class RecordingApprovalProvider:
         claim_status: Literal["claimed", "revoked"] = "claimed",
     ) -> None:
         self._approval = approval
-        self._claim_status = claim_status
+        self._claim_status: Literal["claimed", "revoked"] = claim_status
         self.claim_calls = 0
 
     def claim_approval(

@@ -108,7 +108,7 @@ def test_unclaimed_approval_can_be_revoked_once_and_never_claimed_as_usable() ->
 
 
 def test_claimed_approval_cannot_be_retroactively_revoked() -> None:
-    """Keep revocation limited to authority that has not already transferred to a runtime attempt."""
+    """Keep revocation limited to authority not yet transferred to a runtime attempt."""
     approval = _approval()
     provider = InMemoryActionApprovalProvider([approval])
 
