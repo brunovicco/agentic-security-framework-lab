@@ -1,8 +1,8 @@
 """Framework-neutral runtime enforcement for proposed agent actions."""
 
-from typing import Protocol
+from typing import Protocol, Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from agentic_lab.application.action_approval import (
     NULL_ACTION_APPROVAL_PROVIDER,
@@ -48,6 +48,25 @@ class ActionExecutionEvidence(BaseModel):
     human_approval: HumanApprovalEvidence | None
     approver_authorization: ApproverAuthorizationDecision | None = None
     execution_occurred: bool
+
+    @model_validator(mode="after")
+    def validate_approver_authorization_consistency(self) -> Self:
+        """Keep approver entitlement evidence aligned with the approval runtime status."""
+        status = self.approval_status
+        decision = self.approver_authorization
+        if status == "unauthorized_approver":
+            if decision is None or decision.outcome != "deny":
+                raise ValueError("unauthorized_approver status requires a deny decision")
+            return self
+
+        if status in {"not_yet_valid", "expired", "validated"}:
+            if decision is None or decision.outcome != "allow":
+                raise ValueError(f"{status} approval status requires an allow decision")
+            return self
+
+        if decision is not None:
+            raise ValueError(f"{status} approval status cannot carry approver authorization")
+        return self
 
 
 class GovernedActionRuntime:
