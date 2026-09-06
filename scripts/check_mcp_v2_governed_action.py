@@ -93,10 +93,7 @@ def _assert_uncertain_execution_protocol_error(error: MCPError) -> None:
         "caller_id": _LOCAL_CALLER_ID,
         "identity_source": _LOCAL_IDENTITY_SOURCE,
     }
-    if (
-        _require_mapping(execution_failure.get("context"), "failure context")
-        != expected_context
-    ):
+    if _require_mapping(execution_failure.get("context"), "failure context") != expected_context:
         raise RuntimeError("Failure execution context diverged from trusted identity")
     proposed_action = _require_mapping(
         execution_failure.get("proposed_action"),
