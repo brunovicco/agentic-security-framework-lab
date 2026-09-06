@@ -2,8 +2,9 @@
 
 import os
 
+from mcp import MCPError
 from mcp.server import MCPServer
-from mcp.types import ToolAnnotations
+from mcp.types import INTERNAL_ERROR, ToolAnnotations
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from agentic_lab.adapters.fixtures.action_identity import StaticApiKeyCallerAuthenticator
@@ -21,12 +22,14 @@ from agentic_lab.application.action_identity import CallerCredential
 from agentic_lab.application.action_runtime import GovernedActionRuntime
 from agentic_lab.application.authenticated_action_runtime import (
     AuthenticatedActionExecutionEvidence,
+    AuthenticatedGovernedActionExecutionError,
     AuthenticatedGovernedActionRuntime,
 )
 
 _SERVER_NAME = "agentic-security-authenticated-governed-actions"
 _CALLER_ID = "local-api-key-client"
 _FINDING_RESOURCE = "finding:demo-001"
+_FAILURE_RESOURCE = "finding:missing"
 _CREDENTIAL_ENV = "AGENTIC_SECURITY_CALLER_API_KEY"
 _VERIFICATION_DIGEST_ENV = "AGENTIC_SECURITY_ALLOWED_API_KEY_SHA256"
 
@@ -82,6 +85,13 @@ def _load_host_authenticated_runtime() -> tuple[
             _CALLER_ID,
             "api_key",
             ACKNOWLEDGE_FINDING_ACTION,
+            _FAILURE_RESOURCE,
+            "test",
+        ): "allow",
+        (
+            _CALLER_ID,
+            "api_key",
+            ACKNOWLEDGE_FINDING_ACTION,
             _FINDING_RESOURCE,
             "staging",
         ): "deny",
@@ -127,7 +137,18 @@ def acknowledge_finding(
         resource=resource,
         environment=environment,
     )
-    return runtime.execute(proposed_action, credential)
+    try:
+        return runtime.execute(proposed_action, credential)
+    except AuthenticatedGovernedActionExecutionError as exc:
+        raise MCPError(
+            code=INTERNAL_ERROR,
+            message="governed action execution outcome is unknown",
+            data={
+                "authenticated_execution_failure": exc.authenticated_evidence.model_dump(
+                    mode="json"
+                )
+            },
+        ) from exc
 
 
 @mcp.tool(
