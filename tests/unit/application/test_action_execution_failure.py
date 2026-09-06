@@ -29,7 +29,7 @@ RESOURCE = "finding:demo-001"
 APPROVED_AT = datetime(2026, 9, 6, 0, 0, tzinfo=UTC)
 EXPIRES_AT = APPROVED_AT + timedelta(minutes=15)
 VALID_NOW = APPROVED_AT + timedelta(minutes=5)
-SECRET_ERROR_TEXT = "executor-secret-detail-49"
+EXECUTOR_ERROR_TEXT = "executor-secret-detail-49"
 
 
 class FailingExecutor:
@@ -41,7 +41,7 @@ class FailingExecutor:
     def execute(self, proposed_action: ProposedAction) -> None:
         """Record one executor invocation and raise a sensitive synthetic error."""
         self.calls += 1
-        raise RuntimeError(f"{SECRET_ERROR_TEXT}:{proposed_action.action}")
+        raise RuntimeError(f"{EXECUTOR_ERROR_TEXT}:{proposed_action.action}")
 
 
 class OneShotApprovalProvider:
@@ -290,8 +290,8 @@ def test_runtime_direct_executor_failure_carries_safe_structured_evidence() -> N
     assert evidence.execution_attempted is True
     assert evidence.external_side_effect_state == "unknown"
     assert evidence.failure_reason == "executor_error"
-    assert SECRET_ERROR_TEXT not in serialized
-    assert SECRET_ERROR_TEXT not in str(error)
+    assert EXECUTOR_ERROR_TEXT not in serialized
+    assert EXECUTOR_ERROR_TEXT not in str(error)
     assert executor.calls == 1
 
 
@@ -322,7 +322,7 @@ def test_runtime_hitl_executor_failure_keeps_approval_consumed() -> None:
     assert evidence.approver_authorization == _approver_allow()
     assert evidence.execution_attempted is True
     assert evidence.external_side_effect_state == "unknown"
-    assert SECRET_ERROR_TEXT not in evidence.model_dump_json()
+    assert EXECUTOR_ERROR_TEXT not in evidence.model_dump_json()
     assert retry.approval_status == "missing"
     assert retry.execution_occurred is False
     assert provider.calls == 2

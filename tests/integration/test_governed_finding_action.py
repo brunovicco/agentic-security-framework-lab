@@ -19,7 +19,10 @@ from agentic_lab.application.action_authorization import (
     ProposedAction,
     StaticActionAuthorizationPolicy,
 )
-from agentic_lab.application.action_runtime import GovernedActionRuntime
+from agentic_lab.application.action_runtime import (
+    GovernedActionExecutionError,
+    GovernedActionRuntime,
+)
 
 FINDING_RESOURCE = "finding:demo-001"
 REMEDIATION_AGENT = "remediation-agent"
@@ -232,8 +235,19 @@ def test_authorized_but_missing_resource_fails_without_mutation() -> None:
         executor=executor,
     )
 
-    with pytest.raises(LookupError, match="finding does not exist"):
+    with pytest.raises(GovernedActionExecutionError) as exc_info:
         runtime.execute(_action(resource=missing_resource), _context())
 
+    error = exc_info.value
+    evidence = error.evidence
+
+    assert isinstance(error.__cause__, LookupError)
+    assert str(error.__cause__) == "finding does not exist"
+    assert evidence.authorization.outcome == "allow"
+    assert evidence.approval_status == "not_applicable"
+    assert evidence.execution_attempted is True
+    assert evidence.external_side_effect_state == "unknown"
+    assert evidence.failure_reason == "executor_error"
+    assert "finding does not exist" not in evidence.model_dump_json()
     assert executor.is_acknowledged(FINDING_RESOURCE) is False
     assert executor.execution_count == 0
