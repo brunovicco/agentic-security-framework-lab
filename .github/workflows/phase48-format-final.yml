@@ -1,0 +1,64 @@
+name: phase48-format-final
+
+on:
+  push:
+    branches:
+      - feat/phase-48-action-evidence-state-machine
+    paths:
+      - .github/workflows/phase48-format-final.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: feat/phase-48-action-evidence-state-machine
+      - name: Apply exact Ruff formatting
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          runtime_path = Path("src/agentic_lab/application/action_runtime.py")
+          runtime = runtime_path.read_text()
+          old_runtime = (
+              "        binding_matches = (\n"
+              "            approval.proposed_action == self.proposed_action\n"
+              "            and approval.context == self.context\n"
+              "        )\n"
+          )
+          new_runtime = (
+              "        binding_matches = (\n"
+              "            approval.proposed_action == self.proposed_action and approval.context == self.context\n"
+              "        )\n"
+          )
+          if runtime.count(old_runtime) != 1:
+              raise SystemExit(f"expected one runtime format target, found {runtime.count(old_runtime)}")
+          runtime_path.write_text(runtime.replace(old_runtime, new_runtime, 1))
+
+          test_path = Path("tests/unit/application/test_action_approver_runtime.py")
+          tests = test_path.read_text()
+          old_test = (
+              '    with pytest.raises(ValueError, match="validated approval status requires an allow approver decision"):\n'
+          )
+          new_test = (
+              "    with pytest.raises(\n"
+              '        ValueError, match="validated approval status requires an allow approver decision"\n'
+              "    ):\n"
+          )
+          if tests.count(old_test) != 1:
+              raise SystemExit(f"expected one test format target, found {tests.count(old_test)}")
+          test_path.write_text(tests.replace(old_test, new_test, 1))
+          PY
+          git diff --check
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "src/agentic_lab/application/action_runtime.py tests/unit/application/test_action_approver_runtime.py "
+      - name: Commit formatting correction
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/agentic_lab/application/action_runtime.py tests/unit/application/test_action_approver_runtime.py
+          git commit -m "style: format phase48 evidence checks"
+          git push origin HEAD:feat/phase-48-action-evidence-state-machine
