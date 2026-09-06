@@ -6,7 +6,7 @@
 
 A framework-neutral engineering lab for building, securing, evaluating, and comparing **agentic AI workflows** under the same deterministic controls.
 
-It implements the same vulnerability-analysis workload with **LangGraph, CrewAI, LlamaIndex, and Agno**, routes provider access through **LiteLLM**, validates model reasoning outside the LLM, exposes **MCP** compatibility, emits content-free logical **OpenTelemetry** observations, and now exercises **governed mutable agent actions** through the same application-owned authorization and enforcement boundary.
+It implements the same vulnerability-analysis workload with **LangGraph, CrewAI, LlamaIndex, and Agno**, routes provider access through **LiteLLM**, validates model reasoning outside the LLM, exposes **MCP** compatibility, emits content-free logical **OpenTelemetry** observations, and exercises **governed mutable agent actions** through application-owned authentication, source-aware authorization, bounded human approval, approver authorization, execution, and typed failure-evidence boundaries.
 
 > **The central idea:** agent frameworks may own orchestration, but they should not automatically own security authority, policy, evidence, authorization, or final decisions.
 
@@ -57,10 +57,14 @@ See the complete [documentation map](docs/README.md).
 - untrusted evidence has no instruction authority by default;
 - deterministic policy controls human-review requirements;
 - model-adjacent `ProposedAction` is separated from trusted `ActionContext`;
+- caller authentication is a separate boundary from caller identity and authorization; raw credentials are not copied into trusted action context or execution evidence;
 - exact least-privilege authorization evaluates `(caller_id, identity_source, action, resource, environment)` with no cross-source fallback;
 - unknown action scopes fail closed;
 - `require_human_approval` remains blocked until separately sourced approval evidence is validated for the exact caller/action scope;
-- authorization, approval, and actual execution are recorded as independent evidence facts;
+- approval authority is bounded, single-use, revocable before claim, time-limited, and source-isolated in the controlled provider;
+- approver authorization independently verifies whether the trusted reviewer may approve the exact requested scope;
+- authorization, approval lifecycle, approver authorization, execution, and authentication are preserved as separate evidence facts;
+- post-executor exceptions become typed governed failure evidence with `execution_attempted=true` and `external_side_effect_state=unknown`, without copying raw executor text into structured evidence;
 - framework proprietary telemetry is suppressed where relevant to preserve the project privacy boundary;
 - logical OpenTelemetry contains safe execution metadata, not prompts, responses, rationale, evidence, credentials, or provider payloads;
 - provider/model mapping stays behind the gateway instead of leaking into every framework adapter.
@@ -73,8 +77,9 @@ See the complete [documentation map](docs/README.md).
 - LlamaIndex Workflow with typed events plus governed-action Workflow;
 - Agno Workflow with native loop/condition primitives plus a no-retry governed mutable Step;
 - LiteLLM as the centralized provider-access boundary;
-- MCP v2 compatibility plus real local STDIO host/client smokes for read-only applicability and governed mutable actions;
-- cross-framework governed-action conformance against the direct application runtime;
+- MCP v2 compatibility plus real local STDIO host/client smokes for read-only applicability, trusted-composition governed actions, and a separate host-injected authenticated governed-action experiment;
+- uncertain post-executor MCP failures are classified as host-visible protocol errors instead of normal model-correctable Tool errors;
+- cross-framework governed-action conformance against the direct application runtime covers both normal execution states and typed executor-failure provenance;
 - provider-free CI for quality, typing, security, MCP compatibility, governed mutable-action behavior, and OTel contract checks.
 
 ## Core invariant
@@ -93,12 +98,12 @@ For mutable actions, the same principle becomes:
 
 ```text
 agent/model proposes
-trusted context identifies the caller
+trusted composition or authentication establishes caller context
 policy authorizes
-human evidence approves when required
-runtime enforces
-adapter executes
-evidence proves what happened
+human evidence is claimed and validated when required
+approver policy validates reviewer authority
+runtime enforces and executes
+evidence records success or governed failure
 ```
 
 And one distinction remains explicit throughout the project:
@@ -107,29 +112,36 @@ And one distinction remains explicit throughout the project:
 tool availability != tool authorization != tool execution
 ```
 
-See [Governed Agent Actions](docs/security/GOVERNED_AGENT_ACTIONS.md) for the complete v1.1 trust model.
+See [Governed Agent Actions](docs/security/GOVERNED_AGENT_ACTIONS.md) for the complete current trust model.
 
-## v1.1 engineering snapshot — Governed Agent Actions
+## Current governed-runtime snapshot — v1.1 through post-v1.3 hardening
 
-The post-v1.0 work extends the original principle from **analysis decisions** into **mutable agent actions** without changing who owns security authority.
+The latest published release is **v1.3.0 — Human Approval Lifecycle**. Current `main` preserves the v1.1 governed-action and v1.2 trusted-caller-identity contracts, adds the v1.3 approval lifecycle, and includes subsequent hardening for approver authorization, typed executor-failure provenance, MCP uncertain-execution handling, and cross-framework failure conformance. These post-v1.3 changes are current-main functionality, not retroactive changes to the published v1.3 release.
 
 The current controlled boundary includes:
 
 - frozen `ProposedAction(action, resource, environment)` as untrusted proposal data;
 - separate trusted `ActionContext(caller_id, identity_source)` supplied by composition/runtime or authentication code;
 - deterministic exact-scope authorization with `allow`, `deny`, and `require_human_approval` outcomes;
-- trusted `HumanApprovalEvidence` bound to the exact proposal and caller context;
+- trusted `HumanApprovalEvidence` bound to the exact proposal and caller context, with timezone-aware validity and single-use claim semantics;
+- explicit approval outcomes for missing, revoked, invalid, unauthorized approver, not-yet-valid, expired, and validated states;
+- separate approver authorization for the exact `(approver_id, caller_id, identity_source, action, resource, environment)` scope;
+- a service-caller authentication composition that establishes `api_key` caller context outside model/tool input before source-aware authorization;
 - `GovernedActionRuntime` as the single enforcement point before mutable execution;
-- `ActionExecutionEvidence` separating authorization, approval state, and actual execution;
+- `ActionExecutionEvidence` separating authorization, approval lifecycle, approver authorization, and actual execution;
+- `ActionExecutionFailureEvidence` and `AuthenticatedActionExecutionFailureEvidence` for post-executor failure provenance without claiming whether an external side effect committed;
 - a safe in-memory mutable finding acknowledgement adapter;
 - framework adapters for LangGraph, CrewAI Flow, LlamaIndex Workflow, and Agno Workflow;
 - adversarial tests for caller spoofing, fake approvals, tool substitution, scope escalation, and retry-after-deny;
-- cross-framework conformance comparing complete evidence and observable side effects with direct application execution;
-- a separate governed mutable MCP STDIO server whose tool schema cannot provide trusted caller or approval identity.
+- cross-framework conformance comparing complete success/failure evidence and observable executor behavior with direct application execution;
+- a governed mutable MCP STDIO server whose tool schema cannot provide trusted caller or approval identity;
+- a separate host-injected authenticated MCP STDIO experiment whose raw credential remains outside model-visible tool arguments and structured evidence;
+- MCP protocol-error classification for uncertain post-executor failures so that an unknown side-effect state is not returned through the normal model-correctable Tool-result channel;
+- Agno mutable execution with `max_retries=0` and preservation of the original `GovernedActionExecutionError` across framework `RunStatus.error`.
 
-The cross-framework conformance matrix covers exact allow, explicit deny, missing approval, validated trusted approval, caller mismatch, identity-source mismatch, and resource escalation. For every framework, the expected security semantics and side-effect count must match the direct application baseline.
+The cross-framework conformance matrix covers exact allow, explicit deny, missing/validated approval, unauthorized approver, expired/revoked approval, caller mismatch, identity-source mismatch, resource escalation, and authorized executor failure. For every framework, normal execution evidence and post-executor failure evidence must match the direct application baseline, with exactly one executor attempt in the controlled failure scenario.
 
-This is **provider-free application/framework/MCP integration evidence**. It does not claim authenticated remote identity, production-grade authorization infrastructure, provider-backed action execution, or production certification.
+This is **provider-free application/framework/MCP integration evidence**. It does not claim authenticated remote-user identity, OAuth/OIDC/JWT/mTLS, durable or distributed approvals, production-grade IAM/policy infrastructure, idempotency, rollback/compensation, provider-backed action execution, signed/tamper-proof audit evidence, or production certification.
 
 ## v1.0 evaluation snapshot
 
@@ -263,11 +275,12 @@ Read [Architecture](docs/ARCHITECTURE.md), [Governed Agent Actions](docs/securit
 
 ## MCP boundary
 
-The project keeps two local MCP concerns separate:
+The project keeps checked-in read-only and trusted-composition mutable concerns separate, plus one isolated authenticated experiment used by compatibility/smoke tests:
 
 ```text
-agentic-security-applicability      # read-only analysis/applicability surface
-agentic-security-governed-actions   # controlled mutable-action surface
+agentic-security-applicability                 # read-only analysis/applicability surface
+agentic-security-governed-actions              # trusted-composition mutable-action surface
+agentic-security-authenticated-governed-actions # host-injected authenticated experiment; not project-registered
 ```
 
 For the governed mutable tool:
@@ -277,9 +290,12 @@ For the governed mutable tool:
 - the controlled local `caller_id` is injected by trusted server composition code;
 - `caller_id`, `approval_id`, and `approver_id` are not tool arguments;
 - tool annotations are metadata, not authorization;
-- returned execution evidence is checked against a separate read-only state tool in the real STDIO smoke.
+- returned execution evidence is checked against a separate read-only state tool in the real STDIO smoke;
+- the authenticated experiment receives synthetic credential material only from the trusted host/process environment and keeps it out of the Tool schema;
+- after a governed executor has been invoked and raises, the trusted-composition and authenticated servers map only the typed governed failure to an `MCPError` protocol failure with safe evidence;
+- that protocol classification prevents this uncertain side-effect state from becoming an ordinary model-visible `CallToolResult(is_error=true)` retry channel, but it does not prevent a host from implementing its own programmatic retry.
 
-The local MCP experiment is intentionally not described as authenticated remote-user identity or production authorization.
+The local MCP experiments are intentionally not described as authenticated remote-user identity, transport-bound identity, production IAM, or production authorization. `external_side_effect_state=unknown` is preserved even when the controlled fixture observes zero mutation.
 
 ## Quickstart for developers
 
@@ -373,8 +389,8 @@ Those are the parts intended to be reusable when reasoning about enterprise agen
 
 The planned **v1.0** engineering scope is complete: domain baseline, deterministic controls, RAG progression, four framework families / five orchestration variants, benchmark comparison, LiteLLM, MCP, observability, final evaluation, runtime hardening, and portfolio documentation.
 
-Post-v1.0 development is extending the lab with **v1.1 Governed Agent Actions**: application-owned exact-scope authorization, trusted caller context, controlled HITL approval evidence, runtime enforcement, safe mutable execution, four-framework conformance, and a governed local MCP action boundary.
+Published post-v1.0 milestones are **v1.1 Governed Agent Actions**, **v1.2 Trusted Caller Identity**, and **v1.3 Human Approval Lifecycle**. Current `main` additionally hardens approver authorization, governed executor-failure evidence, authenticated failure composition, MCP uncertain-execution transport handling, Agno failure-provenance preservation, and cross-framework failure conformance.
 
-This remains an engineering lab, not a claim of production certification. Future work can extend identity, policy, approval durability, external side effects, and audit infrastructure without rewriting the accepted historical v1.0 evidence.
+This remains an engineering lab, not a claim of production certification. Durable/distributed approval, remote transport-bound identity, production IAM, idempotency/rollback, external side-effect transactionality, and signed/tamper-proof audit infrastructure remain explicit non-goals until a concrete experiment requires them. Historical provider-backed evidence and published release metadata are not rewritten by current-main hardening.
 
 See [CHANGELOG.md](CHANGELOG.md) for release-level changes.

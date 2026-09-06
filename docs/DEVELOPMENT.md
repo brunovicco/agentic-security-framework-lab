@@ -167,6 +167,23 @@ The lab deliberately distinguishes application analysis attempts from actual mod
 
 When changing retry or timeout behavior, document the ownership boundary and add a regression test for the configured policy.
 
+## Mutable execution failure ownership
+
+For governed mutable actions, a raised executor exception is not equivalent to a clean non-execution. Once the executor boundary has been crossed, preserve the application-owned `GovernedActionExecutionError` / `ActionExecutionFailureEvidence` contract instead of converting it to a generic framework error.
+
+Required invariants for this path:
+
+- exactly one executor attempt unless a separate, explicitly designed retry/idempotency contract exists;
+- `execution_attempted=true`;
+- `failure_reason=executor_error`;
+- `external_side_effect_state=unknown`;
+- raw executor text remains outside structured evidence and governed error text;
+- the original exception may remain only as the local Python `__cause__`;
+- a claimed HITL approval is not silently restored after a failed executor attempt;
+- framework status/error wrappers must not erase the application failure provenance.
+
+At MCP boundaries, do not turn an uncertain post-executor governed failure into an ordinary model-correctable Tool error. The current local experiment maps only the typed governed failure class to a protocol `MCPError`; that transport behavior is not a substitute for idempotency or a host-level retry policy.
+
 ## Provider-backed development
 
 Current framework clients reach providers through the LiteLLM gateway using the stable model-facing alias:
@@ -201,7 +218,10 @@ MCP is an adapter/transport concern, not a Domain dependency.
 When changing MCP behavior:
 
 - preserve the application ports;
-- keep authorization/least-privilege decisions explicit;
+- keep authentication, trusted context, authorization, approval and approver authorization as separate concerns;
+- preserve typed governed failure evidence and the `external_side_effect_state=unknown` contract after executor invocation;
+- do not expose raw credentials or raw executor errors through Tool schemas/results/protocol data;
+- preserve the distinction between model-visible Tool errors and host-visible protocol errors for uncertain mutable execution;
 - run the MCP compatibility and real STDIO smoke gates;
 - verify current MCP documentation/spec behavior before using new APIs.
 
@@ -238,7 +258,8 @@ Then review:
 
 - Is the change in the correct architectural layer?
 - Did a framework abstraction accidentally take ownership of domain/security policy?
-- Are retries, fallbacks, timeouts, or model-call accounting still explicit?
+- Did a framework/transport error path erase authentication, authorization, approval or executor-failure provenance?
+- Are retries, fallbacks, timeouts, mutable executor attempts, or model-call accounting still explicit?
 - Did telemetry privacy change?
 - Did provider/gateway ownership change?
 - Did any historical artifact change unexpectedly?

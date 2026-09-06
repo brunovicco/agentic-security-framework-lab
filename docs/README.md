@@ -25,8 +25,10 @@ Focus on:
 - typed structured output;
 - bounded retry and deterministic fallback;
 - framework-specific orchestration differences;
-- application-owned action authorization and runtime enforcement;
-- trusted caller context and exact least-privilege scopes;
+- application-owned caller authentication, action authorization and runtime enforcement;
+- trusted caller context and exact source-aware least-privilege scopes;
+- bounded single-use approval lifecycle, revocation and independent approver authorization;
+- typed executor-failure evidence and explicit unknown external side-effect state;
 - provider/gateway ownership;
 - provider-free regression gates;
 - evidence immutability.
@@ -48,7 +50,8 @@ Focus on:
 - which responsibilities remain stable when frameworks change;
 - where policy and authority live;
 - how tool availability is separated from authorization and execution;
-- how trusted human approval is kept outside model-controlled inputs;
+- how trusted human approval is kept outside model-controlled inputs and constrained by lifecycle/approver authority;
+- how executor failures preserve authority provenance without claiming external side-effect outcome;
 - how provider access can be centralized;
 - how model failures are contained;
 - what the benchmark does and does not establish;
@@ -92,8 +95,10 @@ Focus on:
 - trust boundaries;
 - instruction authority vs untrusted data;
 - deterministic applicability controls;
-- exact caller/action/resource/environment authorization;
-- human approval as separately sourced evidence;
+- exact caller/identity-source/action/resource/environment authorization;
+- caller authentication as a distinct source of trusted context;
+- human approval lifecycle plus separate approver authorization;
+- post-executor failure evidence with `external_side_effect_state=unknown`;
 - fallback behavior;
 - tool/runtime boundaries;
 - content-free logical telemetry;
@@ -142,7 +147,7 @@ Accepted evidence is not rewritten to make later architecture look cleaner. Hist
 
 That separation is deliberate: **documentation explains the system; evidence records what actually happened.**
 
-The v1.1 governed-action documentation describes provider-free CI and local MCP integration evidence. It does not rewrite or expand the accepted v1.0 provider-backed evaluation bundle.
+Governed-runtime documentation now spans the published v1.1 Governed Agent Actions, v1.2 Trusted Caller Identity, v1.3 Human Approval Lifecycle milestones and post-v1.3 current-main hardening for approver authorization, executor-failure provenance, MCP uncertain-execution handling and cross-framework failure conformance. These documents describe provider-free CI/local integration evidence and do not rewrite or expand the accepted v1.0 provider-backed evaluation bundle or published release metadata.
 
 ## Language
 

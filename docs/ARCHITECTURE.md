@@ -78,10 +78,12 @@ Owns framework-neutral use-case contracts and controls, including:
 - human-review policy;
 - final result construction;
 - `ProposedAction` and trusted `ActionContext` separation;
-- exact-scope action authorization;
-- trusted human-approval contracts;
+- service-caller authentication and trusted identity provenance;
+- exact source-aware action authorization;
+- trusted human-approval lifecycle contracts;
+- independent approver authorization;
 - governed runtime enforcement;
-- `ActionExecutionEvidence`.
+- `ActionExecutionEvidence`, `ActionExecutionFailureEvidence`, authenticated execution evidence, and authenticated governed failure evidence.
 
 The application layer must not depend on framework adapters.
 
@@ -112,7 +114,7 @@ Adapters may decide **how** reasoning or action orchestration is performed, but 
 
 Benchmark artifacts are evidence, not runtime configuration.
 
-The v1.1 governed-action work currently relies on provider-free CI/integration evidence. It does not rewrite the accepted v1.0 provider-backed benchmark artifacts.
+The post-v1.0 governed-runtime work — including published v1.1/v1.2/v1.3 milestones and subsequent current-main hardening — relies on provider-free CI/integration evidence. It does not rewrite the accepted v1.0 provider-backed benchmark artifacts or published release metadata.
 
 ## 3. Authority model
 
@@ -131,11 +133,16 @@ The most important architectural distinction is who is allowed to decide what.
 | human-review requirement for analysis | deterministic policy | no |
 | final `AnalysisResult` | application runtime | no |
 | proposed mutable action intent | agent/model or other untrusted caller | yes, proposal only |
-| trusted caller identity/context | deployment/composition boundary | no |
+| presented caller credential | trusted host/process boundary | no |
+| caller authentication decision | application authenticator | no |
+| trusted caller identity/context | deployment/composition or successful authentication boundary | no |
 | action authorization outcome | application policy | no |
 | whether HITL approval is required | application policy | no |
-| trusted approval evidence | approval provider / trusted integration | no |
+| trusted approval evidence / lifecycle state | approval provider / trusted integration | no |
+| whether a reviewer may approve the exact scope | approver authorization policy | no |
 | whether the mutable executor is reached | `GovernedActionRuntime` | no |
+| post-executor failure classification/evidence | application runtime | no |
+| MCP transport classification of an uncertain governed failure | MCP adapter boundary | no policy authority; transport only |
 | orchestration mechanics | framework adapter | yes |
 
 This prevents the common failure mode where an LLM is asked to both reason about a control and authorize itself to pass that control.
@@ -252,13 +259,21 @@ There are no wildcard, nearest-match, or cross-source fallback semantics. An unk
 
 `ActionContext` is deliberately separate from `ProposedAction`. Caller identity is trusted runtime context supplied by composition code; it is not accepted as model-controlled proposal data.
 
-When policy returns `require_human_approval`, approval is resolved from a separate `ActionApprovalProvider`. Trusted `HumanApprovalEvidence` must match the exact proposal and caller context before execution can proceed.
+When policy returns `require_human_approval`, approval is resolved from a separate `ActionApprovalProvider`. Trusted `HumanApprovalEvidence` must match the exact proposal and caller context before execution can proceed. The controlled provider treats approval as bounded authority: evidence is timezone-aware, exact-scope, single-use, revocable before claim, source-isolated, and evaluated against an application-owned trusted clock.
 
-The resulting `ActionExecutionEvidence` records authorization, approval, and execution as independent facts. This preserves another important distinction:
+A separate `ActionApproverAuthorizer` verifies whether the trusted `approver_id` may approve the exact `(approver_id, caller_id, identity_source, action, resource, environment)` scope. Human approval therefore does not imply global reviewer authority.
+
+For authenticated composition, `AuthenticatedGovernedActionRuntime` first establishes trusted caller context through a framework-neutral authenticator and only then delegates to the same governed authorization/approval/execution runtime. Rejected authentication never reaches mutable authorization or execution, and raw credentials are not copied into `ActionContext` or execution evidence.
+
+The resulting `ActionExecutionEvidence` records authorization, approval lifecycle, approver authorization, and execution as independent facts. This preserves another important distinction:
 
 ```text
 authorized != successfully executed
 ```
+
+If an authorized executor raises after invocation, `GovernedActionRuntime` raises `GovernedActionExecutionError` carrying immutable `ActionExecutionFailureEvidence`. That evidence preserves the exact authority chain, sets `execution_attempted=true`, `failure_reason=executor_error`, and `external_side_effect_state=unknown`, and excludes raw executor text. The original exception remains only as the local chained Python cause. Authenticated composition re-wraps this state as `AuthenticatedGovernedActionExecutionError` while preserving the successful authentication evidence and base-error compatibility.
+
+A failed HITL execution does not restore already-claimed approval authority. The lab deliberately does not infer rollback, idempotency, compensation, or transactional external state from a raised exception.
 
 The controlled in-memory finding acknowledgement adapter is mutable enough to prove state change without introducing external side effects. It validates its concrete operation/resource invariants but never owns authorization.
 
@@ -312,7 +327,7 @@ Uses native Agno `Workflow`, `Loop`, `Step`, and `Condition` orchestration.
 
 Benchmark-sensitive `Step` retries are explicitly disabled (`max_retries=0`) so the only valid retry path is the application-governed evaluator retry. Workflow telemetry is disabled for the controlled benchmark.
 
-The governed mutable-action Step also uses `max_retries=0`. A regression test proves a failing mutable executor is invoked exactly once so framework retry cannot silently multiply side effects.
+The governed mutable-action Step also uses `max_retries=0`. A regression test proves a failing mutable executor is invoked exactly once so framework retry cannot silently multiply side effects. Because Agno represents the workflow failure as `RunStatus.error`, the adapter also preserves and re-raises the original application-owned `GovernedActionExecutionError` instead of replacing it with a generic framework error.
 
 ## 9. Cross-framework governed-action conformance
 
@@ -326,13 +341,15 @@ LlamaIndex Workflow
 Agno Workflow
 ```
 
-The suite covers exact allow, explicit deny, missing HITL approval, validated trusted approval, caller mismatch, identity-source mismatch, and resource escalation.
+The suite covers exact allow, explicit deny, missing and validated HITL approval, unauthorized approver, expired/revoked approval, caller mismatch, identity-source mismatch, resource escalation, and an authorized executor-failure path.
 
 Each adapter must match the direct application baseline for:
 
-- complete `ActionExecutionEvidence`;
+- complete `ActionExecutionEvidence` on success/pre-executor paths;
+- complete `ActionExecutionFailureEvidence` on the post-executor failure path;
 - observable in-memory mutation;
-- successful execution count.
+- successful execution or executor-attempt count, as applicable;
+- raw executor text exclusion from structured evidence and governed error text.
 
 The test therefore checks behavior, not merely API compatibility. Framework orchestration is allowed to differ; application authority is not.
 
@@ -395,7 +412,7 @@ Telemetry is fail-closed where framework adapters expose incomplete usage accoun
 
 Framework-specific telemetry mechanisms differ, but comparison artifacts normalize them into the same benchmark schema.
 
-For governed mutable actions, `ActionExecutionEvidence` is currently the application evidence contract. Production audit storage and correlation infrastructure are outside the current lab scope.
+For governed mutable actions, the application evidence contracts include successful execution, typed governed executor failure, authenticated execution, and authenticated governed failure evidence. Production audit persistence, cryptographic signing, tamper-proof storage, and cross-system transaction proof remain outside the current lab scope.
 
 ## 13. Evaluation truth boundary
 
@@ -442,19 +459,20 @@ See [Framework Decision Matrix](FRAMEWORK_DECISION_MATRIX.md) for the engineerin
 
 ## 15. MCP boundary
 
-The project keeps read-only applicability and governed mutable actions in separate local MCP servers.
+The project keeps read-only applicability and governed mutable actions in separate checked-in local MCP servers. A third authenticated governed-action server is intentionally used only by isolated compatibility/STDIO tests because its synthetic credential material belongs to the trusted host/process environment rather than project configuration.
 
-For the mutable server:
+For mutable servers:
 
-- the MCP tool is available to the host, but availability does not imply authorization;
+- MCP Tool availability does not imply authorization or execution;
 - the action name is fixed by the handler rather than accepted as arbitrary model input;
 - `resource` and `environment` remain untrusted tool arguments;
-- the controlled caller context is created by server composition code;
-- the tool schema does not accept caller identity or approval identifiers;
-- application policy/runtime still owns the authorization and execution boundary;
-- a separate read-only state tool verifies the real in-memory side effect independently from returned execution evidence.
+- trusted-composition caller context or successful host-injected authentication establishes `ActionContext` outside the Tool schema;
+- the Tool schema does not accept caller identity, raw credential, identity source, approval identifiers, or approver identity;
+- application policy/runtime still owns authorization, approval, approver authorization, and execution;
+- a separate read-only state Tool verifies the controlled in-memory side effect independently from returned execution evidence;
+- post-executor `GovernedActionExecutionError` / `AuthenticatedGovernedActionExecutionError` states are mapped to host-visible `MCPError` protocol failures with safe evidence rather than ordinary model-correctable Tool errors.
 
-The current `local-mcp-host` caller is a local deployment-scoped trust context for the experiment. It is not authenticated end-user identity.
+The protocol-error mapping is a transport classification, not a new policy engine and not a universal no-retry guarantee: a host can still retry programmatically. `external_side_effect_state=unknown` remains unchanged even when the controlled fixture observes zero mutation. The `local-mcp-host` caller is a local deployment-scoped trust context; the authenticated experiment demonstrates host-injected service authentication, not remote transport-bound end-user identity.
 
 See [MCP policy](MCP.md) and [Governed Agent Actions](security/GOVERNED_AGENT_ACTIONS.md).
 
