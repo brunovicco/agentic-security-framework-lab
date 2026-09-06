@@ -12,6 +12,11 @@ from agentic_lab.application.action_approval import (
     ApprovalStatus,
     HumanApprovalEvidence,
 )
+from agentic_lab.application.action_approver_authorization import (
+    NULL_ACTION_APPROVER_AUTHORIZER,
+    ActionApproverAuthorizer,
+    ApproverAuthorizationDecision,
+)
 from agentic_lab.application.action_authorization import (
     ActionAuthorizer,
     ActionContext,
@@ -41,11 +46,12 @@ class ActionExecutionEvidence(BaseModel):
     authorization: AuthorizationDecision
     approval_status: ApprovalStatus
     human_approval: HumanApprovalEvidence | None
+    approver_authorization: ApproverAuthorizationDecision | None = None
     execution_occurred: bool
 
 
 class GovernedActionRuntime:
-    """Enforce authorization and trusted approval before action execution."""
+    """Enforce caller authorization and trusted approved authority before execution."""
 
     def __init__(
         self,
@@ -53,12 +59,14 @@ class GovernedActionRuntime:
         executor: ActionExecutor,
         approval_provider: ActionApprovalProvider = NULL_ACTION_APPROVAL_PROVIDER,
         approval_clock: ApprovalClock = SYSTEM_APPROVAL_CLOCK,
+        approver_authorizer: ActionApproverAuthorizer = NULL_ACTION_APPROVER_AUTHORIZER,
     ) -> None:
-        """Bind policy, trusted HITL evidence, time, and execution boundaries."""
+        """Bind caller policy, HITL evidence, approver policy, time, and execution."""
         self._authorizer = authorizer
         self._executor = executor
         self._approval_provider = approval_provider
         self._approval_clock = approval_clock
+        self._approver_authorizer = approver_authorizer
 
     def execute(
         self,
@@ -114,6 +122,22 @@ class GovernedActionRuntime:
                     execution_occurred=False,
                 )
 
+            approver_decision = self._approver_authorizer.authorize(
+                approval.approver_id,
+                proposed_action,
+                context,
+            )
+            if approver_decision.outcome == "deny":
+                return ActionExecutionEvidence(
+                    proposed_action=proposed_action,
+                    context=context,
+                    authorization=decision,
+                    approval_status="unauthorized_approver",
+                    human_approval=approval,
+                    approver_authorization=approver_decision,
+                    execution_occurred=False,
+                )
+
             now = self._approval_clock.now()
             if now.tzinfo is None or now.utcoffset() is None:
                 raise RuntimeError("approval clock must return timezone-aware current time")
@@ -125,6 +149,7 @@ class GovernedActionRuntime:
                     authorization=decision,
                     approval_status="not_yet_valid",
                     human_approval=approval,
+                    approver_authorization=approver_decision,
                     execution_occurred=False,
                 )
 
@@ -135,6 +160,7 @@ class GovernedActionRuntime:
                     authorization=decision,
                     approval_status="expired",
                     human_approval=approval,
+                    approver_authorization=approver_decision,
                     execution_occurred=False,
                 )
 
@@ -145,6 +171,7 @@ class GovernedActionRuntime:
                 authorization=decision,
                 approval_status="validated",
                 human_approval=approval,
+                approver_authorization=approver_decision,
                 execution_occurred=True,
             )
 
