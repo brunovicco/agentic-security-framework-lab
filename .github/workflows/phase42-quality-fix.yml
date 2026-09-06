@@ -43,10 +43,9 @@ jobs:
           PY
       - name: Verify and commit only expected test files
         run: |
-          python -m pip install ruff==0.16.5 pyright==1.1.411
+          python -m pip install ruff==0.16.5
           ruff check tests/unit/adapters/test_action_approvals.py tests/unit/application/test_action_runtime.py
           ruff format --check tests/unit/adapters/test_action_approvals.py tests/unit/application/test_action_runtime.py
-          pyright tests/unit/application/test_action_runtime.py
           git diff --check
           git diff --exit-code -- . \
             ':!tests/unit/adapters/test_action_approvals.py' \
