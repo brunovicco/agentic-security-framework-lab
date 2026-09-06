@@ -1,0 +1,146 @@
+name: phase50-docs-sync
+
+on:
+  push:
+    branches:
+      - feat/phase-50-authenticated-execution-failure-evidence
+    paths:
+      - .github/workflows/phase50-docs-sync.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: feat/phase-50-authenticated-execution-failure-evidence
+      - name: Apply Phase 50 documentation updates
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          changelog_path = Path("CHANGELOG.md")
+          changelog = changelog_path.read_text()
+          added_anchor = (
+              "- `GovernedActionExecutionError` carries safe failure evidence as a `RuntimeError` subtype and chains the original executor exception locally without copying raw executor error text into structured evidence.\n"
+          )
+          added_insert = added_anchor + (
+              "- `AuthenticatedActionExecutionFailureEvidence` binds one successful caller-authentication decision to the exact governed executor-failure context it established.\n"
+              "- `AuthenticatedGovernedActionExecutionError` preserves authentication evidence across executor failure while remaining a subtype of `GovernedActionExecutionError` for existing catch behavior.\n"
+          )
+          if changelog.count(added_anchor) != 1:
+              raise SystemExit(f"expected one changelog Added anchor, found {changelog.count(added_anchor)}")
+          changelog = changelog.replace(added_anchor, added_insert, 1)
+
+          hardened_anchor = (
+              "- Failed HITL executor attempts do not restore consumed approval authority, and structured failure evidence excludes raw executor exception content by construction.\n"
+          )
+          hardened_insert = hardened_anchor + (
+              "- Authentication-first composition now re-wraps governed executor failures with the exact `credential_verified` evidence and rejects rejected-authentication or context-substitution combinations without copying credential or raw executor content.\n"
+          )
+          if changelog.count(hardened_anchor) != 1:
+              raise SystemExit(f"expected one changelog Hardened anchor, found {changelog.count(hardened_anchor)}")
+          changelog = changelog.replace(hardened_anchor, hardened_insert, 1)
+
+          evidence_anchor = (
+              "- Failure evidence deliberately reports the external side-effect state as `unknown`; the lab does not claim rollback, compensation, idempotent retry, two-phase commit, or distributed transaction semantics.\n"
+          )
+          evidence_insert = evidence_anchor + (
+              "- Authenticated-failure regressions prove base-error compatibility, exact credential-derived context binding, rejected-credential short-circuiting, nested governed/original exception chaining, and absence of the raw API key from structured failure evidence.\n"
+          )
+          if changelog.count(evidence_anchor) != 1:
+              raise SystemExit(f"expected one changelog Evidence anchor, found {changelog.count(evidence_anchor)}")
+          changelog_path.write_text(changelog.replace(evidence_anchor, evidence_insert, 1))
+
+          adr_path = Path("docs/adr/0008-separate-service-caller-authentication-from-authorization.md")
+          adr = adr_path.read_text()
+          evolution_anchor = (
+              "Framework adapters and the local MCP server remain consumers of the application policy. Their existing local fixtures explicitly use `trusted_composition`; API-key authentication is not silently added to framework or MCP inputs.\n\n"
+              "## Security invariants\n"
+          )
+          evolution_insert = (
+              "Framework adapters and the local MCP server remain consumers of the application policy. Their existing local fixtures explicitly use `trusted_composition`; API-key authentication is not silently added to framework or MCP inputs.\n\n"
+              "## Evolution note: Phase 50\n\n"
+              "Phase 49 made executor exceptions carry safe governed failure evidence, but `AuthenticatedGovernedActionRuntime` initially propagated that error unchanged. The action failure retained its trusted `ActionContext`, yet the outer authentication boundary no longer exposed the independent `CallerAuthenticationDecision` that established that context.\n\n"
+              "Phase 50 adds `AuthenticatedActionExecutionFailureEvidence`, which accepts only a successful authentication decision and one `ActionExecutionFailureEvidence` whose context exactly matches the credential-derived context. Rejected authentication and context substitution are structurally invalid.\n\n"
+              "`AuthenticatedGovernedActionExecutionError` subclasses `GovernedActionExecutionError`. Existing callers may therefore keep catching the governed base error and reading action-level `error.evidence`, while authentication-aware consumers can read `error.authenticated_evidence`. The authenticated error chains the delegated governed error, which in turn chains the original executor exception; raw executor text and raw credentials are not copied into the structured evidence.\n\n"
+              "This preserves three separate facts on the failure path:\n\n"
+              "```text\n"
+              "credential verification\n"
+              "    !=\n"
+              "authorization / approval authority\n"
+              "    !=\n"
+              "executor outcome\n"
+              "```\n\n"
+              "Phase 50 does not add a new authentication mechanism, credential lifecycle, retry policy, rollback guarantee, or remote identity protocol.\n\n"
+              "## Security invariants\n"
+          )
+          if adr.count(evolution_anchor) != 1:
+              raise SystemExit(f"expected one ADR evolution anchor, found {adr.count(evolution_anchor)}")
+          adr = adr.replace(evolution_anchor, evolution_insert, 1)
+
+          invariant_anchor = (
+              "same caller_id != same authority when identity_source differs\n```\n"
+          )
+          invariant_insert = (
+              "same caller_id != same authority when identity_source differs\n"
+              "authenticated execution failure != authentication evidence loss\n"
+              "authenticated failure context == credential-derived ActionContext\n"
+              "rejected authentication -> no authenticated execution-failure evidence\n"
+              "raw credential not in authenticated failure evidence\n"
+              "AuthenticatedGovernedActionExecutionError is a GovernedActionExecutionError\n"
+              "```\n"
+          )
+          if adr.count(invariant_anchor) != 1:
+              raise SystemExit(f"expected one ADR invariant anchor, found {adr.count(invariant_anchor)}")
+          adr = adr.replace(invariant_anchor, invariant_insert, 1)
+          refs_anchor = "Refs #152, #154, #156\n"
+          if adr.count(refs_anchor) != 1:
+              raise SystemExit(f"expected one ADR refs anchor, found {adr.count(refs_anchor)}")
+          adr_path.write_text(adr.replace(refs_anchor, "Refs #152, #154, #156, #180\n", 1))
+
+          security_path = Path("docs/security/GOVERNED_AGENT_ACTIONS.md")
+          security = security_path.read_text()
+          auth_anchor = (
+              "Authentication success is therefore a precondition for authorization, not a permission grant.\n\n"
+              "## 3. Deterministic authorization\n"
+          )
+          auth_insert = (
+              "Authentication success is therefore a precondition for authorization, not a permission grant.\n\n"
+              "### Authenticated executor failure evidence\n\n"
+              "If credential verification succeeds but the delegated governed executor later raises, the authentication boundary must not disappear from the evidence trail. `AuthenticatedGovernedActionRuntime` catches `GovernedActionExecutionError` and raises `AuthenticatedGovernedActionExecutionError` with immutable `AuthenticatedActionExecutionFailureEvidence`.\n\n"
+              "The authenticated failure model contains the successful `CallerAuthenticationDecision` plus the action-level `ActionExecutionFailureEvidence`. It requires the failure context to equal the exact `ActionContext` created by credential verification. Rejected authentication cannot be paired with executor-failure evidence because rejected credentials stop before authorization and execution.\n\n"
+              "The authenticated error remains a subtype of `GovernedActionExecutionError`, so existing callers retain the action-level `error.evidence` contract. Authentication-aware callers additionally receive `error.authenticated_evidence`. The delegated governed error remains the Python cause, and the original executor exception remains nested beneath it; neither raw credential material nor raw executor text is copied into structured evidence.\n\n"
+              "```text\n"
+              "authenticated execution failure != authentication evidence loss\n"
+              "authenticated failure context == credential-derived ActionContext\n"
+              "```\n\n"
+              "This is local provider-free evidence composition. It does not add OAuth/OIDC, credential lifecycle management, transport binding, retry, rollback, or transactional guarantees.\n\n"
+              "## 3. Deterministic authorization\n"
+          )
+          if security.count(auth_anchor) != 1:
+              raise SystemExit(f"expected one security auth anchor, found {security.count(auth_anchor)}")
+          security = security.replace(auth_anchor, auth_insert, 1)
+
+          raw_anchor = (
+              "Because evidence embeds the same `ActionContext` used by authorization, the runtime does not create a second identity or provenance channel. Raw credentials are not part of `ActionContext`, `CallerAuthenticationDecision`, `ActionExecutionEvidence`, `ActionExecutionFailureEvidence`, or `AuthenticatedActionExecutionEvidence`.\n"
+          )
+          raw_insert = (
+              "Because evidence embeds the same `ActionContext` used by authorization, the runtime does not create a second identity or provenance channel. Raw credentials are not part of `ActionContext`, `CallerAuthenticationDecision`, `ActionExecutionEvidence`, `ActionExecutionFailureEvidence`, `AuthenticatedActionExecutionEvidence`, or `AuthenticatedActionExecutionFailureEvidence`.\n"
+          )
+          if security.count(raw_anchor) != 1:
+              raise SystemExit(f"expected one security raw-evidence anchor, found {security.count(raw_anchor)}")
+          security_path.write_text(security.replace(raw_anchor, raw_insert, 1))
+          PY
+          git diff --check
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "CHANGELOG.md docs/adr/0008-separate-service-caller-authentication-from-authorization.md docs/security/GOVERNED_AGENT_ACTIONS.md "
+      - name: Commit documentation
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add CHANGELOG.md docs/adr/0008-separate-service-caller-authentication-from-authorization.md docs/security/GOVERNED_AGENT_ACTIONS.md
+          git commit -m "docs: preserve authentication on executor failure"
+          git push origin HEAD:feat/phase-50-authenticated-execution-failure-evidence
