@@ -6,6 +6,8 @@
 
 - A framework-neutral `ActionApproverAuthorizer` independently decides whether the trusted `approver_id` named by claimed human evidence is entitled for the exact `(approver_id, caller_id, identity_source, action, resource, environment)` scope.
 - `ActionExecutionEvidence` records approver authorization separately from caller authorization and approval lifecycle evidence.
+- `ActionExecutionFailureEvidence` records the exact authority that permitted an executor invocation which raised, while fixing `execution_attempted=true`, `external_side_effect_state=unknown`, and `failure_reason=executor_error`.
+- `GovernedActionExecutionError` carries safe failure evidence as a `RuntimeError` subtype and chains the original executor exception locally without copying raw executor error text into structured evidence.
 
 ### Hardened
 
@@ -14,6 +16,8 @@
 - Approver decisions and execution evidence reject contradictory outcome/reason or approval-status/approver-decision combinations.
 - `AuthorizationDecision` now rejects caller outcome/reason pairs that deterministic policy cannot emit, including `allow` with a deny reason or `require_human_approval` without `human_approval_required`.
 - `ActionExecutionEvidence` now validates the complete governed-action state machine: caller deny is terminal, direct allow is HITL-free and executed, and every HITL lifecycle state requires exactly the human evidence, approver decision, binding, and execution flag that the runtime can legally produce.
+- Executor exceptions after an authorized direct or validated-HITL path no longer leave the authority chain unstructured; the runtime raises typed governed failure evidence without claiming that the external side effect committed or did not commit.
+- Failed HITL executor attempts do not restore consumed approval authority, and structured failure evidence excludes raw executor exception content by construction.
 
 ### Evidence
 
@@ -23,6 +27,8 @@
 - Approver authorization remains provider-free local/CI evidence; the lab does not claim human authentication, workforce IAM, signed approval attestation, role hierarchy, or multi-party approval.
 - Evidence-model regressions enumerate every legal governed-action state and reject impossible combinations such as deny-plus-execution, allow-plus-HITL, mismatched `invalid` evidence, temporal states without approver allow, and `validated` without execution.
 - This is structural evidence integrity only; it does not provide cryptographic signing, tamper-proof persistence, or transactional proof for an external side effect.
+- Executor-failure regressions cover direct allow, validated HITL, consumed-approval retry, impossible failure-evidence authority states, raw-error exclusion, and an authorized missing-resource adapter failure whose original `LookupError` remains only as the local exception cause.
+- Failure evidence deliberately reports the external side-effect state as `unknown`; the lab does not claim rollback, compensation, idempotent retry, two-phase commit, or distributed transaction semantics.
 
 ## 1.3.0 - 2026-09-05
 

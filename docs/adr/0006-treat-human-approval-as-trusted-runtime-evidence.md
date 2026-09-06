@@ -24,6 +24,8 @@ After the lifecycle was hardened, a separate authority gap remained: trusted app
 
 After approver entitlement was separated, one audit-integrity gap remained: the runtime emitted valid combinations, but its Pydantic evidence models still allowed callers to construct or deserialize security states the runtime itself could never legally produce. Security evidence needs structural state-machine validation in addition to correct runtime control flow.
 
+After successful and blocked evidence states became structurally constrained, executor failure remained an observability gap. An executor can raise after the runtime has already established caller authority and, on HITL paths, consumed a valid approval. The exception alone loses that authority chain, while treating the failure as `execution_occurred=false` would incorrectly imply that no external effect occurred.
+
 ## Decision
 
 Human approval is represented as separate trusted application evidence.
@@ -107,6 +109,23 @@ This hardening protects audit, serialization, and replay consumers from acceptin
 ```text
 security evidence must not represent a state the governed runtime could never legally produce
 ```
+
+### Executor failure evidence
+
+Crossing the executor boundary is not equivalent to proving a successful external side effect. If an authorized executor raises, `GovernedActionRuntime` raises `GovernedActionExecutionError`, a `RuntimeError` subtype carrying immutable `ActionExecutionFailureEvidence`.
+
+Failure evidence preserves the exact proposed action, trusted caller context, caller authorization, and any validated human/approver authority that permitted the attempt. It records only low-cardinality execution facts: `execution_attempted=true`, `failure_reason=executor_error`, and `external_side_effect_state=unknown`. The original executor exception is chained as the local Python cause but its raw message is not copied into structured failure evidence or the governed error message.
+
+Direct-allow failure evidence must remain HITL-free. Approval-gated failure evidence requires an exact-bound `validated` approval plus explicit approver allow. Caller deny and blocked approval states therefore cannot manufacture executor-failure evidence because they never cross the executor boundary.
+
+An executor exception does not prove that the external operation committed zero, partial, or complete effects before failure became visible. The runtime therefore does not map executor failure to ordinary `ActionExecutionEvidence(execution_occurred=false)`, does not restore consumed approval, and does not automatically retry.
+
+```text
+executor raised != external side effect did not occur
+executor invocation + exception => external side-effect state is unknown
+```
+
+This is audit evidence for an execution attempt, not rollback, compensation, idempotency, two-phase commit, or distributed transaction semantics.
 
 ### Temporal validity
 
@@ -220,6 +239,7 @@ Rejected because the current increment only needs to prove trusted approval sepa
 - explicit deny stays terminal;
 - normal allow does not consume HITL evidence;
 - executor failure does not silently restore an already claimed approval;
+- authorized executor failure preserves a safe structured authority trail while keeping external side-effect state explicitly unknown;
 - trusted control-plane code can withdraw one still-unclaimed approval without exposing revocation to model-controlled inputs;
 - revoked approval is distinguishable from missing, invalid, expired, and validated evidence;
 - caller authorization, approval lifecycle, approver authorization, and execution occurrence remain independently observable;
@@ -269,6 +289,10 @@ one claimed approval = at most one execution attempt
 one approval capability + concurrent claims <= one claimed runtime attempt
 
 consumed approval + retry = new approval required
+
+executor raised != external side effect did not occur
+
+executor invocation + exception = external side-effect state unknown
 ```
 
-Refs #131, #145, #163, #165, #167, #169, #174
+Refs #131, #145, #163, #165, #167, #169, #174, #178
