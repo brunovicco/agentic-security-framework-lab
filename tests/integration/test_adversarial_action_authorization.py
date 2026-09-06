@@ -152,6 +152,57 @@ def test_identity_source_substitution_does_not_inherit_composition_authority() -
     assert executor.is_acknowledged(FINDING_RESOURCE) is False
 
 
+def test_wrong_identity_source_cannot_consume_correct_source_approval() -> None:
+    """Keep approval authority available after an approval-gated cross-source attempt."""
+    proposed_action = _action(environment="production")
+    trusted_context = _context(identity_source="trusted_composition")
+    api_key_context = _context(identity_source="api_key")
+    rules: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
+        (
+            REMEDIATION_AGENT,
+            "trusted_composition",
+            proposed_action.action,
+            proposed_action.resource,
+            proposed_action.environment,
+        ): "require_human_approval",
+        (
+            REMEDIATION_AGENT,
+            "api_key",
+            proposed_action.action,
+            proposed_action.resource,
+            proposed_action.environment,
+        ): "require_human_approval",
+    }
+    approval = HumanApprovalEvidence(
+        approval_id="approval-source-isolation-001",
+        approver_id="soc-reviewer",
+        proposed_action=proposed_action,
+        context=trusted_context,
+        approved_at=APPROVED_AT,
+        expires_at=EXPIRES_AT,
+    )
+    executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
+    runtime = GovernedActionRuntime(
+        authorizer=StaticActionAuthorizationPolicy(rules),
+        executor=executor,
+        approval_provider=InMemoryActionApprovalProvider([approval]),
+        approval_clock=FixedApprovalClock(VALID_NOW),
+    )
+
+    wrong_source = runtime.execute(proposed_action, api_key_context)
+    correct_source = runtime.execute(proposed_action, trusted_context)
+
+    assert wrong_source.authorization.outcome == "require_human_approval"
+    assert wrong_source.approval_status == "missing"
+    assert wrong_source.execution_occurred is False
+    assert correct_source.authorization.outcome == "require_human_approval"
+    assert correct_source.approval_status == "validated"
+    assert correct_source.human_approval == approval
+    assert correct_source.execution_occurred is True
+    assert executor.execution_count == 1
+    assert executor.is_acknowledged(FINDING_RESOURCE) is True
+
+
 def test_resource_and_environment_escalation_remain_blocked() -> None:
     """Evaluate the actual requested scope instead of the nearest permitted scope."""
     executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
