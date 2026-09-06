@@ -363,7 +363,29 @@ validated HITL + missing/mismatched authority = impossible evidence
 
 This is structural consistency, not cryptographic integrity. The lab does not claim signed evidence, tamper-proof persistence, or transactional proof that an external side effect committed exactly as recorded.
 
-Because evidence embeds the same `ActionContext` used by authorization, the runtime does not create a second identity or provenance channel. Raw credentials are not part of `ActionContext`, `CallerAuthenticationDecision`, `ActionExecutionEvidence`, or `AuthenticatedActionExecutionEvidence`.
+### Executor failure evidence
+
+An executor exception is not ordinary no-execution evidence. Once the runtime invokes an executor, a raised exception cannot establish whether an external system committed zero, partial, or complete effects before the failure became observable.
+
+`GovernedActionRuntime` therefore raises `GovernedActionExecutionError` with separate immutable `ActionExecutionFailureEvidence` after an authorized executor call raises. The evidence preserves the exact authority that permitted the attempt and fixes these execution facts:
+
+```text
+execution_attempted = true
+failure_reason = executor_error
+external_side_effect_state = unknown
+```
+
+Direct-allow failure evidence carries no HITL fields. HITL failure evidence requires exact-bound `validated` human approval plus approver allow. Caller deny, missing/invalid/revoked approval, unauthorized approver, and temporal failures never synthesize executor-failure evidence because those paths stop before executor invocation.
+
+The governed exception message is generic. The original exception is available only as the locally chained Python cause; raw executor text is not copied into structured failure evidence. A failed HITL attempt also leaves the already claimed approval consumed, so retry requires fresh approval.
+
+```text
+executor raised != external side effect did not occur
+```
+
+The lab does not claim rollback, compensation, automatic retry, idempotency, two-phase commit, or transactional coupling to an external system.
+
+Because evidence embeds the same `ActionContext` used by authorization, the runtime does not create a second identity or provenance channel. Raw credentials are not part of `ActionContext`, `CallerAuthenticationDecision`, `ActionExecutionEvidence`, `ActionExecutionFailureEvidence`, or `AuthenticatedActionExecutionEvidence`.
 
 This distinction matters because:
 
@@ -372,6 +394,8 @@ authenticated != authorized != executed successfully
 ```
 
 For example, a service credential can authenticate successfully while policy still denies the requested action because its exact identity source has no matching rule. Likewise, policy can authorize a scope while the concrete executor can still fail because the target resource does not exist.
+
+In that case the governed failure records that execution was attempted and keeps the external side-effect result `unknown` rather than misreporting a clean non-execution.
 
 ## 6. Safe mutable fixture
 
