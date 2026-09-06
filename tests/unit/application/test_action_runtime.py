@@ -6,6 +6,9 @@ from typing import Literal
 import pytest
 
 from agentic_lab.application.action_approval import ApprovalClaim, HumanApprovalEvidence
+from agentic_lab.application.action_approver_authorization import (
+    StaticActionApproverAuthorizationPolicy,
+)
 from agentic_lab.application.action_authorization import (
     ActionAuthorizationRuleKey,
     ActionAuthorizer,
@@ -135,6 +138,21 @@ def _authorizer() -> ActionAuthorizer:
         ): "require_human_approval",
     }
     return StaticActionAuthorizationPolicy(rules)
+
+
+def _approver_authorizer() -> StaticActionApproverAuthorizationPolicy:
+    return StaticActionApproverAuthorizationPolicy(
+        {
+            (
+                "soc-reviewer",
+                REMEDIATION_AGENT,
+                "trusted_composition",
+                "create_remediation_task",
+                REMEDIATION_RESOURCE,
+                "production",
+            ): "allow"
+        }
+    )
 
 
 def _context(caller_id: str = REMEDIATION_AGENT) -> ActionContext:
@@ -297,6 +315,7 @@ def test_approval_is_valid_at_inclusive_approved_at_boundary() -> None:
         executor=executor,
         approval_provider=approval_provider,
         approval_clock=clock,
+        approver_authorizer=_approver_authorizer(),
     )
 
     evidence = runtime.execute(proposed_action, context)
@@ -323,6 +342,7 @@ def test_not_yet_valid_approval_is_consumed_and_blocked() -> None:
         executor=executor,
         approval_provider=approval_provider,
         approval_clock=clock,
+        approver_authorizer=_approver_authorizer(),
     )
 
     first = runtime.execute(proposed_action, context)
@@ -351,6 +371,7 @@ def test_expired_approval_is_consumed_at_exclusive_expiry_boundary() -> None:
         executor=executor,
         approval_provider=approval_provider,
         approval_clock=clock,
+        approver_authorizer=_approver_authorizer(),
     )
 
     first = runtime.execute(proposed_action, context)
@@ -379,6 +400,7 @@ def test_consumed_valid_approval_cannot_execute_same_action_twice() -> None:
         executor=executor,
         approval_provider=approval_provider,
         approval_clock=clock,
+        approver_authorizer=_approver_authorizer(),
     )
 
     first = runtime.execute(proposed_action, context)
@@ -406,6 +428,7 @@ def test_executor_failure_does_not_restore_claimed_approval() -> None:
         executor=executor,
         approval_provider=approval_provider,
         approval_clock=clock,
+        approver_authorizer=_approver_authorizer(),
     )
 
     with pytest.raises(RuntimeError, match="executor failed"):
@@ -459,6 +482,7 @@ def test_naive_runtime_clock_fails_closed_after_claim() -> None:
         executor=executor,
         approval_provider=approval_provider,
         approval_clock=FixedApprovalClock(datetime(2026, 9, 5, 20, 5)),
+        approver_authorizer=_approver_authorizer(),
     )
 
     with pytest.raises(RuntimeError, match="timezone-aware"):

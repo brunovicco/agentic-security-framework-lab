@@ -9,6 +9,9 @@ from agentic_lab.adapters.fixtures.finding_actions import (
     InMemoryFindingAcknowledgementExecutor,
 )
 from agentic_lab.application.action_approval import HumanApprovalEvidence
+from agentic_lab.application.action_approver_authorization import (
+    StaticActionApproverAuthorizationPolicy,
+)
 from agentic_lab.application.action_authorization import (
     ActionAuthorizationRuleKey,
     ActionContext,
@@ -171,6 +174,18 @@ def test_exact_trusted_approval_allows_only_approved_mutation() -> None:
         executor=executor,
         approval_provider=InMemoryActionApprovalProvider([approval]),
         approval_clock=FixedApprovalClock(),
+        approver_authorizer=StaticActionApproverAuthorizationPolicy(
+            {
+                (
+                    "soc-reviewer",
+                    REMEDIATION_AGENT,
+                    "trusted_composition",
+                    "acknowledge_finding",
+                    FINDING_RESOURCE,
+                    "production",
+                ): "allow"
+            }
+        ),
     )
 
     evidence = runtime.execute(proposed_action, context)

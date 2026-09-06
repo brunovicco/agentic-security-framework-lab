@@ -3,6 +3,7 @@
 import pytest
 
 from agentic_lab.application.action_approver_authorization import (
+    ApproverAuthorizationOutcome,
     ApproverAuthorizationRuleKey,
     NoActionApproverAuthorizer,
     StaticActionApproverAuthorizationPolicy,
@@ -106,7 +107,9 @@ def test_unknown_approver_scope_fails_closed(
 
 def test_policy_copies_trusted_rules_at_construction() -> None:
     """Prevent later mutation of the caller-owned mapping from changing approver policy."""
-    rules = {RULE: "allow"}
+    rules: dict[ApproverAuthorizationRuleKey, ApproverAuthorizationOutcome] = {
+        RULE: "allow"
+    }
     policy = StaticActionApproverAuthorizationPolicy(rules)
     rules[RULE] = "deny"
 

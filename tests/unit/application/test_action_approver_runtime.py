@@ -3,7 +3,11 @@
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
-from agentic_lab.application.action_approval import ApprovalClaim, HumanApprovalEvidence
+from agentic_lab.application.action_approval import (
+    ApprovalClaim,
+    ApprovalClaimStatus,
+    HumanApprovalEvidence,
+)
 from agentic_lab.application.action_approver_authorization import (
     ApproverAuthorizationDecision,
     StaticActionApproverAuthorizationPolicy,
@@ -45,7 +49,7 @@ class OneShotApprovalProvider:
         status: Literal["claimed", "revoked"] = "claimed",
     ) -> None:
         self._approval = approval
-        self._status = status
+        self._status: ApprovalClaimStatus = status
         self.calls = 0
 
     def claim_approval(
@@ -103,7 +107,9 @@ def _action(
     return ProposedAction(action=action, resource=resource, environment=environment)
 
 
-def _context(identity_source: Literal["trusted_composition", "api_key"] = "trusted_composition") -> ActionContext:
+def _context(
+    identity_source: Literal["trusted_composition", "api_key"] = "trusted_composition",
+) -> ActionContext:
     return ActionContext(caller_id=CALLER_ID, identity_source=identity_source)
 
 

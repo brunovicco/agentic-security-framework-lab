@@ -10,6 +10,9 @@ from agentic_lab.adapters.fixtures.finding_actions import (
     InMemoryFindingAcknowledgementExecutor,
 )
 from agentic_lab.application.action_approval import HumanApprovalEvidence
+from agentic_lab.application.action_approver_authorization import (
+    StaticActionApproverAuthorizationPolicy,
+)
 from agentic_lab.application.action_authorization import (
     ActionAuthorizationRuleKey,
     ActionContext,
@@ -90,6 +93,21 @@ def _policy() -> StaticActionAuthorizationPolicy:
         ): "require_human_approval",
     }
     return StaticActionAuthorizationPolicy(rules)
+
+
+def _approver_authorizer() -> StaticActionApproverAuthorizationPolicy:
+    return StaticActionApproverAuthorizationPolicy(
+        {
+            (
+                "soc-reviewer",
+                REMEDIATION_AGENT,
+                "trusted_composition",
+                "acknowledge_finding",
+                FINDING_RESOURCE,
+                "production",
+            ): "allow"
+        }
+    )
 
 
 def _runtime(
@@ -187,6 +205,7 @@ def test_wrong_identity_source_cannot_consume_correct_source_approval() -> None:
         executor=executor,
         approval_provider=InMemoryActionApprovalProvider([approval]),
         approval_clock=FixedApprovalClock(VALID_NOW),
+        approver_authorizer=_approver_authorizer(),
     )
 
     wrong_source = runtime.execute(proposed_action, api_key_context)
@@ -289,6 +308,7 @@ def test_consumed_human_approval_cannot_be_replayed() -> None:
         executor=executor,
         approval_provider=InMemoryActionApprovalProvider([approval]),
         approval_clock=FixedApprovalClock(VALID_NOW),
+        approver_authorizer=_approver_authorizer(),
     )
 
     first = runtime.execute(proposed_action, context)
@@ -322,6 +342,7 @@ def test_stale_unused_human_approval_cannot_authorize_late_mutation() -> None:
         executor=executor,
         approval_provider=InMemoryActionApprovalProvider([approval]),
         approval_clock=FixedApprovalClock(EXPIRES_AT),
+        approver_authorizer=_approver_authorizer(),
     )
 
     stale = runtime.execute(proposed_action, context)
@@ -357,6 +378,7 @@ def test_revoked_unused_human_approval_cannot_authorize_mutation() -> None:
         executor=executor,
         approval_provider=provider,
         approval_clock=FixedApprovalClock(VALID_NOW),
+        approver_authorizer=_approver_authorizer(),
     )
 
     revoked = runtime.execute(proposed_action, context)
@@ -371,6 +393,41 @@ def test_revoked_unused_human_approval_cannot_authorize_mutation() -> None:
     assert executor.execution_count == 0
     assert executor.is_acknowledged(FINDING_RESOURCE) is False
 
+
+
+def test_unentitled_human_approver_cannot_authorize_mutation() -> None:
+    """Reject exact live approval when the trusted approver lacks exact entitlement."""
+    executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
+    proposed_action = _action(environment="production")
+    context = _context()
+    approval = HumanApprovalEvidence(
+        approval_id="approval-unentitled-001",
+        approver_id="unprivileged-reviewer",
+        proposed_action=proposed_action,
+        context=context,
+        approved_at=APPROVED_AT,
+        expires_at=EXPIRES_AT,
+    )
+    runtime = GovernedActionRuntime(
+        authorizer=_policy(),
+        executor=executor,
+        approval_provider=InMemoryActionApprovalProvider([approval]),
+        approval_clock=FixedApprovalClock(VALID_NOW),
+        approver_authorizer=_approver_authorizer(),
+    )
+
+    first = runtime.execute(proposed_action, context)
+    retry = runtime.execute(proposed_action, context)
+
+    assert first.authorization.outcome == "require_human_approval"
+    assert first.approval_status == "unauthorized_approver"
+    assert first.approver_authorization is not None
+    assert first.approver_authorization.outcome == "deny"
+    assert first.approver_authorization.reason == "no_matching_rule"
+    assert first.execution_occurred is False
+    assert retry.approval_status == "missing"
+    assert executor.execution_count == 0
+    assert executor.is_acknowledged(FINDING_RESOURCE) is False
 
 def test_tool_substitution_is_authorized_as_the_actual_proposed_action() -> None:
     """Deny a substituted broader operation despite an allowed nearby capability."""

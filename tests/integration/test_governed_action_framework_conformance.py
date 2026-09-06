@@ -18,6 +18,9 @@ from agentic_lab.adapters.llamaindex.action_workflow import (
     LlamaIndexGovernedActionRuntime,
 )
 from agentic_lab.application.action_approval import ApprovalStatus, HumanApprovalEvidence
+from agentic_lab.application.action_approver_authorization import (
+    StaticActionApproverAuthorizationPolicy,
+)
 from agentic_lab.application.action_authorization import (
     ActionAuthorizationRuleKey,
     ActionContext,
@@ -74,6 +77,7 @@ class _Scenario:
     expected_reason: AuthorizationReason
     expected_approval_status: ApprovalStatus
     expected_execution: bool
+    approver_id: str = "security-reviewer"
     approval_expires_at: datetime | None = None
     revoke_approval: bool = False
 
@@ -130,6 +134,17 @@ _SCENARIOS: tuple[_Scenario, ...] = (
         expected_reason="human_approval_required",
         expected_approval_status="validated",
         expected_execution=True,
+    ),
+    _Scenario(
+        name="approver-unauthorized",
+        proposed_action=_action(environment="production"),
+        context=ActionContext(caller_id=_ALLOWED_CALLER),
+        with_approval=True,
+        expected_outcome="require_human_approval",
+        expected_reason="human_approval_required",
+        expected_approval_status="unauthorized_approver",
+        expected_execution=False,
+        approver_id="unprivileged-reviewer",
     ),
     _Scenario(
         name="approval-expired",
@@ -203,7 +218,7 @@ def _runtime(
         approvals = (
             HumanApprovalEvidence(
                 approval_id="approval-conformance-001",
-                approver_id="security-reviewer",
+                approver_id=scenario.approver_id,
                 proposed_action=scenario.proposed_action,
                 context=scenario.context,
                 approved_at=_APPROVED_AT,
@@ -223,6 +238,18 @@ def _runtime(
         executor=executor,
         approval_provider=approval_provider,
         approval_clock=FixedApprovalClock(),
+        approver_authorizer=StaticActionApproverAuthorizationPolicy(
+            {
+                (
+                    "security-reviewer",
+                    _ALLOWED_CALLER,
+                    "trusted_composition",
+                    ACKNOWLEDGE_FINDING_ACTION,
+                    _FINDING_RESOURCE,
+                    "production",
+                ): "allow"
+            }
+        ),
     )
 
 
