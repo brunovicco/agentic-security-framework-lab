@@ -1,6 +1,6 @@
 # Governed Agent Actions
 
-This document describes the v1.1 security model for **mutable agent actions** and its v1.2 trusted-identity evolution in the Agentic Security Framework Lab.
+This document describes the v1.1 security model for **mutable agent actions**, its v1.2 trusted-identity evolution, the v1.3 human-approval lifecycle hardening, and the post-v1.3 separation of approver entitlement in the Agentic Security Framework Lab.
 
 The goal is not to make an agent "trusted." The goal is to let an agent propose an action while keeping caller authentication, identity provenance, authorization, human approval, runtime enforcement, and execution evidence outside the model and outside framework-specific orchestration logic.
 
@@ -11,6 +11,7 @@ agent/model proposes
 trusted boundary establishes caller identity and provenance
 policy authorizes
 human evidence approves when required
+approver policy authorizes the human for that exact scope
 runtime enforces
 adapter executes
 execution evidence proves what happened
@@ -212,6 +213,7 @@ The runtime records one of these approval states:
 - `not_applicable`
 - `missing`
 - `invalid`
+- `unauthorized_approver`
 - `not_yet_valid`
 - `expired`
 - `revoked`
@@ -220,6 +222,29 @@ The runtime records one of these approval states:
 Only exact-match approval evidence that is valid at trusted runtime time can become `validated` and release an approval-required action for execution.
 
 The default provider is fail-closed and returns no approval. The in-memory approval provider used by tests contains only explicitly supplied synthetic evidence; it never auto-approves.
+
+### Independent approver authorization
+
+Trusted approval evidence and approver entitlement are separate facts. `HumanApprovalEvidence.approver_id` identifies the synthetic human principal recorded by the trusted HITL source, but that identifier does not grant global authority.
+
+`ActionApproverAuthorizer` independently evaluates the exact scope:
+
+```text
+(approver_id, caller_id, identity_source, action, resource, environment)
+```
+
+The controlled static policy supports exact `allow` or `deny` only. Unknown scope and the default no-policy composition both fail closed. An approval from an unentitled approver is recorded as `unauthorized_approver`, produces zero side effects, and stays consumed because entitlement is evaluated after the single-use claim.
+
+Approver authorization is evaluated only after exact approval binding and revocation checks, but before approval freshness and execution. Therefore direct caller `allow`, terminal caller `deny`, missing approval, invalid approval, and revoked approval do not depend on approver policy.
+
+`ActionExecutionEvidence` keeps the approver decision separate from caller authorization and rejects contradictory evidence combinations. A temporal or `validated` approval state requires an explicit approver allow; `unauthorized_approver` requires an approver deny.
+
+```text
+trusted approval evidence != authorized approver
+caller authorization != approver authorization
+```
+
+This is deterministic provider-free entitlement evidence. It does not implement or claim human authentication, OIDC/workforce IAM, directory-backed roles, signed approval attestations, self-approval policy, or multi-party/quorum approval.
 
 ### Approval anti-replay
 
@@ -294,7 +319,9 @@ flowchart TD
     A -->|require_human_approval| H[Claim one unused trusted approval]
     H -->|missing or invalid| B[Return evidence: no execution]
     H -->|revoked| B
-    H -->|claimed exact scope| T[Validate trusted approval time]
+    H -->|claimed exact scope| R[Authorize approver for exact scope]
+    R -->|deny| B
+    R -->|allow| T[Validate trusted approval time]
     T -->|not yet valid or expired| B
     T -->|validated| X
     X --> E[Return execution evidence]
@@ -309,7 +336,7 @@ The runtime returns `ActionExecutionEvidence` containing independent facts about
 - the proposed action;
 - trusted caller context, including caller identity provenance;
 - authorization decision and reason;
-- approval status, claim lifecycle, bounded approval evidence, and temporal validity when present;
+- approval status, claim lifecycle, bounded approval evidence, approver-authorization decision, and temporal validity when present;
 - whether execution occurred.
 
 Because evidence embeds the same `ActionContext` used by authorization, the runtime does not create a second identity or provenance channel. Raw credentials are not part of `ActionContext`, `CallerAuthenticationDecision`, `ActionExecutionEvidence`, or `AuthenticatedActionExecutionEvidence`.
@@ -349,11 +376,11 @@ The same `GovernedActionRuntime` is consumed by four orchestration frameworks.
 | LlamaIndex | `Workflow` + `StartEvent` / `StopEvent` | constructor dependency, outside event input | Application |
 | Agno | `Workflow` + custom `Step` executor | injected dependency, outside workflow input | Application |
 
-None of these adapters contains its own authorization rule table or interprets an authorization outcome to decide whether execution is permitted.
+None of these adapters contains its own caller-authorization or approver-authorization rule table or interprets those outcomes to decide whether execution is permitted.
 
 The framework orchestrates. The application decides and enforces.
 
-Existing framework adapters continue to use their explicitly injected local `trusted_composition` context. Phase 37 migrates their policy fixtures to declare that source explicitly, so framework behavior cannot depend on an implicit source default inside authorization policy. API-key handling remains an application authentication concern rather than framework input.
+Existing framework adapters continue to use their explicitly injected local `trusted_composition` context. Phase 37 migrates their caller-policy fixtures to declare that source explicitly, so framework behavior cannot depend on an implicit source default inside authorization policy. Phase 47 keeps approver entitlement in the same shared application runtime; cross-framework conformance includes an unauthorized-approver scenario rather than duplicating HITL policy inside LangGraph, CrewAI, LlamaIndex, or Agno. API-key handling remains an application authentication concern rather than framework input.
 
 ### Agno retry hardening
 

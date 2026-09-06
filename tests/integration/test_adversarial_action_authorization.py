@@ -429,6 +429,7 @@ def test_unentitled_human_approver_cannot_authorize_mutation() -> None:
     assert executor.execution_count == 0
     assert executor.is_acknowledged(FINDING_RESOURCE) is False
 
+
 def test_tool_substitution_is_authorized_as_the_actual_proposed_action() -> None:
     """Deny a substituted broader operation despite an allowed nearby capability."""
     executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
