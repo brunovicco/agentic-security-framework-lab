@@ -1,0 +1,118 @@
+name: phase48-docs-sync
+
+on:
+  push:
+    branches:
+      - feat/phase-48-action-evidence-state-machine
+    paths:
+      - .github/workflows/phase48-docs-sync.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: feat/phase-48-action-evidence-state-machine
+      - name: Apply exact documentation updates
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          changelog_path = Path("CHANGELOG.md")
+          changelog = changelog_path.read_text()
+          changelog_anchor = (
+              "- Approver decisions and execution evidence reject contradictory outcome/reason or approval-status/approver-decision combinations.\n"
+          )
+          changelog_insert = changelog_anchor + (
+              "- `AuthorizationDecision` now rejects caller outcome/reason pairs that deterministic policy cannot emit, including `allow` with a deny reason or `require_human_approval` without `human_approval_required`.\n"
+              "- `ActionExecutionEvidence` now validates the complete governed-action state machine: caller deny is terminal, direct allow is HITL-free and executed, and every HITL lifecycle state requires exactly the human evidence, approver decision, binding, and execution flag that the runtime can legally produce.\n"
+          )
+          if changelog.count(changelog_anchor) != 1:
+              raise SystemExit(f"expected one changelog anchor, found {changelog.count(changelog_anchor)}")
+          changelog = changelog.replace(changelog_anchor, changelog_insert, 1)
+
+          evidence_anchor = (
+              "- Approver authorization remains provider-free local/CI evidence; the lab does not claim human authentication, workforce IAM, signed approval attestation, role hierarchy, or multi-party approval.\n"
+          )
+          evidence_insert = evidence_anchor + (
+              "- Evidence-model regressions enumerate every legal governed-action state and reject impossible combinations such as deny-plus-execution, allow-plus-HITL, mismatched `invalid` evidence, temporal states without approver allow, and `validated` without execution.\n"
+              "- This is structural evidence integrity only; it does not provide cryptographic signing, tamper-proof persistence, or transactional proof for an external side effect.\n"
+          )
+          if changelog.count(evidence_anchor) != 1:
+              raise SystemExit(f"expected one changelog evidence anchor, found {changelog.count(evidence_anchor)}")
+          changelog_path.write_text(changelog.replace(evidence_anchor, evidence_insert, 1))
+
+          adr_path = Path("docs/adr/0006-treat-human-approval-as-trusted-runtime-evidence.md")
+          adr = adr_path.read_text()
+          context_anchor = (
+              "After the lifecycle was hardened, a separate authority gap remained: trusted approval evidence identifies an `approver_id`, but provenance from a trusted approval source does not prove that this human is entitled to approve every caller/action scope. Approver identity evidence and approver authorization must remain distinct.\n"
+          )
+          context_insert = context_anchor + (
+              "\nAfter approver entitlement was separated, one audit-integrity gap remained: the runtime emitted valid combinations, but its Pydantic evidence models still allowed callers to construct or deserialize security states the runtime itself could never legally produce. Security evidence needs structural state-machine validation in addition to correct runtime control flow.\n"
+          )
+          if adr.count(context_anchor) != 1:
+              raise SystemExit(f"expected one ADR context anchor, found {adr.count(context_anchor)}")
+          adr = adr.replace(context_anchor, context_insert, 1)
+
+          adr_anchor = (
+              "The current approver identifier remains synthetic trusted lab evidence, not human authentication. This phase proves deterministic entitlement separation; it does not claim OIDC/workforce IAM, directory-backed roles, signed human attestations, self-approval controls, or multi-party/quorum workflow.\n\n### Temporal validity\n"
+          )
+          adr_insert = (
+              "The current approver identifier remains synthetic trusted lab evidence, not human authentication. This phase proves deterministic entitlement separation; it does not claim OIDC/workforce IAM, directory-backed roles, signed human attestations, self-approval controls, or multi-party/quorum workflow.\n\n"
+              "### Evidence state-machine integrity\n\n"
+              "`AuthorizationDecision` and `ActionExecutionEvidence` are security evidence, not loose transport DTOs. They therefore reject combinations that deterministic policy and `GovernedActionRuntime` cannot legally emit.\n\n"
+              "Caller authorization reason is bound to outcome: `allow` requires `explicit_allow`; `require_human_approval` requires `human_approval_required`; `deny` permits only `explicit_deny` or fail-closed `no_matching_rule`.\n\n"
+              "Execution evidence then validates the complete control path. Caller `deny` is non-executing with `not_applicable` approval state. Direct caller `allow` carries no HITL evidence and represents completed direct execution. Approval-gated evidence cannot use `not_applicable`; `missing`, `invalid`, `revoked`, `unauthorized_approver`, `not_yet_valid`, `expired`, and `validated` each require the exact human evidence, approver decision, binding relationship, and execution flag associated with that runtime state. Only `validated` may record execution on the HITL path.\n\n"
+              "This hardening protects audit, serialization, and replay consumers from accepting records such as `deny + execution_occurred=true` or `validated` without exact-bound human evidence and approver allow. It does not make records cryptographically tamper-proof and does not prove that an external storage system cannot replace a whole record.\n\n"
+              "```text\n"
+              "security evidence must not represent a state the governed runtime could never legally produce\n"
+              "```\n\n"
+              "### Temporal validity\n"
+          )
+          if adr.count(adr_anchor) != 1:
+              raise SystemExit(f"expected one ADR decision anchor, found {adr.count(adr_anchor)}")
+          adr_path.write_text(adr.replace(adr_anchor, adr_insert, 1))
+
+          security_path = Path("docs/security/GOVERNED_AGENT_ACTIONS.md")
+          security = security_path.read_text()
+          security_anchor = (
+              "- whether execution occurred.\n\nBecause evidence embeds the same `ActionContext` used by authorization, the runtime does not create a second identity or provenance channel. Raw credentials are not part of `ActionContext`, `CallerAuthenticationDecision`, `ActionExecutionEvidence`, or `AuthenticatedActionExecutionEvidence`.\n"
+          )
+          security_insert = (
+              "- whether execution occurred.\n\n"
+              "### Evidence state-machine integrity\n\n"
+              "`ActionExecutionEvidence` is treated as a constrained security state machine rather than an arbitrary bag of fields. The model rejects records that `GovernedActionRuntime` could never legally emit, even when evidence is reconstructed through deserialization, persistence, tests, or downstream audit tooling.\n\n"
+              "`AuthorizationDecision` likewise binds deterministic reason to outcome: `allow -> explicit_allow`, `require_human_approval -> human_approval_required`, and `deny -> explicit_deny | no_matching_rule`. This prevents a stored decision from claiming an allow outcome while carrying a deny reason.\n\n"
+              "The execution evidence validator enforces the complete runtime path:\n\n"
+              "- caller `deny` is terminal, uses `not_applicable`, carries no HITL evidence, and cannot record execution;\n"
+              "- direct caller `allow` uses `not_applicable`, carries no HITL evidence, and records direct execution;\n"
+              "- approval-gated `missing` carries no human or approver evidence and cannot execute;\n"
+              "- `invalid` requires human evidence whose action/context binding actually mismatches the attempted scope;\n"
+              "- `revoked` requires exact-bound human evidence, no approver decision, and no execution;\n"
+              "- `unauthorized_approver` requires exact-bound human evidence plus an approver deny and no execution;\n"
+              "- `not_yet_valid` and `expired` require exact-bound human evidence plus approver allow and no execution;\n"
+              "- `validated` requires exact-bound human evidence plus approver allow and is the only HITL state that records execution.\n\n"
+              "```text\n"
+              "deny + execution = impossible evidence\n"
+              "validated HITL + missing/mismatched authority = impossible evidence\n"
+              "```\n\n"
+              "This is structural consistency, not cryptographic integrity. The lab does not claim signed evidence, tamper-proof persistence, or transactional proof that an external side effect committed exactly as recorded.\n\n"
+              "Because evidence embeds the same `ActionContext` used by authorization, the runtime does not create a second identity or provenance channel. Raw credentials are not part of `ActionContext`, `CallerAuthenticationDecision`, `ActionExecutionEvidence`, or `AuthenticatedActionExecutionEvidence`.\n"
+          )
+          if security.count(security_anchor) != 1:
+              raise SystemExit(f"expected one security-doc anchor, found {security.count(security_anchor)}")
+          security_path.write_text(security.replace(security_anchor, security_insert, 1))
+          PY
+          git diff --check
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "CHANGELOG.md docs/adr/0006-treat-human-approval-as-trusted-runtime-evidence.md docs/security/GOVERNED_AGENT_ACTIONS.md "
+      - name: Commit documentation
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add CHANGELOG.md docs/adr/0006-treat-human-approval-as-trusted-runtime-evidence.md docs/security/GOVERNED_AGENT_ACTIONS.md
+          git commit -m "docs: define governed action evidence state machine"
+          git push origin HEAD:feat/phase-48-action-evidence-state-machine
