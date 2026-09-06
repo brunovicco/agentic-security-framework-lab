@@ -1,0 +1,161 @@
+name: phase49-docs-sync
+
+on:
+  push:
+    branches:
+      - feat/phase-49-executor-failure-evidence
+    paths:
+      - .github/workflows/phase49-docs-sync.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: feat/phase-49-executor-failure-evidence
+      - name: Apply Phase 49 documentation updates
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          changelog_path = Path("CHANGELOG.md")
+          changelog = changelog_path.read_text()
+          added_anchor = (
+              "- `ActionExecutionEvidence` records approver authorization separately from caller authorization and approval lifecycle evidence.\n"
+          )
+          added_insert = added_anchor + (
+              "- `ActionExecutionFailureEvidence` records the exact authority that permitted an executor invocation which raised, while fixing `execution_attempted=true`, `external_side_effect_state=unknown`, and `failure_reason=executor_error`.\n"
+              "- `GovernedActionExecutionError` carries safe failure evidence as a `RuntimeError` subtype and chains the original executor exception locally without copying raw executor error text into structured evidence.\n"
+          )
+          if changelog.count(added_anchor) != 1:
+              raise SystemExit(f"expected one changelog Added anchor, found {changelog.count(added_anchor)}")
+          changelog = changelog.replace(added_anchor, added_insert, 1)
+
+          hardened_anchor = (
+              "- `ActionExecutionEvidence` now validates the complete governed-action state machine: caller deny is terminal, direct allow is HITL-free and executed, and every HITL lifecycle state requires exactly the human evidence, approver decision, binding, and execution flag that the runtime can legally produce.\n"
+          )
+          hardened_insert = hardened_anchor + (
+              "- Executor exceptions after an authorized direct or validated-HITL path no longer leave the authority chain unstructured; the runtime raises typed governed failure evidence without claiming that the external side effect committed or did not commit.\n"
+              "- Failed HITL executor attempts do not restore consumed approval authority, and structured failure evidence excludes raw executor exception content by construction.\n"
+          )
+          if changelog.count(hardened_anchor) != 1:
+              raise SystemExit(f"expected one changelog Hardened anchor, found {changelog.count(hardened_anchor)}")
+          changelog = changelog.replace(hardened_anchor, hardened_insert, 1)
+
+          evidence_anchor = (
+              "- This is structural evidence integrity only; it does not provide cryptographic signing, tamper-proof persistence, or transactional proof for an external side effect.\n"
+          )
+          evidence_insert = evidence_anchor + (
+              "- Executor-failure regressions cover direct allow, validated HITL, consumed-approval retry, impossible failure-evidence authority states, raw-error exclusion, and an authorized missing-resource adapter failure whose original `LookupError` remains only as the local exception cause.\n"
+              "- Failure evidence deliberately reports the external side-effect state as `unknown`; the lab does not claim rollback, compensation, idempotent retry, two-phase commit, or distributed transaction semantics.\n"
+          )
+          if changelog.count(evidence_anchor) != 1:
+              raise SystemExit(f"expected one changelog Evidence anchor, found {changelog.count(evidence_anchor)}")
+          changelog_path.write_text(changelog.replace(evidence_anchor, evidence_insert, 1))
+
+          adr_path = Path("docs/adr/0006-treat-human-approval-as-trusted-runtime-evidence.md")
+          adr = adr_path.read_text()
+          context_anchor = (
+              "After approver entitlement was separated, one audit-integrity gap remained: the runtime emitted valid combinations, but its Pydantic evidence models still allowed callers to construct or deserialize security states the runtime itself could never legally produce. Security evidence needs structural state-machine validation in addition to correct runtime control flow.\n"
+          )
+          context_insert = context_anchor + (
+              "\nAfter successful and blocked evidence states became structurally constrained, executor failure remained an observability gap. An executor can raise after the runtime has already established caller authority and, on HITL paths, consumed a valid approval. The exception alone loses that authority chain, while treating the failure as `execution_occurred=false` would incorrectly imply that no external effect occurred.\n"
+          )
+          if adr.count(context_anchor) != 1:
+              raise SystemExit(f"expected one ADR context anchor, found {adr.count(context_anchor)}")
+          adr = adr.replace(context_anchor, context_insert, 1)
+
+          decision_anchor = (
+              "```text\nsecurity evidence must not represent a state the governed runtime could never legally produce\n```\n\n### Temporal validity\n"
+          )
+          decision_insert = (
+              "```text\nsecurity evidence must not represent a state the governed runtime could never legally produce\n```\n\n"
+              "### Executor failure evidence\n\n"
+              "Crossing the executor boundary is not equivalent to proving a successful external side effect. If an authorized executor raises, `GovernedActionRuntime` raises `GovernedActionExecutionError`, a `RuntimeError` subtype carrying immutable `ActionExecutionFailureEvidence`.\n\n"
+              "Failure evidence preserves the exact proposed action, trusted caller context, caller authorization, and any validated human/approver authority that permitted the attempt. It records only low-cardinality execution facts: `execution_attempted=true`, `failure_reason=executor_error`, and `external_side_effect_state=unknown`. The original executor exception is chained as the local Python cause but its raw message is not copied into structured failure evidence or the governed error message.\n\n"
+              "Direct-allow failure evidence must remain HITL-free. Approval-gated failure evidence requires an exact-bound `validated` approval plus explicit approver allow. Caller deny and blocked approval states therefore cannot manufacture executor-failure evidence because they never cross the executor boundary.\n\n"
+              "An executor exception does not prove that the external operation committed zero, partial, or complete effects before failure became visible. The runtime therefore does not map executor failure to ordinary `ActionExecutionEvidence(execution_occurred=false)`, does not restore consumed approval, and does not automatically retry.\n\n"
+              "```text\n"
+              "executor raised != external side effect did not occur\n"
+              "executor invocation + exception => external side-effect state is unknown\n"
+              "```\n\n"
+              "This is audit evidence for an execution attempt, not rollback, compensation, idempotency, two-phase commit, or distributed transaction semantics.\n\n"
+              "### Temporal validity\n"
+          )
+          if adr.count(decision_anchor) != 1:
+              raise SystemExit(f"expected one ADR decision anchor, found {adr.count(decision_anchor)}")
+          adr = adr.replace(decision_anchor, decision_insert, 1)
+
+          consequence_anchor = (
+              "- executor failure does not silently restore an already claimed approval;\n"
+          )
+          consequence_insert = consequence_anchor + (
+              "- authorized executor failure preserves a safe structured authority trail while keeping external side-effect state explicitly unknown;\n"
+          )
+          if adr.count(consequence_anchor) != 1:
+              raise SystemExit(f"expected one ADR consequence anchor, found {adr.count(consequence_anchor)}")
+          adr = adr.replace(consequence_anchor, consequence_insert, 1)
+
+          invariant_anchor = (
+              "consumed approval + retry = new approval required\n```\n\nRefs #131, #145, #163, #165, #167, #169, #174\n"
+          )
+          invariant_insert = (
+              "consumed approval + retry = new approval required\n\n"
+              "executor raised != external side effect did not occur\n\n"
+              "executor invocation + exception = external side-effect state unknown\n"
+              "```\n\nRefs #131, #145, #163, #165, #167, #169, #174, #178\n"
+          )
+          if adr.count(invariant_anchor) != 1:
+              raise SystemExit(f"expected one ADR invariant anchor, found {adr.count(invariant_anchor)}")
+          adr_path.write_text(adr.replace(invariant_anchor, invariant_insert, 1))
+
+          security_path = Path("docs/security/GOVERNED_AGENT_ACTIONS.md")
+          security = security_path.read_text()
+          evidence_anchor = (
+              "This is structural consistency, not cryptographic integrity. The lab does not claim signed evidence, tamper-proof persistence, or transactional proof that an external side effect committed exactly as recorded.\n\nBecause evidence embeds the same `ActionContext` used by authorization, the runtime does not create a second identity or provenance channel. Raw credentials are not part of `ActionContext`, `CallerAuthenticationDecision`, `ActionExecutionEvidence`, or `AuthenticatedActionExecutionEvidence`.\n"
+          )
+          evidence_insert = (
+              "This is structural consistency, not cryptographic integrity. The lab does not claim signed evidence, tamper-proof persistence, or transactional proof that an external side effect committed exactly as recorded.\n\n"
+              "### Executor failure evidence\n\n"
+              "An executor exception is not ordinary no-execution evidence. Once the runtime invokes an executor, a raised exception cannot establish whether an external system committed zero, partial, or complete effects before the failure became observable.\n\n"
+              "`GovernedActionRuntime` therefore raises `GovernedActionExecutionError` with separate immutable `ActionExecutionFailureEvidence` after an authorized executor call raises. The evidence preserves the exact authority that permitted the attempt and fixes these execution facts:\n\n"
+              "```text\n"
+              "execution_attempted = true\n"
+              "failure_reason = executor_error\n"
+              "external_side_effect_state = unknown\n"
+              "```\n\n"
+              "Direct-allow failure evidence carries no HITL fields. HITL failure evidence requires exact-bound `validated` human approval plus approver allow. Caller deny, missing/invalid/revoked approval, unauthorized approver, and temporal failures never synthesize executor-failure evidence because those paths stop before executor invocation.\n\n"
+              "The governed exception message is generic. The original exception is available only as the locally chained Python cause; raw executor text is not copied into structured failure evidence. A failed HITL attempt also leaves the already claimed approval consumed, so retry requires fresh approval.\n\n"
+              "```text\n"
+              "executor raised != external side effect did not occur\n"
+              "```\n\n"
+              "The lab does not claim rollback, compensation, automatic retry, idempotency, two-phase commit, or transactional coupling to an external system.\n\n"
+              "Because evidence embeds the same `ActionContext` used by authorization, the runtime does not create a second identity or provenance channel. Raw credentials are not part of `ActionContext`, `CallerAuthenticationDecision`, `ActionExecutionEvidence`, `ActionExecutionFailureEvidence`, or `AuthenticatedActionExecutionEvidence`.\n"
+          )
+          if security.count(evidence_anchor) != 1:
+              raise SystemExit(f"expected one security evidence anchor, found {security.count(evidence_anchor)}")
+          security = security.replace(evidence_anchor, evidence_insert, 1)
+
+          distinction_anchor = (
+              "Likewise, policy can authorize a scope while the concrete executor can still fail because the target resource does not exist.\n"
+          )
+          distinction_insert = distinction_anchor + (
+              " In that case the governed failure records that execution was attempted and keeps the external side-effect result `unknown` rather than misreporting a clean non-execution.\n"
+          )
+          if security.count(distinction_anchor) != 1:
+              raise SystemExit(f"expected one security distinction anchor, found {security.count(distinction_anchor)}")
+          security_path.write_text(security.replace(distinction_anchor, distinction_insert, 1))
+          PY
+          git diff --check
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = "CHANGELOG.md docs/adr/0006-treat-human-approval-as-trusted-runtime-evidence.md docs/security/GOVERNED_AGENT_ACTIONS.md "
+      - name: Commit documentation
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add CHANGELOG.md docs/adr/0006-treat-human-approval-as-trusted-runtime-evidence.md docs/security/GOVERNED_AGENT_ACTIONS.md
+          git commit -m "docs: define executor failure evidence boundary"
+          git push origin HEAD:feat/phase-49-executor-failure-evidence
