@@ -10,7 +10,12 @@ from agentic_lab.application.action_identity import (
     CallerAuthenticator,
     CallerCredential,
 )
-from agentic_lab.application.action_runtime import ActionExecutionEvidence, GovernedActionRuntime
+from agentic_lab.application.action_runtime import (
+    ActionExecutionEvidence,
+    ActionExecutionFailureEvidence,
+    GovernedActionExecutionError,
+    GovernedActionRuntime,
+)
 
 
 class AuthenticatedActionExecutionEvidence(BaseModel):
@@ -40,6 +45,40 @@ class AuthenticatedActionExecutionEvidence(BaseModel):
         return self
 
 
+class AuthenticatedActionExecutionFailureEvidence(BaseModel):
+    """Bind authenticated caller evidence to one governed executor failure."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    authentication: CallerAuthenticationDecision
+    execution_failure: ActionExecutionFailureEvidence
+
+    @model_validator(mode="after")
+    def validate_failure_consistency(self) -> Self:
+        """Require a successful authentication for the exact failed execution context."""
+        if self.authentication.outcome != "authenticated":
+            raise ValueError("authenticated execution failure requires authenticated caller")
+
+        context = self.authentication.context
+        if context is None:
+            raise ValueError("authenticated execution failure requires caller context")
+        if self.execution_failure.context != context:
+            raise ValueError("failure context must match authenticated caller context")
+        return self
+
+
+class AuthenticatedGovernedActionExecutionError(GovernedActionExecutionError):
+    """Preserve authentication evidence while remaining a governed execution error."""
+
+    def __init__(self, evidence: AuthenticatedActionExecutionFailureEvidence) -> None:
+        """Retain the action-level base error contract plus authenticated evidence."""
+        super().__init__(evidence.execution_failure)
+        self.authenticated_evidence = evidence
+
+
 class AuthenticatedGovernedActionRuntime:
     """Authenticate a caller before delegating authorization and execution."""
 
@@ -63,7 +102,15 @@ class AuthenticatedGovernedActionRuntime:
         if context is None:
             return AuthenticatedActionExecutionEvidence(authentication=authentication)
 
-        execution = self._action_runtime.execute(proposed_action, context)
+        try:
+            execution = self._action_runtime.execute(proposed_action, context)
+        except GovernedActionExecutionError as exc:
+            evidence = AuthenticatedActionExecutionFailureEvidence(
+                authentication=authentication,
+                execution_failure=exc.evidence,
+            )
+            raise AuthenticatedGovernedActionExecutionError(evidence) from exc
+
         return AuthenticatedActionExecutionEvidence(
             authentication=authentication,
             execution=execution,
