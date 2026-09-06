@@ -12,7 +12,9 @@ The project implements one vulnerability-analysis problem across:
 - LlamaIndex Workflow;
 - Agno Workflow.
 
-All current provider-backed paths use a centralized LiteLLM gateway alias, while deterministic application code remains responsible for validating evidence, applicability, fallback, and final policy.
+All current provider-backed analysis paths use a centralized LiteLLM gateway alias, while deterministic application code remains responsible for validating evidence, applicability, fallback, and final policy. Separately, governed mutable actions keep caller authentication, source-aware authorization, human-approval lifecycle, approver authorization, execution, and failure evidence outside framework/model authority.
+
+The latest published release is **v1.3.0 — Human Approval Lifecycle**. Current `main` includes additional provider-free hardening after that release; the documentation distinguishes those current-main capabilities from immutable published release metadata.
 
 ## Why this matters to an engineering organization
 
@@ -67,9 +69,37 @@ The repository uses a shared dataset, common expected truth, common model-facing
 
 Logical OpenTelemetry is separated from provider/framework tracing. The application observation contract is intentionally content-free and does not include prompts, responses, rationale, evidence, credentials, or provider payloads by default.
 
-### 7. Interoperability boundaries
+### 7. Governed mutable actions and least privilege
 
-The project includes MCP v2 compatibility and a real local STDIO host/client smoke, while keeping MCP transport concerns outside the Domain layer.
+A model or agent can propose a mutable action, but trusted caller context and application policy decide whether it is authorized. Exact policy scope includes caller identity source, action, resource, and environment, with unknown scope failing closed.
+
+### 8. Trusted caller identity and bounded human approval
+
+Service-caller authentication is composed before authorization and keeps raw credentials out of model-visible Tool input and execution evidence. Human approval is separately sourced, exact-bound, time-limited, single-use, revocable before claim, and independently checked against approver authorization.
+
+### 9. Failure provenance instead of false certainty
+
+Once a mutable executor is invoked, an exception does not prove whether an external side effect committed. The application therefore emits typed `ActionExecutionFailureEvidence` with `execution_attempted=true` and `external_side_effect_state=unknown`; authenticated composition preserves the successful authentication decision alongside that governed failure.
+
+### 10. Interoperability and MCP failure boundaries
+
+The project includes MCP v2 compatibility and real local STDIO host/client smokes for read-only applicability, trusted-composition governed actions, and an isolated host-injected authenticated action experiment. Post-executor governed failures are mapped to MCP protocol errors rather than ordinary model-correctable Tool errors, while MCP transport concerns remain outside the Domain layer.
+
+## Current governed-runtime evidence
+
+Provider-free CI and integration tests currently prove:
+
+- authentication rejection stops before authorization and mutable execution;
+- source-aware authorization does not inherit authority across `identity_source` values;
+- explicit deny is terminal and human approval cannot override it;
+- approval claims distinguish missing, revoked, invalid, unauthorized approver, temporal failure and validated states;
+- approval authority is single-use and process-local claim/revoke transitions are synchronized in the controlled provider;
+- executor failure preserves the authority chain and records external side-effect state as `unknown`;
+- LangGraph, CrewAI Flow, LlamaIndex Workflow and Agno Workflow match the direct application baseline for governed execution and executor-failure provenance;
+- Agno's mutable Step uses `max_retries=0` and preserves the original governed failure across workflow error status;
+- governed MCP STDIO surfaces uncertain executor failures as protocol errors with safe evidence, not ordinary model-directed Tool retry results.
+
+This evidence does not claim production IAM, remote transport-bound identity, durable/distributed approval, external transactionality, idempotency/compensation, or signed/tamper-proof audit storage.
 
 ## v1.0 evaluation evidence
 
@@ -117,9 +147,11 @@ The repository provides concrete examples of reasoning about:
 - agent framework selection;
 - deterministic guardrails;
 - secure-by-design trust boundaries;
+- caller authentication, source-aware least privilege, HITL lifecycle and approver authorization;
+- typed execution-failure provenance and unknown side-effect handling;
 - LLM gateway patterns;
 - retries and fallback ownership;
-- MCP integration boundaries;
+- MCP integration and uncertain-execution boundaries;
 - OpenTelemetry and privacy;
 - evaluation methodology;
 - immutable evidence and reproducibility;
@@ -134,6 +166,7 @@ A concise way to explain the architecture is:
 | If you want to understand... | Read... |
 | --- | --- |
 | architecture and trust boundaries | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| governed authentication, authorization, approval and failure evidence | [security/GOVERNED_AGENT_ACTIONS.md](security/GOVERNED_AGENT_ACTIONS.md) |
 | which framework abstraction fit which trade-off | [FRAMEWORK_DECISION_MATRIX.md](FRAMEWORK_DECISION_MATRIX.md) |
 | provider/model governance | [litellm/GATEWAY_FOUNDATION.md](litellm/GATEWAY_FOUNDATION.md) |
 | current benchmark methodology | [evaluation/FINAL_EVALUATION.md](evaluation/FINAL_EVALUATION.md) |

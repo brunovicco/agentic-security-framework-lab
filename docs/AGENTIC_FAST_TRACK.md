@@ -139,34 +139,48 @@ Use LangGraph for:
 
 Implement the same workload through alternative framework adapters.
 
+## Current implemented state
+
+The original comparison roadmap is complete and the lab now also includes:
+
+* a governed LiteLLM provider boundary plus persisted five-way provider-backed evaluation evidence;
+* read-only and mutable MCP v2 STDIO experiments;
+* application-owned exact source-aware mutable-action authorization;
+* service-caller authentication separated from authorization;
+* bounded, single-use, revocable and time-limited human approval;
+* independent approver authorization;
+* governed success and executor-failure evidence, including authenticated composition;
+* fail-closed MCP protocol classification for uncertain post-executor failures;
+* LangGraph, CrewAI Flow, LlamaIndex and Agno governed-action conformance against the direct application runtime;
+* Agno mutable Step retry suppression and governed failure-provenance preservation;
+* provider-free quality, security, MCP and OpenTelemetry CI gates.
+
+The latest published milestone is v1.3.0; some failure-provenance and MCP hardening exists only on current `main` until a later release is explicitly published.
+
 ## Development sequence
 
 ```text
 shared contracts
     ↓
-deterministic fixtures
+deterministic fixtures and validation
     ↓
-LangChain tools
+LangGraph / CrewAI / LlamaIndex / Agno implementations
     ↓
-LangGraph v1
+cross-framework evaluation and immutable evidence
     ↓
-LLM structured reasoning
+LiteLLM provider boundary
     ↓
-tool calling
+MCP / OpenTelemetry / adversarial security
     ↓
-routing and failure handling
+governed mutable actions
     ↓
-evaluations
+trusted caller identity and source-aware authorization
     ↓
-CrewAI
+human approval lifecycle and approver authorization
     ↓
-LlamaIndex
+executor-failure provenance and uncertain-execution hardening
     ↓
-Agno
-    ↓
-cross-framework benchmark
-    ↓
-MCP / observability / HITL / security
+cross-framework governed failure conformance
 ```
 
 ## Current scope freeze

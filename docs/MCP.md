@@ -83,13 +83,38 @@ no credential, API-key, caller-id, identity-source, approval-id, or approver-id 
 The source-aware policy for this experiment binds authority to `identity_source = api_key`. Real
 STDIO subprocess checks prove that missing credentials fail closed, invalid credentials return
 rejection evidence with zero mutation, and valid authentication can still be denied, require human
-approval, or execute depending on the exact action scope. A separate read-only state Tool verifies
+approval, execute, or reach a typed governed executor-failure path depending on the exact action
+scope. Successful authentication evidence remains distinct from authorization/execution evidence, and
+raw credentials are excluded from structured failure evidence. A separate read-only state Tool verifies
 side effects independently. Smoke credentials are generated at runtime and no expected plaintext API
 key is committed.
 
 This is provider-free local host-injection evidence. It does **not** establish remote MCP identity,
 transport-bound authentication, OAuth/OIDC/JWT/mTLS, production secret storage, rotation, expiry, or
 end-user identity.
+
+### Uncertain post-executor failure boundary
+
+The mutable MCP experiments distinguish a pre-executor Tool failure from a failure that occurs after
+`GovernedActionRuntime` has already invoked a mutable executor. In the latter case the application
+reports `external_side_effect_state = unknown`; returning that state as an ordinary model-visible Tool
+error would create a natural self-directed retry channel even though a previous side effect may have
+committed.
+
+The trusted-composition server therefore catches only `GovernedActionExecutionError`, and the
+authenticated server catches only `AuthenticatedGovernedActionExecutionError`. Each is translated to
+a host-visible `MCPError` protocol failure with generic message text and safe structured failure
+evidence in protocol data. Raw executor text and raw credentials are not copied into the protocol
+payload.
+
+The exact MCP 2.1.1 compatibility and real STDIO smokes require this failure to raise as a protocol
+error rather than `CallToolResult(is_error=true)`. Controlled fixtures may observe zero mutation for
+the synthetic failing resource, but that observation never rewrites the application fact that the
+external side-effect state is `unknown`.
+
+This is a transport classification, not a universal no-retry mechanism. A host can still implement
+programmatic retry, and the lab does not claim idempotency, rollback, compensation, two-phase commit,
+or transactional coupling to an external system.
 
 ## Governance
 

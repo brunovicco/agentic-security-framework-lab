@@ -6,7 +6,7 @@
 
 Um laboratório de engenharia framework-neutral para construir, proteger, avaliar e comparar **workflows de IA agêntica** sob os mesmos controles determinísticos.
 
-O projeto implementa a mesma carga de análise de vulnerabilidades com **LangGraph, CrewAI, LlamaIndex e Agno**, centraliza acesso a providers com **LiteLLM**, valida o raciocínio do modelo fora do LLM, demonstra compatibilidade **MCP**, emite observações lógicas de **OpenTelemetry** sem conteúdo sensível e agora também exercita **ações mutáveis governadas** por uma mesma fronteira de autorização e enforcement da Application.
+O projeto implementa a mesma carga de análise de vulnerabilidades com **LangGraph, CrewAI, LlamaIndex e Agno**, centraliza acesso a providers com **LiteLLM**, valida o raciocínio do modelo fora do LLM, demonstra compatibilidade **MCP**, emite observações lógicas de **OpenTelemetry** sem conteúdo sensível e exercita **ações mutáveis governadas** por fronteiras da Application para autenticação, autorização source-aware, aprovação humana limitada, autorização do aprovador, execução e evidence tipada de falha.
 
 > **Ideia central:** frameworks podem ser responsáveis pela orquestração, mas não devem automaticamente ser donos da autoridade de segurança, política, evidência, autorização ou decisão final.
 
@@ -57,10 +57,14 @@ Veja o [mapa completo da documentação](docs/README.md).
 - evidência não confiável não recebe autoridade de instrução por padrão;
 - política determinística controla necessidade de revisão humana;
 - `ProposedAction`, adjacente ao modelo, é separada do `ActionContext` confiável;
+- autenticação do caller é uma fronteira separada de identidade e autorização; credenciais brutas não são copiadas para o contexto confiável nem para execution evidence;
 - autorização least-privilege avalia exatamente `(caller_id, identity_source, action, resource, environment)`, sem fallback entre origens de identidade;
 - scopes desconhecidos falham de forma fechada;
 - `require_human_approval` continua bloqueado até existir evidência de aprovação confiável para exatamente o mesmo caller e action scope;
-- autorização, aprovação e execução real são preservadas como fatos distintos de evidence;
+- a autoridade de approval é limitada no tempo, single-use, revogável antes do claim e isolada por origem de identidade no provider controlado;
+- autorização do aprovador verifica separadamente se o reviewer confiável pode aprovar exatamente o scope solicitado;
+- autenticação, autorização, ciclo de approval, approver authorization e execução são preservados como fatos separados;
+- exceções depois da chamada ao executor geram failure evidence tipada com `execution_attempted=true` e `external_side_effect_state=unknown`, sem copiar texto bruto da exceção para evidence estruturada;
 - telemetria proprietária de frameworks é desabilitada quando necessário para preservar a fronteira de privacidade;
 - OpenTelemetry lógico contém somente metadata segura, sem prompts, respostas, rationale, evidência, credenciais ou payloads de provider;
 - mapeamento provider/modelo permanece atrás do gateway em vez de vazar para cada adapter.
@@ -73,8 +77,9 @@ Veja o [mapa completo da documentação](docs/README.md).
 - LlamaIndex Workflow com eventos tipados e Workflow de governed action;
 - Agno Workflow com primitives nativas de loop/condition e Step mutável sem retry automático;
 - LiteLLM como fronteira centralizada de acesso a providers;
-- compatibilidade MCP v2 mais smokes reais locais STDIO para applicability read-only e governed mutable actions;
-- conformance cross-framework de governed actions contra a execução direta da Application;
+- compatibilidade MCP v2 mais smokes reais locais STDIO para applicability read-only, governed actions por trusted composition e um experimento autenticado separado com credencial injetada pelo host;
+- falhas MCP incertas após a chamada ao executor são classificadas como erros de protocolo visíveis ao host, e não como Tool errors normais corrigíveis pelo modelo;
+- conformance cross-framework de governed actions contra a execução direta da Application cobre estados normais e provenance tipada de falha do executor;
 - CI provider-free para qualidade, tipagem, segurança, MCP, governed actions e contrato de OTel.
 
 ## Invariante central
@@ -93,12 +98,12 @@ Para ações mutáveis, o mesmo princípio vira:
 
 ```text
 agente/modelo propõe
-contexto confiável identifica o caller
+trusted composition ou autenticação estabelece o caller context
 política autoriza
-evidência humana aprova quando necessário
-runtime aplica enforcement
-adapter executa
-evidência prova o que aconteceu
+evidência humana é claimed e validada quando necessário
+policy de aprovador valida a autoridade do reviewer
+runtime aplica enforcement e executa
+evidência registra sucesso ou falha governada
 ```
 
 E uma separação permanece explícita:
@@ -107,29 +112,36 @@ E uma separação permanece explícita:
 tool disponível != tool autorizado != tool executado
 ```
 
-Leia [Governed Agent Actions](docs/security/GOVERNED_AGENT_ACTIONS.md) para o trust model completo da v1.1.
+Leia [Governed Agent Actions](docs/security/GOVERNED_AGENT_ACTIONS.md) para o trust model completo atual.
 
-## Snapshot de engenharia v1.1 — Governed Agent Actions
+## Snapshot atual do governed runtime — v1.1 ao hardening pós-v1.3
 
-O desenvolvimento pós-v1.0 estende o princípio original de **decisões de análise** para **ações mutáveis de agentes** sem mudar quem possui a autoridade de segurança.
+A release publicada mais recente é **v1.3.0 — Human Approval Lifecycle**. O `main` atual preserva os contratos de v1.1 Governed Agent Actions e v1.2 Trusted Caller Identity, adiciona o approval lifecycle de v1.3 e inclui hardening posterior para approver authorization, provenance tipada de falha do executor, tratamento de uncertain execution no MCP e conformance cross-framework de falhas. Essas mudanças pós-v1.3 pertencem ao `main` atual e não reescrevem retroativamente a release v1.3 publicada.
 
 A fronteira controlada atual inclui:
 
 - `ProposedAction(action, resource, environment)` congelada como proposta não confiável;
 - `ActionContext(caller_id, identity_source)` separado e fornecido por composição/runtime ou autenticação confiável;
 - autorização determinística de scope exato com outcomes `allow`, `deny` e `require_human_approval`;
-- `HumanApprovalEvidence` confiável vinculada exatamente à proposta e ao caller context;
+- `HumanApprovalEvidence` confiável vinculada exatamente à proposta e ao caller context, com validade timezone-aware e claim single-use;
+- outcomes explícitos de approval para missing, revoked, invalid, unauthorized approver, not-yet-valid, expired e validated;
+- approver authorization separada para o scope exato `(approver_id, caller_id, identity_source, action, resource, environment)`;
+- composição de autenticação de service caller que estabelece contexto `api_key` fora do input de modelo/tool antes da autorização source-aware;
 - `GovernedActionRuntime` como único enforcement point antes da execução mutável;
-- `ActionExecutionEvidence` separando decisão, status de aprovação e execução real;
+- `ActionExecutionEvidence` separando authorization, approval lifecycle, approver authorization e execução real;
+- `ActionExecutionFailureEvidence` e `AuthenticatedActionExecutionFailureEvidence` para provenance pós-executor sem afirmar se o side effect externo foi committed;
 - um adapter in-memory seguro para `acknowledge_finding`;
 - adapters de governed action para LangGraph, CrewAI Flow, LlamaIndex Workflow e Agno Workflow;
 - testes adversariais para caller spoofing, fake approval, tool substitution, scope escalation e retry-after-deny;
-- conformance cross-framework comparando evidence completa e side effects observáveis com a execução direta da Application;
-- um servidor MCP STDIO mutável separado, cujo schema não permite ao modelo fornecer identidade de caller ou aprovação confiável.
+- conformance cross-framework comparando evidence completa de sucesso/falha e comportamento observável do executor com a execução direta da Application;
+- servidor MCP STDIO mutável governado cujo schema não permite ao modelo fornecer identidade de caller ou approval confiável;
+- experimento MCP STDIO autenticado separado, com credencial injetada pelo host e fora dos argumentos visíveis ao modelo e da evidence estruturada;
+- classificação de erro de protocolo MCP para falhas incertas pós-executor, evitando devolver `external_side_effect_state=unknown` pelo canal normal de Tool error corrigível pelo modelo;
+- execução mutável no Agno com `max_retries=0` e preservação do `GovernedActionExecutionError` original através de `RunStatus.error`.
 
-A matriz de conformance cobre allow exato, deny explícito, approval ausente, approval confiável validado, caller mismatch, identity-source mismatch e resource escalation. Em todos os frameworks, os mesmos security semantics e a mesma contagem de side effects devem coincidir com a baseline direta da Application.
+A matriz de conformance cobre allow exato, deny explícito, approval missing/validated, unauthorized approver, approval expired/revoked, caller mismatch, identity-source mismatch, resource escalation e falha autorizada do executor. Em todos os frameworks, evidence de execução normal e failure evidence pós-executor devem coincidir com a baseline direta da Application, com exatamente uma tentativa do executor no cenário controlado de falha.
 
-Isso é **evidência provider-free de integração entre Application, frameworks e MCP local**. Não é uma afirmação de identidade remota autenticada, infraestrutura de autorização production-grade, action execution provider-backed ou certificação de produção.
+Isso é **evidência provider-free de integração entre Application, frameworks e MCP local**. Não é uma afirmação de identidade remota autenticada, OAuth/OIDC/JWT/mTLS, approval durável/distribuído, IAM/policy production-grade, idempotência, rollback/compensation, execução mutável provider-backed, audit evidence assinada/tamper-proof ou certificação de produção.
 
 ## Snapshot da avaliação v1.0
 
@@ -263,11 +275,12 @@ Leia [Arquitetura](docs/ARCHITECTURE.md), [Governed Agent Actions](docs/security
 
 ## Fronteira MCP
 
-O projeto mantém dois concerns MCP locais separados:
+O projeto mantém separadas as superfícies locais checked-in de leitura e ação mutável por trusted composition, além de um experimento autenticado isolado usado por testes de compatibilidade/smoke:
 
 ```text
-agentic-security-applicability      # surface read-only de análise/applicability
-agentic-security-governed-actions   # surface controlada de ação mutável
+agentic-security-applicability                  # superfície read-only de análise/applicability
+agentic-security-governed-actions               # ação mutável por trusted composition
+agentic-security-authenticated-governed-actions # experimento autenticado host-injected; não registrado no projeto
 ```
 
 No tool mutável governado:
@@ -277,9 +290,12 @@ No tool mutável governado:
 - o `caller_id` local controlado é injetado por composição confiável do server;
 - `caller_id`, `approval_id` e `approver_id` não são argumentos do tool;
 - ToolAnnotations são metadata, não autorização;
-- a evidence retornada é comparada com um segundo tool read-only que observa o estado real no smoke STDIO.
+- execution evidence retornada é verificada contra uma Tool read-only separada no smoke STDIO real;
+- o experimento autenticado recebe material sintético de credencial somente do ambiente confiável do host/processo e o mantém fora do Tool schema;
+- depois que o executor governado foi chamado e lança uma exceção, os servidores trusted-composition e autenticado mapeiam apenas a falha governada tipada para `MCPError` com evidence segura;
+- essa classificação evita que o estado incerto seja devolvido como `CallToolResult(is_error=true)` comum e usado como canal natural de retry dirigido pelo modelo, mas não impede um host de implementar retry programático.
 
-O experimento MCP local não é descrito como identidade autenticada de usuário remoto nem como autorização de produção.
+Os experimentos MCP locais intencionalmente não são descritos como identidade autenticada de usuário remoto, identidade vinculada ao transporte, IAM de produção ou autorização production-grade. `external_side_effect_state=unknown` permanece `unknown` mesmo quando a fixture controlada observa zero mutações.
 
 ## Quickstart para developers
 
@@ -371,10 +387,10 @@ Esses princípios são reutilizáveis ao discutir plataformas corporativas de ag
 
 ## Status do projeto
 
-O escopo de engenharia planejado para **v1.0** está concluído: baseline de domínio, controles determinísticos, evolução de RAG, quatro famílias de frameworks / cinco variantes de orquestração, comparação de benchmark, LiteLLM, MCP, observabilidade, avaliação final, hardening de runtime e documentação de portfólio.
+O escopo planejado de engenharia da **v1.0** está completo: baseline de domínio, controles determinísticos, progressão de RAG, quatro famílias de framework / cinco variantes de orquestração, comparação de benchmark, LiteLLM, MCP, observabilidade, avaliação final, runtime hardening e documentação de portfólio.
 
-O desenvolvimento pós-v1.0 está evoluindo a **v1.1 Governed Agent Actions**: autorização de scope exato na Application, trusted caller context, evidence controlada de HITL approval, runtime enforcement, execução mutável segura, conformance em quatro frameworks e uma fronteira MCP local governada.
+Os milestones pós-v1.0 publicados são **v1.1 Governed Agent Actions**, **v1.2 Trusted Caller Identity** e **v1.3 Human Approval Lifecycle**. O `main` atual também endurece approver authorization, governed executor-failure evidence, composição autenticada de falha, tratamento MCP de uncertain execution, preservação de failure provenance no Agno e conformance cross-framework de falhas.
 
-O repositório continua sendo um laboratório de engenharia, não uma afirmação de certificação para produção. Trabalhos futuros podem ampliar identidade, policy, durabilidade de approvals, side effects externos e audit infrastructure sem reescrever a evidência histórica v1.0 aceita.
+Este continua sendo um laboratório de engenharia, não uma afirmação de certificação de produção. Approval durável/distribuído, identidade remota vinculada ao transporte, IAM de produção, idempotência/rollback, transacionalidade de side effects externos e audit evidence assinada/tamper-proof permanecem non-goals explícitos até existir um experimento concreto que os exija. Evidência provider-backed histórica e metadata de releases publicadas não são reescritas pelo hardening do `main` atual.
 
 Veja [CHANGELOG.md](CHANGELOG.md) para mudanças por release.

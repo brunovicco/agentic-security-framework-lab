@@ -4,7 +4,7 @@ This document translates the current gateway-backed five-way evaluation into an 
 
 It is **not** a universal ranking of agentic frameworks. The evidence comes from one controlled vulnerability-analysis workload with five scenarios, three repetitions per scenario, and fifteen framework executions per variant.
 
-The earlier provider-direct five-way artifacts remain valid historical evidence. This matrix uses the immutable Phase 15 final-evaluation bundle as the current-state source instead of rewriting those historical artifacts.
+The earlier provider-direct five-way artifacts remain valid historical evidence. This matrix uses the immutable Phase 15 final-evaluation bundle as the current analysis-workload source instead of rewriting those historical artifacts. Separately, provider-free governed-action conformance now exercises authorization, HITL/approver states and executor-failure provenance across LangGraph, CrewAI Flow, LlamaIndex and Agno; those security results inform the qualitative sections below but do not alter the immutable v1.0 benchmark metrics.
 
 ## Current evaluation context
 
@@ -147,7 +147,7 @@ That latency difference is far too small and the sample far too limited to suppo
 
 **Security-relevant defaults**
 
-Agno `Step` retries require an explicit `max_retries=0` override for benchmark-sensitive steps so framework retries cannot occur outside the application-governed evaluator loop. Vendor telemetry is also explicitly disabled for the benchmark runtime.
+Agno `Step` retries require an explicit `max_retries=0` override for benchmark-sensitive and mutable governed steps so framework retries cannot occur outside application-owned control. Vendor telemetry is also explicitly disabled for the benchmark runtime. For the governed mutable path, the adapter additionally preserves and re-raises the original `GovernedActionExecutionError` when Agno reports `RunStatus.error`, preventing framework status from erasing application-owned failure evidence.
 
 **Use when**
 
@@ -208,7 +208,9 @@ The more important questions are:
 7. Can provider identity and credentials remain behind a stable gateway contract?
 8. Can the framework be replaced without rewriting security policy?
 
-All five variants in this lab were deliberately engineered to answer those questions through shared application-owned controls and the same governed gateway alias.
+All five analysis variants in this lab were deliberately engineered to answer those questions through shared application-owned controls and the same governed gateway alias. The four governed mutable-action adapters additionally match the direct application runtime for exact allow/deny/HITL states, approver authorization failures, identity/source mismatches, scope escalation and authorized executor failure.
+
+That second conformance surface changes the framework-security question from merely "can this framework call a tool?" to "can this framework preserve application-owned authority and failure provenance without adding an unsafe retry or generic error wrapper?" Current provider-free tests say yes for LangGraph, CrewAI Flow, LlamaIndex and Agno under the controlled workload.
 
 ## Practical selection guide
 
@@ -228,11 +230,12 @@ Then evaluate the candidate under **your own** workload, gateway/provider mappin
 
 The decision matrix should be revisited when the lab adds or materially expands:
 
-- tool calls and MCP authorization beyond compatibility smoke;
+- remote/transport-bound MCP authentication and authorization instead of local host composition;
+- real external mutable systems where idempotency, rollback or compensation become concrete requirements;
+- durable/distributed or multi-party approval infrastructure;
 - multi-agent delegation;
-- memory and persistence;
-- richer prompt-injection scenarios;
-- human approval steps;
+- framework-native memory, checkpointing and persistence in the comparable workload;
+- richer prompt-injection and tool-abuse scenarios;
 - provider/model variation behind the gateway;
 - larger latency samples and uncertainty estimates;
 - deployment-grade tracing/exporter composition.
@@ -253,7 +256,9 @@ Historical provider-direct comparison artifacts remain available without modific
 - [`five-way-latest.md`](../artifacts/benchmarks/comparison/five-way-latest.md)
 - [`five-way-latest.json`](../artifacts/benchmarks/comparison/five-way-latest.json)
 
-Architecture and authority boundaries:
+Architecture, authority and governed-action conformance:
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- [Governed Agent Actions](security/GOVERNED_AGENT_ACTIONS.md)
+- [cross-framework governed-action conformance](../tests/integration/test_governed_action_framework_conformance.py)
 - [LiteLLM gateway foundation](litellm/GATEWAY_FOUNDATION.md)
