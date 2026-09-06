@@ -6,7 +6,7 @@
 
 Um laboratório de engenharia neutro em relação a frameworks para construir, proteger, avaliar e comparar **fluxos de IA agentic** sob os mesmos controles determinísticos.
 
-O projeto implementa a mesma carga de análise de vulnerabilidades com **LangGraph, CrewAI, LlamaIndex e Agno**, roteia o acesso a provedores através do **LiteLLM**, valida o raciocínio do modelo fora do LLM, expõe compatibilidade com **MCP**, emite observações lógicas de **OpenTelemetry** sem conteúdo sensível, e exercita **ações mutáveis governadas de agentes** através de autenticação de posse da aplicação, autorização ciente da fonte de identidade, aprovação humana limitada, autorização do aprovador, execução e fronteiras tipadas de evidência de falha.
+O projeto implementa a mesma carga de análise de vulnerabilidades com **LangGraph, CrewAI, LlamaIndex e Agno**, roteia o acesso a provedores através do **LiteLLM**, valida o raciocínio do modelo fora do LLM, expõe compatibilidade com **MCP**, emite observações lógicas de **OpenTelemetry** sem conteúdo sensível e exercita **ações mutáveis governadas de agentes** através de autenticação do chamador controlada pela aplicação, autorização ciente da fonte de identidade, aprovação humana limitada, autorização do aprovador, execução e fronteiras tipadas de evidência de falha.
 
 > **A ideia central:** frameworks de agentes podem ser donos da orquestração, mas não devem automaticamente ser donos da autoridade de segurança, da política, da evidência, da autorização ou das decisões finais.
 
@@ -61,7 +61,7 @@ Veja o [mapa completo da documentação](docs/README.md).
 - a autorização exata de menor privilégio avalia `(caller_id, identity_source, action, resource, environment)` sem fallback entre fontes;
 - escopos de ação desconhecidos falham fechado;
 - `require_human_approval` permanece bloqueado até que uma evidência de aprovação de origem separada seja validada para o escopo exato de chamador/ação;
-- a autoridade de aprovação é limitada, de uso único, revogável antes do claim, com prazo definido e isolada por fonte no provedor controlado;
+- a autoridade de aprovação é limitada, de uso único, revogável antes do claim, com prazo definido e isolada por fonte no provedor controlado **single-process**;
 - a autorização do aprovador verifica de forma independente se o revisor confiável pode aprovar exatamente o escopo requisitado;
 - autorização, ciclo de vida da aprovação, autorização do aprovador, execução e autenticação são preservados como fatos de evidência separados;
 - exceções pós-executor viram evidência tipada de falha governada com `execution_attempted=true` e `external_side_effect_state=unknown`, sem copiar o texto bruto do executor para a evidência estruturada;
@@ -122,22 +122,22 @@ Ele assume a posição oposta: presuma que a injeção teve sucesso. Presuma que
 
 Na análise somente leitura, rende uma conclusão proposta que um avaliador determinístico vai checar contra evidência externa e rejeitar se estiver errada, com fallback determinístico por oráculo atrás dela.
 
-Em ações mutáveis, rende um `ProposedAction` — dado de proposta não confiável. Não rende identidade do chamador, que é contexto confiável injetado fora da entrada visível ao modelo. Não rende uma decisão de autorização, que é determinística, exata e ciente da fonte de identidade. Não rende evidência de aprovação humana, que tem origem separada e é vinculada ao chamador e ao escopo exatos. Não rende autoridade de aprovador, que é verificada de forma independente. E não rende execução, que só acontece depois de um único ponto de enforcement que avaliou tudo isso.
+Em ações mutáveis, rende um `ProposedAction` — dado de proposta não confiável. Não rende identidade do chamador, que é contexto confiável injetado fora da entrada visível ao modelo. Não rende uma decisão de autorização, que é determinística, exata e ciente da fonte de identidade. Não rende evidência de aprovação humana, que tem origem separada e é vinculada ao chamador e ao escopo exatos. Não rende autoridade de aprovador, que é verificada de forma independente. E não rende execução por si só, que só acontece depois de um único ponto de enforcement que avaliou tudo isso.
 
-Uma injeção plenamente bem-sucedida, portanto, produz uma proposta que falha fechado.
+Uma injeção plenamente bem-sucedida, portanto, **não adquire autoridade adicional por si só**. Se a proposta estiver fora do escopo autorizado ou exigir evidência de aprovação que não existe, o runtime falha fechado. Se a proposta estiver dentro de uma autoridade já concedida ao chamador e satisfizer todos os controles exigidos, ela ainda pode ser executada — por isso least privilege, escopo exato e desenho seguro das ferramentas continuam essenciais mesmo quando o modelo é removido do caminho de autoridade.
 
 O cenário `adversarial-asset-id` e a suíte adversarial v2 de documentos exercitam essa fronteira em pontos específicos. São testes controlados, não prova de resistência ampla a injeção — e sob este modelo de ameaça não é isso que se pede deles. Detecção é uma mitigação. Retirar o modelo do caminho de autoridade é uma propriedade estrutural, e é sobre ela que este repositório é construído.
 
 ## Retrato atual do runtime governado — v1.1 até o hardening pós-v1.3
 
-O último release publicado é o **v1.3.0 — Human Approval Lifecycle**. A `main` atual preserva os contratos de ação governada da v1.1 e de identidade confiável de chamador da v1.2, adiciona o ciclo de vida de aprovação da v1.3, e inclui hardening posterior para autorização de aprovador, proveniência tipada de falha de executor, tratamento de execução incerta em MCP e conformidade de falha entre frameworks. Essas mudanças pós-v1.3 são funcionalidade da `main` atual, não alterações retroativas ao release v1.3 publicado.
+A release publicada mais recente é a **v1.3.0 — Human Approval Lifecycle**. A `main` atual preserva os contratos de ação governada da v1.1 e de identidade confiável de chamador da v1.2, adiciona o ciclo de vida de aprovação da v1.3 e inclui hardening posterior para autorização de aprovador, proveniência tipada de falha de executor, tratamento de execução incerta em MCP e conformidade de falha entre frameworks. Essas mudanças pós-v1.3 são funcionalidade da `main` atual, não alterações retroativas ao release v1.3 publicado.
 
 A fronteira controlada atual inclui:
 
 - `ProposedAction(action, resource, environment)` congelado como dado de proposta não confiável;
 - `ActionContext(caller_id, identity_source)` confiável e separado, fornecido por código de composição/runtime ou de autenticação;
 - autorização determinística de escopo exato com desfechos `allow`, `deny` e `require_human_approval`;
-- `HumanApprovalEvidence` confiável vinculada à proposta e ao contexto de chamador exatos, com validade ciente de fuso horário e semântica de claim de uso único;
+- `HumanApprovalEvidence` confiável vinculada à proposta e ao contexto de chamador exatos, com validade ciente de fuso horário e semântica de claim de uso único no provedor controlado single-process;
 - desfechos explícitos de aprovação para estados ausente, revogado, inválido, aprovador não autorizado, ainda não válido, expirado e validado;
 - autorização separada de aprovador para o escopo exato `(approver_id, caller_id, identity_source, action, resource, environment)`;
 - uma composição de autenticação de chamador de serviço que estabelece contexto de chamador `api_key` fora da entrada de modelo/ferramenta, antes da autorização ciente da fonte;
@@ -155,7 +155,18 @@ A fronteira controlada atual inclui:
 
 A matriz de conformidade entre frameworks cobre allow exato, deny explícito, aprovação ausente/validada, aprovador não autorizado, aprovação expirada/revogada, divergência de chamador, divergência de fonte de identidade, escalação de recurso e falha de executor autorizado. Para todos os frameworks, a evidência de execução normal e a evidência de falha pós-executor devem coincidir com a baseline direta da aplicação, com exatamente uma tentativa de executor no cenário controlado de falha.
 
-Isto é **evidência de integração aplicação/framework/MCP sem provedor**. Não afirma identidade autenticada de usuário remoto, OAuth/OIDC/JWT/mTLS, aprovações duráveis ou distribuídas, infraestrutura de IAM/política de nível produtivo, idempotência, rollback/compensação, execução de ação com provedor real, evidência de auditoria assinada/à prova de adulteração, nem certificação de produção.
+Isto é **evidência de integração aplicação/framework/MCP sem provedor**. Não afirma identidade autenticada de usuário remoto, OAuth/OIDC/JWT/mTLS, aprovações duráveis ou distribuídas, infraestrutura de IAM/política de nível produtivo, PDP externo, idempotência, rollback/compensação, execução de ação com provedor real, evidência de auditoria assinada/à prova de adulteração, nem certificação de produção.
+
+## Fronteiras arquiteturais declaradas
+
+Os contratos atuais são intencionalmente pequenos. As seguintes limitações não ficam como omissões implícitas: estão registradas como decisões arquiteturais aceitas, com desenho futuro e gatilhos explícitos de reavaliação.
+
+- [ADR 0009 — Tamper-evident execution evidence](docs/adr/0009-tamper-evident-execution-evidence.md): a evidência atual preserva fatos de execução e proveniência de autoridade em memória, mas **não prova que um registro não foi alterado depois de produzido**. Persistência de evidência é o gatilho para revisitar canonicalização, encadeamento e checkpoints assinados.
+- [ADR 0010 — Approval authority is single-process](docs/adr/0010-approval-authority-is-single-process.md): single-use, revogação-before-claim e validade temporal são garantias do provider controlado atual **dentro de um único processo**. Distribuição futura exige claim atômico, comportamento fail-closed sob indisponibilidade e testes reais de concorrência.
+- [ADR 0011 — Uncertain external side effects: idempotency and reconciliation](docs/adr/0011-uncertain-external-side-effects-idempotency-and-reconciliation.md): `external_side_effect_state=unknown` permanece terminal no escopo do laboratório. Idempotency keys, probes e reconciliação só passam a fazer sentido quando existir um executor com efeito colateral externo real.
+- [ADR 0012 — Exact-scope authorization and the external PDP boundary](docs/adr/0012-exact-scope-authorization-and-external-pdp-boundary.md): o authorizer exato e in-process permanece como implementação de referência. Um PDP externo futuro deve preservar equivalência comportamental com a matriz de conformidade existente, incluindo isolamento por `identity_source` e fail-closed quando o PDP estiver indisponível.
+
+Esses ADRs documentam **limites e critérios de evolução**, não funcionalidades já implementadas.
 
 ## Retrato da avaliação v1.0 — custo e caminho de execução sob acurácia constante
 
@@ -401,6 +412,6 @@ O escopo de engenharia planejado da **v1.0** está completo: baseline de domíni
 
 Os marcos publicados pós-v1.0 são **v1.1 Governed Agent Actions**, **v1.2 Trusted Caller Identity** e **v1.3 Human Approval Lifecycle**. A `main` atual adicionalmente endurece a autorização de aprovador, a evidência de falha de executor governada, a composição de falha autenticada, o tratamento de transporte para execução incerta em MCP, a preservação de proveniência de falha no Agno e a conformidade de falha entre frameworks.
 
-Isto continua sendo um laboratório de engenharia, não uma alegação de certificação de produção. Aprovação durável/distribuída, identidade remota vinculada ao transporte, IAM de produção, idempotência/rollback, transacionalidade de efeito colateral externo e infraestrutura de auditoria assinada/à prova de adulteração permanecem não-objetivos explícitos até que um experimento concreto os exija. Cada uma dessas fronteiras está registrada como um registro de decisão de arquitetura, com o desenho pretendido e os gatilhos de reavaliação, em vez de ficar como omissão não examinada. Evidência histórica com provedor real e metadados de releases publicados não são reescritos pelo hardening da `main` atual.
+Isto continua sendo um laboratório de engenharia, não uma alegação de certificação de produção. Aprovação durável/distribuída, identidade remota vinculada ao transporte, IAM de produção, PDP externo, idempotência/rollback, transacionalidade de efeito colateral externo e infraestrutura de evidência assinada/à prova de adulteração permanecem não-objetivos explícitos até que um experimento concreto os exija. Essas fronteiras estão documentadas nos [ADRs 0009–0012](docs/adr), com o desenho pretendido, os limites das claims atuais e gatilhos de reavaliação. Evidência histórica com provedor real e metadados de releases publicados não são reescritos pelo hardening da `main` atual.
 
 Veja o [CHANGELOG.md](CHANGELOG.md) para mudanças em nível de release.
