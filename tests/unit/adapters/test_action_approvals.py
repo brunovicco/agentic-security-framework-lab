@@ -1,6 +1,8 @@
 """Tests for the deterministic in-memory action approval provider."""
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+from threading import Barrier
 
 import pytest
 
@@ -174,6 +176,57 @@ def test_revoked_and_claimed_lifecycle_is_isolated_by_identity_source() -> None:
         _action(),
         _context(identity_source="trusted_composition"),
     ) == ApprovalClaim(status="revoked", approval=trusted)
+
+
+def test_concurrent_claims_transfer_one_approval_capability_once() -> None:
+    """Linearize simultaneous claims so one approval transfers at most once."""
+    approval = _approval()
+    provider = InMemoryActionApprovalProvider([approval])
+    participants = 8
+    barrier = Barrier(participants)
+
+    def claim() -> ApprovalClaim:
+        barrier.wait()
+        return provider.claim_approval(_action(), _context())
+
+    with ThreadPoolExecutor(max_workers=participants) as executor:
+        futures = [executor.submit(claim) for _ in range(participants)]
+        claims = [future.result() for future in futures]
+
+    statuses = [claim.status for claim in claims]
+    assert statuses.count("claimed") == 1
+    assert statuses.count("missing") == participants - 1
+    claimed = next(claim for claim in claims if claim.status == "claimed")
+    assert claimed.approval == approval
+
+
+def test_concurrent_claim_and_revocation_have_one_linearizable_winner() -> None:
+    """Allow only claim-first or revoke-first lifecycle outcomes under one race."""
+    approval = _approval()
+    provider = InMemoryActionApprovalProvider([approval])
+    barrier = Barrier(2)
+
+    def claim() -> ApprovalClaim:
+        barrier.wait()
+        return provider.claim_approval(_action(), _context())
+
+    def revoke() -> bool:
+        barrier.wait()
+        return provider.revoke_approval(approval.approval_id)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        claim_future = executor.submit(claim)
+        revoke_future = executor.submit(revoke)
+        claim_result = claim_future.result()
+        revoke_result = revoke_future.result()
+
+    if revoke_result:
+        assert claim_result == ApprovalClaim(status="revoked", approval=approval)
+    else:
+        assert claim_result == ApprovalClaim(status="claimed", approval=approval)
+
+    assert provider.claim_approval(_action(), _context()) == ApprovalClaim(status="missing")
+    assert provider.revoke_approval(approval.approval_id) is False
 
 
 def test_unknown_approval_id_cannot_be_revoked() -> None:
