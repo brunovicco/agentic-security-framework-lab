@@ -1,0 +1,102 @@
+name: phase44-doc-sync
+
+on:
+  push:
+    branches:
+      - fix/phase-44-process-local-approval-atomicity
+    paths:
+      - .github/workflows/phase44-doc-sync.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: fix/phase-44-process-local-approval-atomicity
+      - name: Document process-local approval atomicity
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old!r}")
+              file.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "CHANGELOG.md",
+              "- The controlled approval provider now partitions claims by exact `(caller_id, identity_source, action, resource, environment)` scope, preventing one identity provenance from dequeuing approval authority issued for another provenance.\n",
+              "- The controlled approval provider now partitions claims by exact `(caller_id, identity_source, action, resource, environment)` scope, preventing one identity provenance from dequeuing approval authority issued for another provenance.\n- Process-local approval claim and revocation transitions now share one synchronization boundary, making queue removal and lifecycle-state changes linearizable within one provider instance under concurrent callers.\n",
+          )
+          replace_once(
+              "CHANGELOG.md",
+              "- Source-confusion regressions prove an approval-gated request under the wrong identity source receives `missing` without consuming the correct-source approval, which remains available for the intended context and executes at most once.\n",
+              "- Source-confusion regressions prove an approval-gated request under the wrong identity source receives `missing` without consuming the correct-source approval, which remains available for the intended context and executes at most once.\n- Concurrency regressions use barriers rather than sleeps to prove eight simultaneous claims transfer one approval exactly once, claim-vs-revoke races produce only linearizable outcomes, and eight concurrent approval-gated runtime attempts cause exactly one mutable execution.\n- Approval concurrency evidence is process-local only; it does not prove cross-process/distributed atomicity or transactional coupling between approval state and external side effects.\n",
+          )
+
+          path = "docs/adr/0006-treat-human-approval-as-trusted-runtime-evidence.md"
+          replace_once(
+              path,
+              "After freshness was enforced, a third lifecycle gap remained: a still-valid approval could not be explicitly withdrawn before use. Trusted control-plane intent needs a way to revoke an unused capability without turning revocation into model input or rewriting authorization policy.\n",
+              "After freshness was enforced, a third lifecycle gap remained: a still-valid approval could not be explicitly withdrawn before use. Trusted control-plane intent needs a way to revoke an unused capability without turning revocation into model input or rewriting authorization policy.\n\nAfter source-aware lifecycle isolation, one process-local concurrency gap remained: claim and revocation were compound operations across approval queues and lifecycle state without an explicit synchronization boundary. Sequential anti-replay semantics are insufficient when multiple runtime attempts can race for the same capability.\n",
+          )
+          replace_once(
+              path,
+              "The controlled in-memory provider also partitions approval queues by the full source-aware key `(caller_id, identity_source, action, resource, environment)`. This prevents a request under one trusted identity provenance from dequeuing or consuming approval evidence issued for the same caller id and action scope under another provenance. Runtime exact-context validation remains in place as defense in depth rather than being replaced by provider indexing.\n",
+              "The controlled in-memory provider also partitions approval queues by the full source-aware key `(caller_id, identity_source, action, resource, environment)`. This prevents a request under one trusted identity provenance from dequeuing or consuming approval evidence issued for the same caller id and action scope under another provenance. Runtime exact-context validation remains in place as defense in depth rather than being replaced by provider indexing.\n\nThe provider serializes its queue mutation and lifecycle-state transition with one process-local lock. `claim_approval(...)` therefore removes one queued capability and marks it claimed as one linearizable operation; `revoke_approval(...)` uses the same boundary. Concurrent callers can observe either claim-first or revoke-first ordering, but they cannot reuse one approval or produce contradictory lifecycle state inside one provider instance.\n",
+          )
+          replace_once(
+              path,
+              "### Single-use and failure semantics\n",
+              "### Process-local concurrency semantics\n\nSingle-use authority must remain single-use when multiple runtime attempts arrive concurrently. The controlled provider uses one lock for both the source-aware queue and lifecycle dictionary so compound claim/revoke transitions are serialized together rather than relying on Python interpreter scheduling details.\n\nTests coordinate threads with barriers instead of sleeps. Eight simultaneous claims for one approval yield exactly one `claimed` result and seven `missing` results. A claim-vs-revoke race has only two legal linearizable outcomes: claim wins and later revocation returns false, or revocation wins and the queued claim reports `revoked`. Eight concurrent approval-gated `GovernedActionRuntime` attempts with one capability produce exactly one `validated` execution and seven `missing` results.\n\nThis guarantee is intentionally process-local. The lock does not coordinate multiple processes, durable approval stores, remote workers, or an external side effect transaction. A production distributed provider would need its own atomic storage/coordination primitive while preserving the same application contract.\n\n```text\none approval capability + concurrent claims <= one claimed runtime attempt\n```\n\n### Single-use and failure semantics\n",
+          )
+          replace_once(
+              path,
+              "Each approval is a single-use capability with process-local lifecycle state `available`, `revoked`, or `claimed`. Queues are partitioned by exact caller id, identity source, action, resource, and environment. A matching source-aware claim removes that queued capability from future use. Multiple unique approvals may be supplied for the same exact source-aware scope when multiple independent executions were separately approved.\n",
+              "Each approval is a single-use capability with process-local lifecycle state `available`, `revoked`, or `claimed`. Queues are partitioned by exact caller id, identity source, action, resource, and environment. A matching source-aware claim removes that queued capability from future use. One process-local lock protects queue removal and lifecycle transitions together under concurrent claim/revoke calls. Multiple unique approvals may be supplied for the same exact source-aware scope when multiple independent executions were separately approved.\n",
+          )
+          replace_once(
+              path,
+              "- one approval cannot be replayed for repeated mutable executions;\n",
+              "- one approval cannot be replayed for repeated or concurrent mutable executions within one provider instance;\n",
+          )
+          replace_once(
+              path,
+              "- the in-memory claim operation is process-local and does not prove distributed transactional atomicity;\n",
+              "- the in-memory claim/revoke lock is process-local and does not prove cross-process or distributed transactional atomicity;\n- one global fixture lock favors simple correctness over parallel claim throughput and is not presented as a distributed scaling design;\n",
+          )
+          replace_once(
+              path,
+              "one claimed approval = at most one execution attempt\n",
+              "one claimed approval = at most one execution attempt\n\none approval capability + concurrent claims <= one claimed runtime attempt\n",
+          )
+          replace_once(path, "Refs #131, #145, #163, #165, #167", "Refs #131, #145, #163, #165, #167, #169")
+
+          path = "docs/security/GOVERNED_AGENT_ACTIONS.md"
+          replace_once(
+              path,
+              "```text\nsame caller_id != same approval capability when identity_source differs\n```\n\n### Approval freshness\n",
+              "```text\nsame caller_id != same approval capability when identity_source differs\n```\n\n### Approval process-local concurrency safety\n\nSequential anti-replay is not enough when multiple agent/runtime attempts can race for the same single-use approval. The controlled in-memory provider therefore protects its source-aware queue and lifecycle dictionary with one process-local lock. Claim and revocation transitions are serialized together instead of relying on the Python GIL or incidental container-operation atomicity.\n\nBarrier-coordinated tests prove eight simultaneous claims yield exactly one `claimed` and seven `missing` results. A concurrent claim-vs-revoke race permits only the two linearizable orderings: claim-first (`claimed` plus failed later revocation) or revoke-first (successful revocation plus a `revoked` claim). A direct runtime integration also proves eight concurrent approval-gated executions with one approval produce exactly one `validated` side effect.\n\n```text\none approval capability + concurrent claims <= one claimed runtime attempt\n```\n\nThis is a process-local guarantee for one provider instance. It does not prove cross-process/distributed locking, durable-store atomicity, or transactional coupling between approval consumption and an external side effect. Those require storage-specific coordination outside this controlled fixture.\n\n### Approval freshness\n",
+          )
+          PY
+      - name: Commit only expected documentation files
+        run: |
+          git diff --check
+          git diff --exit-code -- . \
+            ':!CHANGELOG.md' \
+            ':!docs/adr/0006-treat-human-approval-as-trusted-runtime-evidence.md' \
+            ':!docs/security/GOVERNED_AGENT_ACTIONS.md'
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add CHANGELOG.md \
+            docs/adr/0006-treat-human-approval-as-trusted-runtime-evidence.md \
+            docs/security/GOVERNED_AGENT_ACTIONS.md
+          git commit -m "docs: document process-local approval atomicity"
+          git push origin HEAD:fix/phase-44-process-local-approval-atomicity
