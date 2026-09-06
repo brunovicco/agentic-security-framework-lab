@@ -35,53 +35,42 @@ jobs:
           changelog = replace_once(
               changelog,
               hardened_anchor,
-              hardened_anchor
-              + "\n- Agno governed mutable execution now preserves the original `GovernedActionExecutionError` across `RunStatus.error` instead of replacing application-owned failure provenance with a generic framework error; the existing `max_retries=0` boundary remains unchanged.",
+              hardened_anchor + "\n- Agno governed mutable execution now preserves the original `GovernedActionExecutionError` across `RunStatus.error` instead of replacing application-owned failure provenance with a generic framework error; the existing `max_retries=0` boundary remains unchanged.",
               "CHANGELOG hardened",
           )
           evidence_anchor = "- The MCP protocol guard removes this failure class from the normal model-correctable Tool-result channel; it does not prove that every host will avoid programmatic retry and does not provide idempotency, rollback, compensation, or distributed transaction semantics."
           changelog = replace_once(
               changelog,
               evidence_anchor,
-              evidence_anchor
-              + "\n- Agno failure regression coverage proves a mutable executor is attempted exactly once and callers receive the original governed failure evidence with exact context/action/authorization, `execution_attempted=true`, `failure_reason=executor_error`, and `external_side_effect_state=unknown`; raw executor text remains only in the local exception cause.",
+              evidence_anchor + "\n- Agno failure regression coverage proves a mutable executor is attempted exactly once and callers receive the original governed failure evidence with exact context/action/authorization, `execution_attempted=true`, `failure_reason=executor_error`, and `external_side_effect_state=unknown`; raw executor text remains only in the local exception cause.",
               "CHANGELOG evidence",
           )
           changelog_path.write_text(changelog)
 
           security_path = Path("docs/security/GOVERNED_AGENT_ACTIONS.md")
           security = security_path.read_text()
-          old_section = """### Agno retry hardening
-
-The Agno mutable step explicitly uses `max_retries=0` and fail-closed step behavior.
-
-This is security-relevant because an implicit framework retry around a mutating executor could multiply side effects after a partial failure.
-
-A regression test uses a failing executor and proves it is invoked exactly once.
-"""
-          new_section = """### Agno retry and failure-provenance hardening
-
-The Agno mutable step explicitly uses `max_retries=0` and fail-closed step behavior.
-
-This is security-relevant because an implicit framework retry around a mutating executor could multiply side effects after a partial failure. The zero-retry setting therefore remains explicit even though authorization and executor-failure semantics belong to the application runtime rather than Agno.
-
-A second boundary matters after that one allowed attempt fails. `GovernedActionRuntime` raises `GovernedActionExecutionError` with `ActionExecutionFailureEvidence`, but Agno represents the workflow itself as `RunStatus.error`. The adapter must not replace the application-owned governed failure with a new generic framework error merely because the workflow status is error.
-
-The Agno adapter therefore captures only `GovernedActionExecutionError` while the Step is executing and, when the Workflow reports `RunStatus.error`, re-raises that same governed exception. Non-governed Agno failures still use the adapter's generic framework error path.
-
-This preserves two independent facts:
-
-```text
-Agno mutable executor failure
-    -> exactly one executor invocation
-    -> original GovernedActionExecutionError survives
-    -> ActionExecutionFailureEvidence remains inspectable
-```
-
-Regression coverage requires the exact caller context, proposed action and authorization evidence, `execution_attempted=true`, `failure_reason=executor_error`, and `external_side_effect_state=unknown`. Raw executor exception text remains excluded from structured evidence and the governed error message; it remains available only as the local Python exception cause.
-
-This does not make Agno the owner of failure semantics and does not add retry, idempotency, rollback, compensation, or transaction guarantees.
-"""
+          old_section = (
+              "### Agno retry hardening\n\n"
+              "The Agno mutable step explicitly uses `max_retries=0` and fail-closed step behavior.\n\n"
+              "This is security-relevant because an implicit framework retry around a mutating executor could multiply side effects after a partial failure.\n\n"
+              "A regression test uses a failing executor and proves it is invoked exactly once.\n"
+          )
+          new_section = (
+              "### Agno retry and failure-provenance hardening\n\n"
+              "The Agno mutable step explicitly uses `max_retries=0` and fail-closed step behavior.\n\n"
+              "This is security-relevant because an implicit framework retry around a mutating executor could multiply side effects after a partial failure. The zero-retry setting therefore remains explicit even though authorization and executor-failure semantics belong to the application runtime rather than Agno.\n\n"
+              "A second boundary matters after that one allowed attempt fails. `GovernedActionRuntime` raises `GovernedActionExecutionError` with `ActionExecutionFailureEvidence`, but Agno represents the workflow itself as `RunStatus.error`. The adapter must not replace the application-owned governed failure with a new generic framework error merely because the workflow status is error.\n\n"
+              "The Agno adapter therefore captures only `GovernedActionExecutionError` while the Step is executing and, when the Workflow reports `RunStatus.error`, re-raises that same governed exception. Non-governed Agno failures still use the adapter's generic framework error path.\n\n"
+              "This preserves two independent facts:\n\n"
+              "```text\n"
+              "Agno mutable executor failure\n"
+              "    -> exactly one executor invocation\n"
+              "    -> original GovernedActionExecutionError survives\n"
+              "    -> ActionExecutionFailureEvidence remains inspectable\n"
+              "```\n\n"
+              "Regression coverage requires the exact caller context, proposed action and authorization evidence, `execution_attempted=true`, `failure_reason=executor_error`, and `external_side_effect_state=unknown`. Raw executor exception text remains excluded from structured evidence and the governed error message; it remains available only as the local Python exception cause.\n\n"
+              "This does not make Agno the owner of failure semantics and does not add retry, idempotency, rollback, compensation, or transaction guarantees.\n"
+          )
           security = replace_once(
               security,
               old_section,
