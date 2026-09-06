@@ -92,8 +92,7 @@ class ActionExecutionEvidence(BaseModel):
             raise ValueError(f"{status} approval status requires human approval evidence")
 
         binding_matches = (
-            approval.proposed_action == self.proposed_action
-            and approval.context == self.context
+            approval.proposed_action == self.proposed_action and approval.context == self.context
         )
         if status == "invalid":
             if binding_matches:

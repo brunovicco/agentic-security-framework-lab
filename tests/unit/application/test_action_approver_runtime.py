@@ -414,7 +414,9 @@ def test_validated_status_requires_allow_approver_decision() -> None:
     """Reject evidence that records validated approval after an approver deny."""
     action = _action()
     context = _context()
-    with pytest.raises(ValueError, match="validated approval status requires an allow approver decision"):
+    with pytest.raises(
+        ValueError, match="validated approval status requires an allow approver decision"
+    ):
         ActionExecutionEvidence(
             proposed_action=action,
             context=context,
