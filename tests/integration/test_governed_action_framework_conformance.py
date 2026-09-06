@@ -31,6 +31,8 @@ from agentic_lab.application.action_authorization import (
 )
 from agentic_lab.application.action_runtime import (
     ActionExecutionEvidence,
+    ActionExecutor,
+    GovernedActionExecutionError,
     GovernedActionRuntime,
 )
 
@@ -39,6 +41,7 @@ _ALLOWED_CALLER = "remediation-agent"
 _APPROVED_AT = datetime(2026, 9, 5, 20, 0, tzinfo=UTC)
 _NOW = _APPROVED_AT + timedelta(minutes=5)
 _EXPIRES_AT = _APPROVED_AT + timedelta(minutes=15)
+_RAW_EXECUTOR_ERROR = "synthetic cross-framework executor failure"
 
 _RULES: dict[ActionAuthorizationRuleKey, AuthorizationOutcome] = {
     (
@@ -80,6 +83,18 @@ class _Scenario:
     approver_id: str = "security-reviewer"
     approval_expires_at: datetime | None = None
     revoke_approval: bool = False
+
+
+class _FailingExecutor:
+    """Count one mutable invocation before raising a deterministic failure."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def execute(self, proposed_action: ProposedAction) -> None:
+        """Fail after the application has crossed the executor boundary."""
+        self.calls += 1
+        raise RuntimeError(_RAW_EXECUTOR_ERROR)
 
 
 def _action(
@@ -210,7 +225,7 @@ class FixedApprovalClock:
 
 
 def _runtime(
-    executor: InMemoryFindingAcknowledgementExecutor,
+    executor: ActionExecutor,
     scenario: _Scenario,
 ) -> GovernedActionRuntime:
     approvals: tuple[HumanApprovalEvidence, ...] = ()
@@ -312,6 +327,30 @@ def _assert_expected_behavior(
     assert executor.is_acknowledged(_FINDING_RESOURCE) is scenario.expected_execution
 
 
+def _assert_failure_behavior(
+    error: GovernedActionExecutionError,
+    executor: _FailingExecutor,
+    scenario: _Scenario,
+) -> None:
+    evidence = error.evidence
+
+    assert executor.calls == 1
+    assert evidence.proposed_action == scenario.proposed_action
+    assert evidence.context == scenario.context
+    assert evidence.authorization.outcome == "allow"
+    assert evidence.authorization.reason == "explicit_allow"
+    assert evidence.approval_status == "not_applicable"
+    assert evidence.human_approval is None
+    assert evidence.approver_authorization is None
+    assert evidence.execution_attempted is True
+    assert evidence.failure_reason == "executor_error"
+    assert evidence.external_side_effect_state == "unknown"
+    assert _RAW_EXECUTOR_ERROR not in evidence.model_dump_json()
+    assert _RAW_EXECUTOR_ERROR not in str(error)
+    assert isinstance(error.__cause__, RuntimeError)
+    assert str(error.__cause__) == _RAW_EXECUTOR_ERROR
+
+
 @pytest.mark.parametrize(
     ("framework_name", "runner"),
     _FRAMEWORK_RUNNERS,
@@ -341,3 +380,37 @@ def test_framework_governed_actions_match_application_baseline(
         assert framework_evidence == baseline_evidence, (
             f"{framework_name} diverged from the application baseline for {scenario.name}"
         )
+
+
+@pytest.mark.parametrize(
+    ("framework_name", "runner"),
+    _FRAMEWORK_RUNNERS,
+    ids=[name for name, _ in _FRAMEWORK_RUNNERS],
+)
+def test_framework_executor_failures_match_application_baseline(
+    framework_name: str,
+    runner: FrameworkRunner,
+) -> None:
+    """Require every framework to preserve application-owned executor failure provenance."""
+    scenario = _SCENARIOS[0]
+
+    baseline_executor = _FailingExecutor()
+    with pytest.raises(GovernedActionExecutionError) as baseline_caught:
+        _runtime(baseline_executor, scenario).execute(
+            scenario.proposed_action,
+            scenario.context,
+        )
+    _assert_failure_behavior(baseline_caught.value, baseline_executor, scenario)
+
+    framework_executor = _FailingExecutor()
+    with pytest.raises(GovernedActionExecutionError) as framework_caught:
+        runner(
+            _runtime(framework_executor, scenario),
+            scenario.context,
+            scenario.proposed_action,
+        )
+    _assert_failure_behavior(framework_caught.value, framework_executor, scenario)
+
+    assert framework_caught.value.evidence == baseline_caught.value.evidence, (
+        f"{framework_name} diverged from the application failure baseline"
+    )
