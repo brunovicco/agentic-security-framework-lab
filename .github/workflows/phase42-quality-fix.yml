@@ -1,0 +1,58 @@
+name: phase42-quality-fix
+
+on:
+  push:
+    branches:
+      - fix/phase-42-approval-revocation
+    paths:
+      - .github/workflows/phase42-quality-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: fix/phase-42-approval-revocation
+      - name: Apply exact static-quality fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old!r}")
+              file.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "tests/unit/adapters/test_action_approvals.py",
+              '    """Keep revocation limited to authority that has not already transferred to a runtime attempt."""\n',
+              '    """Keep revocation limited to authority not yet transferred to a runtime attempt."""\n',
+          )
+          replace_once(
+              "tests/unit/application/test_action_runtime.py",
+              "        self._claim_status = claim_status\n",
+              '        self._claim_status: Literal["claimed", "revoked"] = claim_status\n',
+          )
+          PY
+      - name: Verify and commit only expected test files
+        run: |
+          python -m pip install ruff==0.16.5 pyright==1.1.411
+          ruff check tests/unit/adapters/test_action_approvals.py tests/unit/application/test_action_runtime.py
+          ruff format --check tests/unit/adapters/test_action_approvals.py tests/unit/application/test_action_runtime.py
+          pyright tests/unit/application/test_action_runtime.py
+          git diff --check
+          git diff --exit-code -- . \
+            ':!tests/unit/adapters/test_action_approvals.py' \
+            ':!tests/unit/application/test_action_runtime.py'
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add tests/unit/adapters/test_action_approvals.py tests/unit/application/test_action_runtime.py
+          git commit -m "test: fix approval revocation quality checks"
+          git push origin HEAD:fix/phase-42-approval-revocation
