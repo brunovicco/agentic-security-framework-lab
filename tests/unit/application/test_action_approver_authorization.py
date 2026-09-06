@@ -3,6 +3,7 @@
 import pytest
 
 from agentic_lab.application.action_approver_authorization import (
+    ApproverAuthorizationDecision,
     ApproverAuthorizationOutcome,
     ApproverAuthorizationRuleKey,
     NoActionApproverAuthorizer,
@@ -107,9 +108,7 @@ def test_unknown_approver_scope_fails_closed(
 
 def test_policy_copies_trusted_rules_at_construction() -> None:
     """Prevent later mutation of the caller-owned mapping from changing approver policy."""
-    rules: dict[ApproverAuthorizationRuleKey, ApproverAuthorizationOutcome] = {
-        RULE: "allow"
-    }
+    rules: dict[ApproverAuthorizationRuleKey, ApproverAuthorizationOutcome] = {RULE: "allow"}
     policy = StaticActionApproverAuthorizationPolicy(rules)
     rules[RULE] = "deny"
 
@@ -125,3 +124,15 @@ def test_missing_approver_policy_fails_closed() -> None:
 
     assert decision.outcome == "deny"
     assert decision.reason == "no_matching_rule"
+
+
+def test_allow_decision_rejects_deny_reason() -> None:
+    """Keep persisted approver evidence internally consistent."""
+    with pytest.raises(ValueError, match="requires explicit_allow"):
+        ApproverAuthorizationDecision(outcome="allow", reason="explicit_deny")
+
+
+def test_deny_decision_rejects_allow_reason() -> None:
+    """Prevent a denied approver from carrying allow-looking evidence."""
+    with pytest.raises(ValueError, match="cannot carry explicit_allow"):
+        ApproverAuthorizationDecision(outcome="deny", reason="explicit_allow")
