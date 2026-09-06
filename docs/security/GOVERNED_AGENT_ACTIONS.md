@@ -394,7 +394,8 @@ authenticated != authorized != executed successfully
 ```
 
 For example, a service credential can authenticate successfully while policy still denies the requested action because its exact identity source has no matching rule. Likewise, policy can authorize a scope while the concrete executor can still fail because the target resource does not exist.
- In that case the governed failure records that execution was attempted and keeps the external side-effect result `unknown` rather than misreporting a clean non-execution.
+
+In that case the governed failure records that execution was attempted and keeps the external side-effect result `unknown` rather than misreporting a clean non-execution.
 
 ## 6. Safe mutable fixture
 
