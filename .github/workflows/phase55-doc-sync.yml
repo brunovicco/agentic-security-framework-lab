@@ -18,6 +18,38 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Normalize legacy Portuguese anchors
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("README.pt-br.md")
+          text = path.read_text()
+
+          replacements = (
+              (
+                  "O projeto mantém dois concerns MCP locais separados:\n\n```text\nagentic-security-applicability      # surface read-only de análise/applicability\nagentic-security-governed-actions   # surface controlada de ação mutável\n```",
+                  "O projeto mantém duas preocupações locais de MCP separadas:\n\n```text\nagentic-security-applicability      # superfície read-only de análise/applicability\nagentic-security-governed-actions   # superfície controlada de ação mutável\n```",
+              ),
+              (
+                  "- a evidence retornada é comparada com um segundo tool read-only que observa o estado real no smoke STDIO.\n\nO experimento MCP local não é descrito como identidade autenticada de usuário remoto nem como autorização de produção.",
+                  "- execution evidence retornada é verificada contra uma Tool read-only separada no smoke STDIO real.\n\nO experimento MCP local intencionalmente não é descrito como identidade autenticada de usuário remoto nem como autorização de produção.",
+              ),
+              (
+                  "O escopo de engenharia planejado para **v1.0** está concluído: baseline de domínio, controles determinísticos, evolução de RAG, quatro famílias de frameworks / cinco variantes de orquestração, comparação de benchmark, LiteLLM, MCP, observabilidade, avaliação final, hardening de runtime e documentação de portfólio.\n\nO desenvolvimento pós-v1.0 está evoluindo a **v1.1 Governed Agent Actions**: autorização de scope exato na Application, trusted caller context, evidence controlada de HITL approval, runtime enforcement, execução mutável segura, conformance em quatro frameworks e uma fronteira MCP local governada.\n\nO repositório continua sendo um laboratório de engenharia, não uma afirmação de certificação para produção. Trabalhos futuros podem ampliar identidade, policy, durabilidade de approvals, side effects externos e audit infrastructure sem reescrever a evidência histórica v1.0 aceita.",
+                  "O escopo planejado de engenharia da **v1.0** está completo: baseline de domínio, controles determinísticos, progressão de RAG, quatro famílias de framework / cinco variantes de orquestração, comparação de benchmark, LiteLLM, MCP, observabilidade, avaliação final, runtime hardening e documentação de portfólio.\n\nO desenvolvimento pós-v1.0 está estendendo o laboratório com **v1.1 Governed Agent Actions**: autorização application-owned por scope exato, caller context confiável, approval HITL controlado, runtime enforcement, execução mutável segura, conformance em quatro frameworks e uma fronteira MCP local governada.\n\nEste continua sendo um laboratório de engenharia, não uma afirmação de certificação de produção. Trabalho futuro pode estender identidade, policy, durabilidade de approval, side effects externos e infraestrutura de auditoria sem reescrever a evidência histórica aceita da v1.0.",
+              ),
+          )
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"legacy PT anchor: expected exactly one match, found {count}")
+              text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
       - name: Update current capability documentation
         run: python scripts/phase55_sync_docs.py
       - name: Guard documentation scope
