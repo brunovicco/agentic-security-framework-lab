@@ -14,10 +14,14 @@ from agentic_lab.application.action_authorization import (
     ProposedAction,
     StaticActionAuthorizationPolicy,
 )
-from agentic_lab.application.action_runtime import GovernedActionRuntime
+from agentic_lab.application.action_runtime import (
+    GovernedActionExecutionError,
+    GovernedActionRuntime,
+)
 
 _FINDING_RESOURCE = "finding:demo-001"
 _ALLOWED_CALLER = "remediation-agent"
+_RAW_EXECUTOR_ERROR = f"synthetic failure for {_FINDING_RESOURCE}"
 
 
 class _FailingExecutor:
@@ -147,18 +151,33 @@ def test_agno_resource_escalation_fails_closed_before_mutation() -> None:
     assert executor.execution_count == 0
 
 
-def test_agno_mutable_step_does_not_retry_executor_failure() -> None:
-    """Prevent framework retry policy from repeating a failed mutable execution."""
+def test_agno_mutable_step_preserves_governed_failure_without_retry() -> None:
+    """Preserve typed failure provenance while preventing repeated mutable execution."""
     executor = _FailingExecutor()
+    context = ActionContext(caller_id=_ALLOWED_CALLER)
+    proposed_action = _action()
     runtime = AgnoGovernedActionRuntime(
         runtime=GovernedActionRuntime(
             authorizer=_policy(),
             executor=executor,
         ),
-        context=ActionContext(caller_id=_ALLOWED_CALLER),
+        context=context,
     )
 
-    with pytest.raises(RuntimeError):
-        runtime.run(_action())
+    with pytest.raises(GovernedActionExecutionError) as caught:
+        runtime.run(proposed_action)
 
+    error = caught.value
     assert executor.calls == 1
+    assert error.evidence.proposed_action == proposed_action
+    assert error.evidence.context == context
+    assert error.evidence.authorization.outcome == "allow"
+    assert error.evidence.authorization.reason == "explicit_allow"
+    assert error.evidence.approval_status == "not_applicable"
+    assert error.evidence.execution_attempted is True
+    assert error.evidence.failure_reason == "executor_error"
+    assert error.evidence.external_side_effect_state == "unknown"
+    assert _RAW_EXECUTOR_ERROR not in error.evidence.model_dump_json()
+    assert _RAW_EXECUTOR_ERROR not in str(error)
+    assert isinstance(error.__cause__, RuntimeError)
+    assert str(error.__cause__) == _RAW_EXECUTOR_ERROR
