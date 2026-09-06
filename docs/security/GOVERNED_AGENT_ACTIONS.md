@@ -159,6 +159,21 @@ Rejected authentication must have no action execution evidence. Successful authe
 
 Authentication success is therefore a precondition for authorization, not a permission grant.
 
+### Authenticated executor failure evidence
+
+If credential verification succeeds but the delegated governed executor later raises, the authentication boundary must not disappear from the evidence trail. `AuthenticatedGovernedActionRuntime` catches `GovernedActionExecutionError` and raises `AuthenticatedGovernedActionExecutionError` with immutable `AuthenticatedActionExecutionFailureEvidence`.
+
+The authenticated failure model contains the successful `CallerAuthenticationDecision` plus the action-level `ActionExecutionFailureEvidence`. It requires the failure context to equal the exact `ActionContext` created by credential verification. Rejected authentication cannot be paired with executor-failure evidence because rejected credentials stop before authorization and execution.
+
+The authenticated error remains a subtype of `GovernedActionExecutionError`, so existing callers retain the action-level `error.evidence` contract. Authentication-aware callers additionally receive `error.authenticated_evidence`. The delegated governed error remains the Python cause, and the original executor exception remains nested beneath it; neither raw credential material nor raw executor text is copied into structured evidence.
+
+```text
+authenticated execution failure != authentication evidence loss
+authenticated failure context == credential-derived ActionContext
+```
+
+This is local provider-free evidence composition. It does not add OAuth/OIDC, credential lifecycle management, transport binding, retry, rollback, or transactional guarantees.
+
 ## 3. Deterministic authorization
 
 `StaticActionAuthorizationPolicy` is the current controlled-lab policy implementation.
@@ -385,7 +400,7 @@ executor raised != external side effect did not occur
 
 The lab does not claim rollback, compensation, automatic retry, idempotency, two-phase commit, or transactional coupling to an external system.
 
-Because evidence embeds the same `ActionContext` used by authorization, the runtime does not create a second identity or provenance channel. Raw credentials are not part of `ActionContext`, `CallerAuthenticationDecision`, `ActionExecutionEvidence`, `ActionExecutionFailureEvidence`, or `AuthenticatedActionExecutionEvidence`.
+Because evidence embeds the same `ActionContext` used by authorization, the runtime does not create a second identity or provenance channel. Raw credentials are not part of `ActionContext`, `CallerAuthenticationDecision`, `ActionExecutionEvidence`, `ActionExecutionFailureEvidence`, `AuthenticatedActionExecutionEvidence`, or `AuthenticatedActionExecutionFailureEvidence`.
 
 This distinction matters because:
 

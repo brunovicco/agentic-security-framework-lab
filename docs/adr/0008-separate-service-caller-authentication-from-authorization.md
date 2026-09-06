@@ -157,6 +157,26 @@ same caller_id != same authority when identity_source differs
 
 Framework adapters and the local MCP server remain consumers of the application policy. Their existing local fixtures explicitly use `trusted_composition`; API-key authentication is not silently added to framework or MCP inputs.
 
+## Evolution note: Phase 50
+
+Phase 49 made executor exceptions carry safe governed failure evidence, but `AuthenticatedGovernedActionRuntime` initially propagated that error unchanged. The action failure retained its trusted `ActionContext`, yet the outer authentication boundary no longer exposed the independent `CallerAuthenticationDecision` that established that context.
+
+Phase 50 adds `AuthenticatedActionExecutionFailureEvidence`, which accepts only a successful authentication decision and one `ActionExecutionFailureEvidence` whose context exactly matches the credential-derived context. Rejected authentication and context substitution are structurally invalid.
+
+`AuthenticatedGovernedActionExecutionError` subclasses `GovernedActionExecutionError`. Existing callers may therefore keep catching the governed base error and reading action-level `error.evidence`, while authentication-aware consumers can read `error.authenticated_evidence`. The authenticated error chains the delegated governed error, which in turn chains the original executor exception; raw executor text and raw credentials are not copied into the structured evidence.
+
+This preserves three separate facts on the failure path:
+
+```text
+credential verification
+    !=
+authorization / approval authority
+    !=
+executor outcome
+```
+
+Phase 50 does not add a new authentication mechanism, credential lifecycle, retry policy, rollback guarantee, or remote identity protocol.
+
 ## Security invariants
 
 ```text
@@ -167,6 +187,11 @@ raw credential not in authorization/runtime evidence
 api_key source != end-user identity
 authenticated != authorized
 same caller_id != same authority when identity_source differs
+authenticated execution failure != authentication evidence loss
+authenticated failure context == credential-derived ActionContext
+rejected authentication -> no authenticated execution-failure evidence
+raw credential not in authenticated failure evidence
+AuthenticatedGovernedActionExecutionError is a GovernedActionExecutionError
 ```
 
 ## Revisit when
@@ -175,4 +200,4 @@ Revisit this decision when a real transport requires OAuth/OIDC, mTLS, signed wo
 
 Any future mechanism must keep raw credential material outside model-controlled action proposals, derive trusted `ActionContext` before invoking action authorization, and preserve source-aware least privilege unless an explicit policy model supersedes it.
 
-Refs #152, #154, #156
+Refs #152, #154, #156, #180

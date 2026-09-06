@@ -8,6 +8,8 @@
 - `ActionExecutionEvidence` records approver authorization separately from caller authorization and approval lifecycle evidence.
 - `ActionExecutionFailureEvidence` records the exact authority that permitted an executor invocation which raised, while fixing `execution_attempted=true`, `external_side_effect_state=unknown`, and `failure_reason=executor_error`.
 - `GovernedActionExecutionError` carries safe failure evidence as a `RuntimeError` subtype and chains the original executor exception locally without copying raw executor error text into structured evidence.
+- `AuthenticatedActionExecutionFailureEvidence` binds one successful caller-authentication decision to the exact governed executor-failure context it established.
+- `AuthenticatedGovernedActionExecutionError` preserves authentication evidence across executor failure while remaining a subtype of `GovernedActionExecutionError` for existing catch behavior.
 
 ### Hardened
 
@@ -18,6 +20,7 @@
 - `ActionExecutionEvidence` now validates the complete governed-action state machine: caller deny is terminal, direct allow is HITL-free and executed, and every HITL lifecycle state requires exactly the human evidence, approver decision, binding, and execution flag that the runtime can legally produce.
 - Executor exceptions after an authorized direct or validated-HITL path no longer leave the authority chain unstructured; the runtime raises typed governed failure evidence without claiming that the external side effect committed or did not commit.
 - Failed HITL executor attempts do not restore consumed approval authority, and structured failure evidence excludes raw executor exception content by construction.
+- Authentication-first composition now re-wraps governed executor failures with the exact `credential_verified` evidence and rejects rejected-authentication or context-substitution combinations without copying credential or raw executor content.
 
 ### Evidence
 
@@ -29,6 +32,7 @@
 - This is structural evidence integrity only; it does not provide cryptographic signing, tamper-proof persistence, or transactional proof for an external side effect.
 - Executor-failure regressions cover direct allow, validated HITL, consumed-approval retry, impossible failure-evidence authority states, raw-error exclusion, and an authorized missing-resource adapter failure whose original `LookupError` remains only as the local exception cause.
 - Failure evidence deliberately reports the external side-effect state as `unknown`; the lab does not claim rollback, compensation, idempotent retry, two-phase commit, or distributed transaction semantics.
+- Authenticated-failure regressions prove base-error compatibility, exact credential-derived context binding, rejected-credential short-circuiting, nested governed/original exception chaining, and absence of the raw API key from structured failure evidence.
 
 ## 1.3.0 - 2026-09-05
 
