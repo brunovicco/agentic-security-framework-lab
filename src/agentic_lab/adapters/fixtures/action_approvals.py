@@ -2,6 +2,7 @@
 
 from collections import defaultdict, deque
 from collections.abc import Iterable
+from threading import Lock
 from typing import Literal
 
 from agentic_lab.application.action_approval import ApprovalClaim, HumanApprovalEvidence
@@ -44,35 +45,39 @@ class InMemoryActionApprovalProvider:
 
         self._approvals = dict(queues)
         self._approval_states = approval_states
+        self._lock = Lock()
 
     def claim_approval(
         self,
         proposed_action: ProposedAction,
         context: ActionContext,
     ) -> ApprovalClaim:
-        """Remove and report one approval capability for the exact requested scope."""
+        """Atomically remove and report one approval for the exact requested scope."""
         key = _approval_key(proposed_action, context)
-        approvals = self._approvals.get(key)
-        if not approvals:
-            return ApprovalClaim(status="missing")
 
-        approval = approvals.popleft()
-        if not approvals:
-            del self._approvals[key]
+        with self._lock:
+            approvals = self._approvals.get(key)
+            if not approvals:
+                return ApprovalClaim(status="missing")
 
-        state = self._approval_states[approval.approval_id]
-        if state == "revoked":
-            return ApprovalClaim(status="revoked", approval=approval)
-        if state != "available":
-            raise RuntimeError(f"approval is not claimable: {approval.approval_id}")
+            approval = approvals.popleft()
+            if not approvals:
+                del self._approvals[key]
 
-        self._approval_states[approval.approval_id] = "claimed"
-        return ApprovalClaim(status="claimed", approval=approval)
+            state = self._approval_states[approval.approval_id]
+            if state == "revoked":
+                return ApprovalClaim(status="revoked", approval=approval)
+            if state != "available":
+                raise RuntimeError(f"approval is not claimable: {approval.approval_id}")
+
+            self._approval_states[approval.approval_id] = "claimed"
+            return ApprovalClaim(status="claimed", approval=approval)
 
     def revoke_approval(self, approval_id: str) -> bool:
-        """Revoke one exact approval only while its single-use capability is unclaimed."""
-        if self._approval_states.get(approval_id) != "available":
-            return False
+        """Atomically revoke one exact approval while its capability is unclaimed."""
+        with self._lock:
+            if self._approval_states.get(approval_id) != "available":
+                return False
 
-        self._approval_states[approval_id] = "revoked"
-        return True
+            self._approval_states[approval_id] = "revoked"
+            return True
