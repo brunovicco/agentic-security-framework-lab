@@ -13,8 +13,10 @@ ApprovalStatus = Literal[
     "invalid",
     "not_yet_valid",
     "expired",
+    "revoked",
     "validated",
 ]
+ApprovalClaimStatus = Literal["missing", "claimed", "revoked"]
 
 
 class HumanApprovalEvidence(BaseModel):
@@ -37,6 +39,27 @@ class HumanApprovalEvidence(BaseModel):
         """Require one non-empty validity window for trusted approval evidence."""
         if self.expires_at <= self.approved_at:
             raise ValueError("expires_at must be later than approved_at")
+        return self
+
+
+class ApprovalClaim(BaseModel):
+    """Record whether one approval claim found usable, revoked, or no evidence."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
+    status: ApprovalClaimStatus
+    approval: HumanApprovalEvidence | None = None
+
+    @model_validator(mode="after")
+    def validate_claim_evidence(self) -> Self:
+        """Keep claim status and attached human evidence structurally consistent."""
+        if self.status == "missing" and self.approval is not None:
+            raise ValueError("missing approval claim cannot contain approval evidence")
+        if self.status != "missing" and self.approval is None:
+            raise ValueError(f"{self.status} approval claim requires approval evidence")
         return self
 
 
@@ -66,8 +89,16 @@ class ActionApprovalProvider(Protocol):
         self,
         proposed_action: ProposedAction,
         context: ActionContext,
-    ) -> HumanApprovalEvidence | None:
-        """Atomically return one unused approval at most once for the requested scope."""
+    ) -> ApprovalClaim:
+        """Atomically return one explicit single-use claim outcome for the requested scope."""
+        ...
+
+
+class ActionApprovalRevoker(Protocol):
+    """Revoke an unclaimed approval capability through a trusted control-plane boundary."""
+
+    def revoke_approval(self, approval_id: str) -> bool:
+        """Return True only when one still-unclaimed approval transitions to revoked."""
         ...
 
 
@@ -78,9 +109,9 @@ class NoActionApprovalProvider:
         self,
         proposed_action: ProposedAction,
         context: ActionContext,
-    ) -> HumanApprovalEvidence | None:
-        """Return no approval so approval-required actions remain blocked."""
-        return None
+    ) -> ApprovalClaim:
+        """Return an explicit missing claim so approval-required actions remain blocked."""
+        return ApprovalClaim(status="missing")
 
 
 NULL_ACTION_APPROVAL_PROVIDER: ActionApprovalProvider = NoActionApprovalProvider()

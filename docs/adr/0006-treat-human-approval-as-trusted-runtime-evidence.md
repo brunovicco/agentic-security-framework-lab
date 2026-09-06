@@ -16,6 +16,8 @@ A later hardening review identified an additional requirement: trusted approval 
 
 After the single-use capability model was in place, a second temporal gap remained: an approval that had never been claimed could stay valid indefinitely. Old human intent must not authorize a much later mutable side effect merely because the approval was still unused.
 
+After freshness was enforced, a third lifecycle gap remained: a still-valid approval could not be explicitly withdrawn before use. Trusted control-plane intent needs a way to revoke an unused capability without turning revocation into model input or rewriting authorization policy.
+
 ## Decision
 
 Human approval is represented as separate trusted application evidence.
@@ -33,11 +35,13 @@ The identifiers are useful local audit evidence in this lab, but they are not au
 
 `ActionApprovalProvider` is the framework-neutral port used by `GovernedActionRuntime` to **claim** approval evidence. The default provider returns no approval, so an application that does not configure a trusted HITL source remains fail-closed.
 
-The port exposes `claim_approval(...)`, not a reusable read operation. A successful claim transfers one unused approval capability to one runtime attempt. The controlled in-memory provider removes the claimed approval from its available set, so the same evidence cannot be replayed.
+The port exposes `claim_approval(...)`, not a reusable read operation. It returns an explicit `ApprovalClaim` with `missing`, `claimed`, or `revoked` status. A successful `claimed` result transfers one unused approval capability to one runtime attempt. The controlled in-memory provider removes that queued capability from future claims, so the same evidence cannot be replayed.
+
+`ActionApprovalRevoker` is a separate trusted control-plane port. It can revoke one exact `approval_id` only while that capability is still unclaimed. Revocation does not mutate `HumanApprovalEvidence`, does not come from `ProposedAction`, and does not override deterministic authorization policy.
 
 The runtime consults approval evidence only when deterministic policy returns `require_human_approval`.
 
-The runtime then records one of six low-cardinality approval states:
+The runtime then records one of seven low-cardinality approval states:
 
 ```text
 not_applicable
@@ -45,6 +49,7 @@ missing
 invalid
 not_yet_valid
 expired
+revoked
 validated
 ```
 
@@ -69,6 +74,16 @@ If trusted current time is before `approved_at`, the runtime records `not_yet_va
 Temporal validation happens only after policy requires HITL, one approval has been claimed, and exact action/context binding has been confirmed. Normal `allow`, terminal `deny`, missing approval, and scope-mismatch paths therefore do not depend on time unnecessarily.
 
 A future-dated or expired approval is already claimed when temporal failure is discovered, so it stays consumed. Retry requires fresh human evidence rather than waiting for or resurrecting the same capability.
+
+### Explicit revocation
+
+A valid, unused approval is not irrevocable authority. Trusted control-plane code may call `revoke_approval(approval_id)` before claim. The controlled provider changes that capability from `available` to `revoked`; repeated revocation attempts return false instead of manufacturing new lifecycle state.
+
+When the revoked capability reaches its exact queued claim position, `claim_approval(...)` returns `ApprovalClaim(status="revoked", approval=...)`. `GovernedActionRuntime` preserves the original `require_human_approval` policy decision, records approval status `revoked`, and blocks before consulting approval time or invoking the mutable executor. The revoked capability is then absent from later claims, so retry receives `missing` unless another distinct approval exists.
+
+Revocation is deliberately pre-claim only. Once a capability has already been claimed, `revoke_approval(...)` returns false and cannot retroactively cancel the runtime attempt to which authority was transferred. Solving cancellation after claim would require a different coordination model and is outside this process-local experiment.
+
+Revocation targets immutable approval identity, not broad action scope. Revoking one approval does not revoke a second distinct approval for the same action/context.
 
 ### Single-use and failure semantics
 
@@ -99,7 +114,7 @@ This produces stronger evidence than collapsing both into a final allow flag.
 
 `InMemoryActionApprovalProvider` exists only for deterministic controlled experiments. It begins with the approvals explicitly supplied to it and never auto-approves an action based on model output, action content, or policy outcome.
 
-Each approval is a single-use capability. A matching claim removes that exact approval from the provider. Multiple unique approvals may be supplied for the same scope when multiple independent executions were separately approved.
+Each approval is a single-use capability with process-local lifecycle state `available`, `revoked`, or `claimed`. A matching claim removes that queued capability from future use. Multiple unique approvals may be supplied for the same scope when multiple independent executions were separately approved.
 
 The fixture proves trust-boundary and anti-replay mechanics; it is not production HITL infrastructure.
 
@@ -144,13 +159,16 @@ Rejected because the current increment only needs to prove trusted approval sepa
 - explicit deny stays terminal;
 - normal allow does not consume HITL evidence;
 - executor failure does not silently restore an already claimed approval;
+- trusted control-plane code can withdraw one still-unclaimed approval without exposing revocation to model-controlled inputs;
+- revoked approval is distinguishable from missing, invalid, expired, and validated evidence;
 - authorization outcome, approval status, and execution occurrence remain independently observable;
 - frameworks continue consuming the governed runtime without duplicating HITL policy.
 
 ### Trade-offs
 
 - synthetic approver identity is not authentication proof;
-- durable approval persistence, revocation, and multi-party approval are not modeled yet;
+- durable approval persistence, durable/distributed revocation, and multi-party approval are not modeled yet;
+- process-local revocation cannot retroactively cancel an approval after its capability has been claimed;
 - temporal validity is enforced locally, but this does not prove clock synchronization or distributed expiry enforcement across processes;
 - the in-memory claim operation is process-local and does not prove distributed transactional atomicity;
 - the in-memory provider is controlled lab infrastructure only.
@@ -170,7 +188,11 @@ model claim of approval != trusted human approval
 
 policy deny + human approval = deny
 
-require_human_approval + missing/invalid/not-yet-valid/expired approval = no execution
+require_human_approval + missing/invalid/not-yet-valid/expired/revoked approval = no execution
+
+valid + unused approval != irrevocable authority
+
+revoked unclaimed approval = no execution
 
 valid approval time = approved_at <= trusted_now < expires_at
 
@@ -179,4 +201,4 @@ one claimed approval = at most one execution attempt
 consumed approval + retry = new approval required
 ```
 
-Refs #131, #145, #163
+Refs #131, #145, #163, #165

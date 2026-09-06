@@ -214,6 +214,7 @@ The runtime records one of these approval states:
 - `invalid`
 - `not_yet_valid`
 - `expired`
+- `revoked`
 - `validated`
 
 Only exact-match approval evidence that is valid at trusted runtime time can become `validated` and release an approval-required action for execution.
@@ -224,7 +225,7 @@ The default provider is fail-closed and returns no approval. The in-memory appro
 
 Approval is modeled as a **single-use capability**, not a reusable boolean or lookup result.
 
-`ActionApprovalProvider.claim_approval(...)` returns one unused approval at most once. The controlled in-memory provider removes a matching approval when it is claimed. A second identical request therefore receives `missing` unless a second, distinct human approval was supplied for that same scope.
+`ActionApprovalProvider.claim_approval(...)` returns an explicit claim outcome: `missing`, `claimed`, or `revoked`. The controlled in-memory provider removes the matching queued capability when its claim position is encountered. A second identical request therefore receives `missing` unless a second, distinct human approval was supplied for that same scope.
 
 The claim happens before the mutable executor runs. If the claimed evidence is invalid, or if the executor fails after the claim, the approval is not restored automatically. A retry requires fresh human approval.
 
@@ -242,7 +243,17 @@ A claimed approval before its issuance becomes `not_yet_valid`; a claim at or af
 
 Tests use deterministic fixed clocks rather than sleeps. The adversarial suite proves that an old unused approval cannot authorize a late mutation, and the framework conformance matrix includes an expired-approval scenario across LangGraph, CrewAI, LlamaIndex, and Agno.
 
-This proves local application-owned temporal enforcement, not durable revocation, distributed clock synchronization, or production approval workflow infrastructure.
+This proves local application-owned temporal enforcement, not distributed clock synchronization or production approval workflow infrastructure.
+
+### Approval revocation
+
+Freshness limits how long authority can live, but it does not let trusted control-plane code withdraw a still-valid approval before use. Phase 42 adds `ActionApprovalRevoker` as a separate trusted boundary for that lifecycle operation. Revocation is addressed by immutable `approval_id`; it is not a field in `ProposedAction` and is not controlled by an orchestration framework or model.
+
+The controlled in-memory provider tracks each capability as `available`, `revoked`, or `claimed`. `revoke_approval(...)` succeeds only while the exact capability is still available. When a revoked capability reaches its queued claim position, the provider returns explicit `revoked` evidence, and `GovernedActionRuntime` blocks before freshness checks or mutable execution. A retry cannot reuse the revoked capability.
+
+Revocation is intentionally not retroactive after claim. Once a runtime attempt has claimed the capability, later revocation returns false; cancellation of an already-running or externally coordinated side effect would require a different distributed control protocol. Revoking one approval id also leaves other distinct approvals for the same scope untouched.
+
+Adversarial coverage proves a revoked, otherwise fresh production approval produces zero side effects, while cross-framework conformance proves direct runtime, LangGraph, CrewAI, LlamaIndex, and Agno preserve the same `revoked` result. This is provider-free process-local evidence, not durable or distributed revocation infrastructure.
 
 ## 5. Runtime enforcement
 
@@ -256,7 +267,8 @@ flowchart TD
     A -->|allow| X[Execute adapter]
     A -->|require_human_approval| H[Claim one unused trusted approval]
     H -->|missing or invalid| B[Return evidence: no execution]
-    H -->|exact scope| T[Validate trusted approval time]
+    H -->|revoked| B
+    H -->|claimed exact scope| T[Validate trusted approval time]
     T -->|not yet valid or expired| B
     T -->|validated| X
     X --> E[Return execution evidence]
@@ -271,7 +283,7 @@ The runtime returns `ActionExecutionEvidence` containing independent facts about
 - the proposed action;
 - trusted caller context, including caller identity provenance;
 - authorization decision and reason;
-- approval status, bounded approval evidence, and temporal validity when present;
+- approval status, claim lifecycle, bounded approval evidence, and temporal validity when present;
 - whether execution occurred.
 
 Because evidence embeds the same `ActionContext` used by authorization, the runtime does not create a second identity or provenance channel. Raw credentials are not part of `ActionContext`, `CallerAuthenticationDecision`, `ActionExecutionEvidence`, or `AuthenticatedActionExecutionEvidence`.

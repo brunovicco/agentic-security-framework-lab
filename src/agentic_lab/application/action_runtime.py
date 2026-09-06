@@ -79,8 +79,8 @@ class GovernedActionRuntime:
             )
 
         if decision.outcome == "require_human_approval":
-            approval = self._approval_provider.claim_approval(proposed_action, context)
-            if approval is None:
+            claim = self._approval_provider.claim_approval(proposed_action, context)
+            if claim.status == "missing":
                 return ActionExecutionEvidence(
                     proposed_action=proposed_action,
                     context=context,
@@ -90,12 +90,26 @@ class GovernedActionRuntime:
                     execution_occurred=False,
                 )
 
+            approval = claim.approval
+            if approval is None:
+                raise RuntimeError("non-missing approval claim must contain approval evidence")
+
             if approval.proposed_action != proposed_action or approval.context != context:
                 return ActionExecutionEvidence(
                     proposed_action=proposed_action,
                     context=context,
                     authorization=decision,
                     approval_status="invalid",
+                    human_approval=approval,
+                    execution_occurred=False,
+                )
+
+            if claim.status == "revoked":
+                return ActionExecutionEvidence(
+                    proposed_action=proposed_action,
+                    context=context,
+                    authorization=decision,
+                    approval_status="revoked",
                     human_approval=approval,
                     execution_occurred=False,
                 )

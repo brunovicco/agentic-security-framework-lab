@@ -286,6 +286,41 @@ def test_stale_unused_human_approval_cannot_authorize_late_mutation() -> None:
     assert executor.is_acknowledged(FINDING_RESOURCE) is False
 
 
+def test_revoked_unused_human_approval_cannot_authorize_mutation() -> None:
+    """Prevent a valid but explicitly revoked capability from causing a side effect."""
+    executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])
+    proposed_action = _action(environment="production")
+    context = _context()
+    approval = HumanApprovalEvidence(
+        approval_id="approval-revoked-001",
+        approver_id="soc-reviewer",
+        proposed_action=proposed_action,
+        context=context,
+        approved_at=APPROVED_AT,
+        expires_at=EXPIRES_AT,
+    )
+    provider = InMemoryActionApprovalProvider([approval])
+    assert provider.revoke_approval(approval.approval_id) is True
+    runtime = GovernedActionRuntime(
+        authorizer=_policy(),
+        executor=executor,
+        approval_provider=provider,
+        approval_clock=FixedApprovalClock(VALID_NOW),
+    )
+
+    revoked = runtime.execute(proposed_action, context)
+    retry = runtime.execute(proposed_action, context)
+
+    assert revoked.authorization.outcome == "require_human_approval"
+    assert revoked.approval_status == "revoked"
+    assert revoked.human_approval == approval
+    assert revoked.execution_occurred is False
+    assert retry.approval_status == "missing"
+    assert retry.execution_occurred is False
+    assert executor.execution_count == 0
+    assert executor.is_acknowledged(FINDING_RESOURCE) is False
+
+
 def test_tool_substitution_is_authorized_as_the_actual_proposed_action() -> None:
     """Deny a substituted broader operation despite an allowed nearby capability."""
     executor = InMemoryFindingAcknowledgementExecutor([FINDING_RESOURCE])

@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from agentic_lab.application.action_approval import (
     NULL_ACTION_APPROVAL_PROVIDER,
+    ApprovalClaim,
     HumanApprovalEvidence,
 )
 from agentic_lab.application.action_authorization import ActionContext, ProposedAction
@@ -25,6 +26,17 @@ def _action() -> ProposedAction:
 
 def _context() -> ActionContext:
     return ActionContext(caller_id="remediation-agent")
+
+
+def _approval() -> HumanApprovalEvidence:
+    return HumanApprovalEvidence(
+        approval_id="approval-001",
+        approver_id="soc-reviewer",
+        proposed_action=_action(),
+        context=_context(),
+        approved_at=APPROVED_AT,
+        expires_at=EXPIRES_AT,
+    )
 
 
 def test_human_approval_binds_exact_action_context_and_time_window() -> None:
@@ -103,6 +115,30 @@ def test_human_approval_rejects_unmodeled_fields() -> None:
         )
 
 
+@pytest.mark.parametrize("status", ["claimed", "revoked"])
+def test_non_missing_claim_requires_human_approval_evidence(status: str) -> None:
+    """Reject claim outcomes that assert approval state without trusted evidence."""
+    with pytest.raises(ValidationError, match="requires approval evidence"):
+        ApprovalClaim.model_validate({"status": status})
+
+
+def test_missing_claim_rejects_attached_human_approval() -> None:
+    """Keep absence of approval distinct from any concrete approval capability."""
+    with pytest.raises(ValidationError, match="cannot contain approval evidence"):
+        ApprovalClaim(status="missing", approval=_approval())
+
+
+def test_claimed_and_revoked_claims_preserve_exact_human_evidence() -> None:
+    """Carry the immutable approval through both usable and revoked claim outcomes."""
+    approval = _approval()
+
+    assert ApprovalClaim(status="claimed", approval=approval).approval == approval
+    assert ApprovalClaim(status="revoked", approval=approval).approval == approval
+
+
 def test_null_approval_provider_fails_closed() -> None:
-    """Return no approval when no trusted HITL source is configured."""
-    assert NULL_ACTION_APPROVAL_PROVIDER.claim_approval(_action(), _context()) is None
+    """Return an explicit missing claim when no trusted HITL source is configured."""
+    assert NULL_ACTION_APPROVAL_PROVIDER.claim_approval(
+        _action(),
+        _context(),
+    ) == ApprovalClaim(status="missing")

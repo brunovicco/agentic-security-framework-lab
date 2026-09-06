@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from agentic_lab.adapters.fixtures.action_approvals import InMemoryActionApprovalProvider
-from agentic_lab.application.action_approval import HumanApprovalEvidence
+from agentic_lab.application.action_approval import ApprovalClaim, HumanApprovalEvidence
 from agentic_lab.application.action_authorization import ActionContext, ProposedAction
 
 FINDING_RESOURCE = "finding:demo-001"
@@ -42,7 +42,7 @@ def test_empty_provider_does_not_auto_approve() -> None:
     """Require approval evidence to be supplied explicitly."""
     provider = InMemoryActionApprovalProvider()
 
-    assert provider.claim_approval(_action(), _context()) is None
+    assert provider.claim_approval(_action(), _context()) == ApprovalClaim(status="missing")
 
 
 def test_exact_scope_claims_explicitly_supplied_approval_once() -> None:
@@ -50,8 +50,11 @@ def test_exact_scope_claims_explicitly_supplied_approval_once() -> None:
     approval = _approval()
     provider = InMemoryActionApprovalProvider([approval])
 
-    assert provider.claim_approval(_action(), _context()) == approval
-    assert provider.claim_approval(_action(), _context()) is None
+    assert provider.claim_approval(_action(), _context()) == ApprovalClaim(
+        status="claimed",
+        approval=approval,
+    )
+    assert provider.claim_approval(_action(), _context()) == ApprovalClaim(status="missing")
 
 
 def test_different_resource_or_caller_does_not_claim_approval() -> None:
@@ -59,9 +62,17 @@ def test_different_resource_or_caller_does_not_claim_approval() -> None:
     approval = _approval()
     provider = InMemoryActionApprovalProvider([approval])
 
-    assert provider.claim_approval(_action("finding:demo-999"), _context()) is None
-    assert provider.claim_approval(_action(), _context("observer-agent")) is None
-    assert provider.claim_approval(_action(), _context()) == approval
+    assert provider.claim_approval(
+        _action("finding:demo-999"),
+        _context(),
+    ) == ApprovalClaim(status="missing")
+    assert provider.claim_approval(_action(), _context("observer-agent")) == ApprovalClaim(
+        status="missing"
+    )
+    assert provider.claim_approval(_action(), _context()) == ApprovalClaim(
+        status="claimed",
+        approval=approval,
+    )
 
 
 def test_distinct_approvals_can_authorize_distinct_executions_of_same_scope() -> None:
@@ -70,9 +81,66 @@ def test_distinct_approvals_can_authorize_distinct_executions_of_same_scope() ->
     second = _approval("approval-002")
     provider = InMemoryActionApprovalProvider([first, second])
 
-    assert provider.claim_approval(_action(), _context()) == first
-    assert provider.claim_approval(_action(), _context()) == second
-    assert provider.claim_approval(_action(), _context()) is None
+    assert provider.claim_approval(_action(), _context()) == ApprovalClaim(
+        status="claimed",
+        approval=first,
+    )
+    assert provider.claim_approval(_action(), _context()) == ApprovalClaim(
+        status="claimed",
+        approval=second,
+    )
+    assert provider.claim_approval(_action(), _context()) == ApprovalClaim(status="missing")
+
+
+def test_unclaimed_approval_can_be_revoked_once_and_never_claimed_as_usable() -> None:
+    """Turn one still-unused capability into sticky revoked evidence before execution."""
+    approval = _approval()
+    provider = InMemoryActionApprovalProvider([approval])
+
+    assert provider.revoke_approval(approval.approval_id) is True
+    assert provider.revoke_approval(approval.approval_id) is False
+    assert provider.claim_approval(_action(), _context()) == ApprovalClaim(
+        status="revoked",
+        approval=approval,
+    )
+    assert provider.claim_approval(_action(), _context()) == ApprovalClaim(status="missing")
+    assert provider.revoke_approval(approval.approval_id) is False
+
+
+def test_claimed_approval_cannot_be_retroactively_revoked() -> None:
+    """Keep revocation limited to authority not yet transferred to a runtime attempt."""
+    approval = _approval()
+    provider = InMemoryActionApprovalProvider([approval])
+
+    assert provider.claim_approval(_action(), _context()) == ApprovalClaim(
+        status="claimed",
+        approval=approval,
+    )
+    assert provider.revoke_approval(approval.approval_id) is False
+
+
+def test_revoking_one_approval_does_not_revoke_distinct_capability_for_same_scope() -> None:
+    """Target revocation by immutable approval id rather than broad action scope."""
+    first = _approval("approval-001")
+    second = _approval("approval-002")
+    provider = InMemoryActionApprovalProvider([first, second])
+
+    assert provider.revoke_approval(first.approval_id) is True
+    assert provider.claim_approval(_action(), _context()) == ApprovalClaim(
+        status="revoked",
+        approval=first,
+    )
+    assert provider.claim_approval(_action(), _context()) == ApprovalClaim(
+        status="claimed",
+        approval=second,
+    )
+
+
+def test_unknown_approval_id_cannot_be_revoked() -> None:
+    """Do not manufacture revocation state for approval capabilities that do not exist."""
+    provider = InMemoryActionApprovalProvider([_approval()])
+
+    assert provider.revoke_approval("approval-unknown") is False
 
 
 def test_duplicate_approval_id_is_rejected() -> None:
