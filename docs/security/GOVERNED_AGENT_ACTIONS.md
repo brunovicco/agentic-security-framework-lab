@@ -445,13 +445,28 @@ The framework orchestrates. The application decides and enforces.
 
 Existing framework adapters continue to use their explicitly injected local `trusted_composition` context. Phase 37 migrates their caller-policy fixtures to declare that source explicitly, so framework behavior cannot depend on an implicit source default inside authorization policy. Phase 47 keeps approver entitlement in the same shared application runtime; cross-framework conformance includes an unauthorized-approver scenario rather than duplicating HITL policy inside LangGraph, CrewAI, LlamaIndex, or Agno. API-key handling remains an application authentication concern rather than framework input.
 
-### Agno retry hardening
+### Agno retry and failure-provenance hardening
 
 The Agno mutable step explicitly uses `max_retries=0` and fail-closed step behavior.
 
-This is security-relevant because an implicit framework retry around a mutating executor could multiply side effects after a partial failure.
+This is security-relevant because an implicit framework retry around a mutating executor could multiply side effects after a partial failure. The zero-retry setting therefore remains explicit even though authorization and executor-failure semantics belong to the application runtime rather than Agno.
 
-A regression test uses a failing executor and proves it is invoked exactly once.
+A second boundary matters after that one allowed attempt fails. `GovernedActionRuntime` raises `GovernedActionExecutionError` with `ActionExecutionFailureEvidence`, but Agno represents the workflow itself as `RunStatus.error`. The adapter must not replace the application-owned governed failure with a new generic framework error merely because the workflow status is error.
+
+The Agno adapter therefore captures only `GovernedActionExecutionError` while the Step is executing and, when the Workflow reports `RunStatus.error`, re-raises that same governed exception. Non-governed Agno failures still use the adapter's generic framework error path.
+
+This preserves two independent facts:
+
+```text
+Agno mutable executor failure
+    -> exactly one executor invocation
+    -> original GovernedActionExecutionError survives
+    -> ActionExecutionFailureEvidence remains inspectable
+```
+
+Regression coverage requires the exact caller context, proposed action and authorization evidence, `execution_attempted=true`, `failure_reason=executor_error`, and `external_side_effect_state=unknown`. Raw executor exception text remains excluded from structured evidence and the governed error message; it remains available only as the local Python exception cause.
+
+This does not make Agno the owner of failure semantics and does not add retry, idempotency, rollback, compensation, or transaction guarantees.
 
 ## 8. Cross-framework conformance
 
