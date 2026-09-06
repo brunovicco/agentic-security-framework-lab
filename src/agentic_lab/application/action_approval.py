@@ -11,6 +11,7 @@ ApprovalStatus = Literal[
     "not_applicable",
     "missing",
     "invalid",
+    "unauthorized_approver",
     "not_yet_valid",
     "expired",
     "revoked",
