@@ -3,14 +3,18 @@
 import asyncio
 import json
 
-from mcp import Client
+from mcp import Client, MCPError
+from mcp.types import INTERNAL_ERROR
 from mcp_governed_action_server import mcp
 
 _MUTABLE_TOOL = "acknowledge_finding"
 _STATE_TOOL = "get_finding_acknowledgement_state"
 _FINDING_RESOURCE = "finding:demo-001"
+_FAILURE_RESOURCE = "finding:missing"
 _LOCAL_CALLER_ID = "local-mcp-host"
 _LOCAL_IDENTITY_SOURCE = "trusted_composition"
+_PROTOCOL_FAILURE_MESSAGE = "governed action execution outcome is unknown"
+_RAW_EXECUTOR_ERROR = "finding does not exist"
 
 
 def _require_mapping(value: object, label: str) -> dict[str, object]:
@@ -67,6 +71,55 @@ def _assert_state(payload: object, *, acknowledged: bool, execution_count: int) 
     }
     if document != expected:
         raise RuntimeError(f"Unexpected finding state: {document!r}")
+
+
+def _assert_uncertain_execution_protocol_error(error: MCPError) -> None:
+    """Require host-only governed evidence for one post-executor uncertain outcome."""
+    if error.error.code != INTERNAL_ERROR:
+        raise RuntimeError(f"Unexpected MCP error code: {error.error.code!r}")
+    if error.error.message != _PROTOCOL_FAILURE_MESSAGE:
+        raise RuntimeError(f"Unexpected MCP error message: {error.error.message!r}")
+
+    data = _require_mapping(error.error.data, "MCP protocol error data")
+    serialized_data = json.dumps(data, sort_keys=True)
+    if _RAW_EXECUTOR_ERROR in serialized_data:
+        raise RuntimeError("Raw executor error leaked into MCP protocol failure data")
+
+    execution_failure = _require_mapping(
+        data.get("execution_failure"),
+        "governed execution failure",
+    )
+    expected_context = {
+        "caller_id": _LOCAL_CALLER_ID,
+        "identity_source": _LOCAL_IDENTITY_SOURCE,
+    }
+    if _require_mapping(execution_failure.get("context"), "failure context") != expected_context:
+        raise RuntimeError("Failure execution context diverged from trusted identity")
+    proposed_action = _require_mapping(
+        execution_failure.get("proposed_action"),
+        "failed proposed action",
+    )
+    expected_action = {
+        "action": _MUTABLE_TOOL,
+        "resource": _FAILURE_RESOURCE,
+        "environment": "test",
+    }
+    if proposed_action != expected_action:
+        raise RuntimeError(f"Unexpected failed proposed action: {proposed_action!r}")
+    authorization = _require_mapping(
+        execution_failure.get("authorization"),
+        "failure authorization",
+    )
+    if authorization != {"outcome": "allow", "reason": "explicit_allow"}:
+        raise RuntimeError(f"Unexpected failure authorization: {authorization!r}")
+    if execution_failure.get("approval_status") != "not_applicable":
+        raise RuntimeError("Direct governed failure unexpectedly carried HITL state")
+    if execution_failure.get("execution_attempted") is not True:
+        raise RuntimeError("MCP failure evidence must record executor invocation")
+    if execution_failure.get("external_side_effect_state") != "unknown":
+        raise RuntimeError("MCP failure evidence must preserve unknown side-effect state")
+    if execution_failure.get("failure_reason") != "executor_error":
+        raise RuntimeError("MCP failure evidence must preserve closed executor failure reason")
 
 
 async def _call_state(client: Client) -> dict[str, object]:
@@ -172,6 +225,20 @@ async def _check() -> dict[str, object]:
         )
         _assert_state(await _call_state(client), acknowledged=False, execution_count=0)
 
+        try:
+            uncertain = await client.call_tool(
+                _MUTABLE_TOOL,
+                {"resource": _FAILURE_RESOURCE, "environment": "test"},
+            )
+        except MCPError as exc:
+            _assert_uncertain_execution_protocol_error(exc)
+        else:
+            raise RuntimeError(
+                "Uncertain mutable execution must raise a host-only MCP protocol error; "
+                f"received Tool result is_error={uncertain.is_error!r}"
+            )
+        _assert_state(await _call_state(client), acknowledged=False, execution_count=0)
+
         allowed = await client.call_tool(
             _MUTABLE_TOOL,
             {"resource": _FINDING_RESOURCE, "environment": "test"},
@@ -197,6 +264,9 @@ async def _check() -> dict[str, object]:
             "denied_side_effects": 0,
             "approval_required_side_effects": 0,
             "scope_escalation_side_effects": 0,
+            "uncertain_execution_protocol_error": True,
+            "uncertain_execution_model_visible_tool_error": False,
+            "uncertain_execution_side_effect_state": "unknown",
             "allowed_side_effects": 1,
         }
 

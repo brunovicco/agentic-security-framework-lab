@@ -6,16 +6,20 @@ import os
 import tomllib
 from pathlib import Path
 
-from mcp import ClientSession, StdioServerParameters
+from mcp import ClientSession, MCPError, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.types import INTERNAL_ERROR
 
 _CONFIG_PATH = Path(".codex/config.toml")
 _SERVER_NAME = "agentic-security-governed-actions"
 _MUTABLE_TOOL = "acknowledge_finding"
 _STATE_TOOL = "get_finding_acknowledgement_state"
 _FINDING_RESOURCE = "finding:demo-001"
+_FAILURE_RESOURCE = "finding:missing"
 _LOCAL_CALLER_ID = "local-mcp-host"
 _LOCAL_IDENTITY_SOURCE = "trusted_composition"
+_PROTOCOL_FAILURE_MESSAGE = "governed action execution outcome is unknown"
+_RAW_EXECUTOR_ERROR = "finding does not exist"
 
 
 def _load_server_parameters() -> StdioServerParameters:
@@ -94,6 +98,55 @@ def _assert_runtime_result(
         raise RuntimeError(f"Unexpected execution flag: {document.get('execution_occurred')!r}")
 
 
+def _assert_uncertain_execution_protocol_error(error: MCPError) -> None:
+    """Require host-only governed evidence for one uncertain mutable execution."""
+    if error.error.code != INTERNAL_ERROR:
+        raise RuntimeError(f"Unexpected uncertain-execution MCP code: {error.error.code!r}")
+    if error.error.message != _PROTOCOL_FAILURE_MESSAGE:
+        raise RuntimeError(f"Unexpected uncertain-execution MCP message: {error.error.message!r}")
+
+    data = _require_mapping(error.error.data, "uncertain execution MCP data")
+    serialized_data = json.dumps(data, sort_keys=True)
+    if _RAW_EXECUTOR_ERROR in serialized_data:
+        raise RuntimeError("Raw executor error leaked into uncertain-execution MCP data")
+
+    execution_failure = _require_mapping(
+        data.get("execution_failure"),
+        "execution failure evidence",
+    )
+    expected_context = {
+        "caller_id": _LOCAL_CALLER_ID,
+        "identity_source": _LOCAL_IDENTITY_SOURCE,
+    }
+    if (
+        _require_mapping(execution_failure.get("context"), "failure execution context")
+        != expected_context
+    ):
+        raise RuntimeError("Failure execution context diverged from trusted identity")
+    action = _require_mapping(execution_failure.get("proposed_action"), "failed action")
+    expected_action = {
+        "action": _MUTABLE_TOOL,
+        "resource": _FAILURE_RESOURCE,
+        "environment": "test",
+    }
+    if action != expected_action:
+        raise RuntimeError(f"Unexpected failed action evidence: {action!r}")
+    authorization = _require_mapping(
+        execution_failure.get("authorization"),
+        "failure authorization",
+    )
+    if authorization != {"outcome": "allow", "reason": "explicit_allow"}:
+        raise RuntimeError(f"Unexpected failure authorization: {authorization!r}")
+    if execution_failure.get("approval_status") != "not_applicable":
+        raise RuntimeError("Direct governed failure unexpectedly carried HITL state")
+    if execution_failure.get("execution_attempted") is not True:
+        raise RuntimeError("Uncertain execution must record executor invocation")
+    if execution_failure.get("external_side_effect_state") != "unknown":
+        raise RuntimeError("Uncertain execution must preserve unknown side-effect state")
+    if execution_failure.get("failure_reason") != "executor_error":
+        raise RuntimeError("Uncertain execution must preserve executor_error reason")
+
+
 async def _read_state(session: ClientSession) -> dict[str, object]:
     """Read observable action state through the separate read-only MCP Tool."""
     result = await session.call_tool(_STATE_TOOL, {})
@@ -119,7 +172,7 @@ async def _call_action(
 
 
 async def _smoke() -> dict[str, object]:
-    """Exercise denied and allowed mutable calls through the committed STDIO boundary."""
+    """Exercise governed mutable success, blocks, and uncertain failure over STDIO."""
     server_parameters = _load_server_parameters()
 
     async with (
@@ -174,6 +227,20 @@ async def _smoke() -> dict[str, object]:
         )
         _assert_state(await _read_state(session), acknowledged=False, execution_count=0)
 
+        try:
+            uncertain = await session.call_tool(
+                _MUTABLE_TOOL,
+                {"resource": _FAILURE_RESOURCE, "environment": "test"},
+            )
+        except MCPError as exc:
+            _assert_uncertain_execution_protocol_error(exc)
+        else:
+            raise RuntimeError(
+                "Uncertain mutable execution must raise a host-only MCP protocol error; "
+                f"received Tool result is_error={uncertain.is_error!r}"
+            )
+        _assert_state(await _read_state(session), acknowledged=False, execution_count=0)
+
         allowed = await _call_action(
             session,
             resource=_FINDING_RESOURCE,
@@ -196,6 +263,9 @@ async def _smoke() -> dict[str, object]:
             "state_tool": _STATE_TOOL,
             "trusted_identity_source": _LOCAL_IDENTITY_SOURCE,
             "blocked_mutations": 3,
+            "uncertain_execution_protocol_error": True,
+            "uncertain_execution_model_visible_tool_error": False,
+            "uncertain_execution_observed_fixture_mutations": 0,
             "allowed_mutations": 1,
             "final_execution_count": 1,
         }
