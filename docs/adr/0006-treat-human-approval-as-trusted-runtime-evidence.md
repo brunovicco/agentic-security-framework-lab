@@ -22,6 +22,8 @@ After source-aware lifecycle isolation, one process-local concurrency gap remain
 
 After the lifecycle was hardened, a separate authority gap remained: trusted approval evidence identifies an `approver_id`, but provenance from a trusted approval source does not prove that this human is entitled to approve every caller/action scope. Approver identity evidence and approver authorization must remain distinct.
 
+After approver entitlement was separated, one audit-integrity gap remained: the runtime emitted valid combinations, but its Pydantic evidence models still allowed callers to construct or deserialize security states the runtime itself could never legally produce. Security evidence needs structural state-machine validation in addition to correct runtime control flow.
+
 ## Decision
 
 Human approval is represented as separate trusted application evidence.
@@ -91,6 +93,20 @@ caller authorization != trusted approval evidence != approver authorization
 Normal caller `allow`, caller `deny`, missing approval, invalid binding, and revoked approval paths do not consult approver authorization unnecessarily. Time validation is reached only after an explicit approver allow.
 
 The current approver identifier remains synthetic trusted lab evidence, not human authentication. This phase proves deterministic entitlement separation; it does not claim OIDC/workforce IAM, directory-backed roles, signed human attestations, self-approval controls, or multi-party/quorum workflow.
+
+### Evidence state-machine integrity
+
+`AuthorizationDecision` and `ActionExecutionEvidence` are security evidence, not loose transport DTOs. They therefore reject combinations that deterministic policy and `GovernedActionRuntime` cannot legally emit.
+
+Caller authorization reason is bound to outcome: `allow` requires `explicit_allow`; `require_human_approval` requires `human_approval_required`; `deny` permits only `explicit_deny` or fail-closed `no_matching_rule`.
+
+Execution evidence then validates the complete control path. Caller `deny` is non-executing with `not_applicable` approval state. Direct caller `allow` carries no HITL evidence and represents completed direct execution. Approval-gated evidence cannot use `not_applicable`; `missing`, `invalid`, `revoked`, `unauthorized_approver`, `not_yet_valid`, `expired`, and `validated` each require the exact human evidence, approver decision, binding relationship, and execution flag associated with that runtime state. Only `validated` may record execution on the HITL path.
+
+This hardening protects audit, serialization, and replay consumers from accepting records such as `deny + execution_occurred=true` or `validated` without exact-bound human evidence and approver allow. It does not make records cryptographically tamper-proof and does not prove that an external storage system cannot replace a whole record.
+
+```text
+security evidence must not represent a state the governed runtime could never legally produce
+```
 
 ### Temporal validity
 

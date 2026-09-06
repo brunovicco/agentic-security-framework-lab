@@ -339,6 +339,30 @@ The runtime returns `ActionExecutionEvidence` containing independent facts about
 - approval status, claim lifecycle, bounded approval evidence, approver-authorization decision, and temporal validity when present;
 - whether execution occurred.
 
+### Evidence state-machine integrity
+
+`ActionExecutionEvidence` is treated as a constrained security state machine rather than an arbitrary bag of fields. The model rejects records that `GovernedActionRuntime` could never legally emit, even when evidence is reconstructed through deserialization, persistence, tests, or downstream audit tooling.
+
+`AuthorizationDecision` likewise binds deterministic reason to outcome: `allow -> explicit_allow`, `require_human_approval -> human_approval_required`, and `deny -> explicit_deny | no_matching_rule`. This prevents a stored decision from claiming an allow outcome while carrying a deny reason.
+
+The execution evidence validator enforces the complete runtime path:
+
+- caller `deny` is terminal, uses `not_applicable`, carries no HITL evidence, and cannot record execution;
+- direct caller `allow` uses `not_applicable`, carries no HITL evidence, and records direct execution;
+- approval-gated `missing` carries no human or approver evidence and cannot execute;
+- `invalid` requires human evidence whose action/context binding actually mismatches the attempted scope;
+- `revoked` requires exact-bound human evidence, no approver decision, and no execution;
+- `unauthorized_approver` requires exact-bound human evidence plus an approver deny and no execution;
+- `not_yet_valid` and `expired` require exact-bound human evidence plus approver allow and no execution;
+- `validated` requires exact-bound human evidence plus approver allow and is the only HITL state that records execution.
+
+```text
+deny + execution = impossible evidence
+validated HITL + missing/mismatched authority = impossible evidence
+```
+
+This is structural consistency, not cryptographic integrity. The lab does not claim signed evidence, tamper-proof persistence, or transactional proof that an external side effect committed exactly as recorded.
+
 Because evidence embeds the same `ActionContext` used by authorization, the runtime does not create a second identity or provenance channel. Raw credentials are not part of `ActionContext`, `CallerAuthenticationDecision`, `ActionExecutionEvidence`, or `AuthenticatedActionExecutionEvidence`.
 
 This distinction matters because:
