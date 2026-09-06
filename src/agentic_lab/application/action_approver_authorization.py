@@ -1,9 +1,9 @@
 """Deterministic authorization for human approvers of governed actions."""
 
 from collections.abc import Mapping
-from typing import Literal, Protocol
+from typing import Literal, Protocol, Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from agentic_lab.application.action_authorization import (
     ActionContext,
@@ -42,6 +42,15 @@ class ApproverAuthorizationDecision(BaseModel):
 
     outcome: ApproverAuthorizationOutcome
     reason: ApproverAuthorizationReason
+
+    @model_validator(mode="after")
+    def validate_reason_consistency(self) -> Self:
+        """Reject contradictory approver outcomes and reasons in persisted evidence."""
+        if self.outcome == "allow" and self.reason != "explicit_allow":
+            raise ValueError("allowed approver decision requires explicit_allow reason")
+        if self.outcome == "deny" and self.reason == "explicit_allow":
+            raise ValueError("denied approver decision cannot carry explicit_allow reason")
+        return self
 
 
 class ActionApproverAuthorizer(Protocol):
