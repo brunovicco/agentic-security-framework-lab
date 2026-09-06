@@ -23,110 +23,83 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          def replace_once(text: str, old: str, new: str, label: str) -> str:
+          def replace_once(path: Path, old: str, new: str, label: str) -> None:
+              text = path.read_text()
               count = text.count(old)
               if count != 1:
-                  raise SystemExit(f"{label}: expected exactly one match, found {count}")
-              return text.replace(old, new, 1)
+                  raise SystemExit(f"{label}: expected one match, found {count}")
+              path.write_text(text.replace(old, new, 1))
 
-          def replace_between(
-              text: str,
-              start: str,
-              end: str,
-              replacement: str,
-              label: str,
-          ) -> str:
-              start_count = text.count(start)
-              end_count = text.count(end)
-              if start_count != 1 or end_count != 1:
-                  raise SystemExit(
-                      f"{label}: expected one start/end marker, found "
-                      f"{start_count}/{end_count}"
-                  )
-              before, rest = text.split(start, 1)
-              _, after = rest.split(end, 1)
-              return before + replacement + end + after
+          def insert_after(path: Path, anchor: str, addition: str, label: str) -> None:
+              replace_once(path, anchor, anchor + addition, label)
 
-          changelog_path = Path("CHANGELOG.md")
-          changelog = changelog_path.read_text()
-          hardened_anchor = (
+          changelog = Path("CHANGELOG.md")
+          hardened = (
               "- Authenticated MCP mutable execution now maps only post-executor "
               "`AuthenticatedGovernedActionExecutionError` states to host-visible `MCPError` "
               "protocol failures, preventing an uncertain side-effect outcome from becoming an "
               "ordinary model-visible Tool error that invites self-directed retry."
           )
-          changelog = replace_once(
+          insert_after(
               changelog,
-              hardened_anchor,
-              hardened_anchor
-              + "\n- The trusted-composition governed MCP mutable boundary now applies the same "
-                "fail-closed transport classification to post-executor "
-                "`GovernedActionExecutionError`, preserving safe action-level failure evidence "
-                "while keeping raw executor text out of MCP protocol data.",
+              hardened,
+              "\n- The trusted-composition governed MCP mutable boundary now applies the same "
+              "fail-closed transport classification to post-executor "
+              "`GovernedActionExecutionError`, preserving safe action-level failure evidence "
+              "while keeping raw executor text out of MCP protocol data.",
               "CHANGELOG hardened",
           )
-          evidence_anchor = (
+          authenticated_evidence = (
               "- Exact isolated `mcp[cli]==2.1.1` compatibility and real STDIO checks prove "
               "uncertain authenticated mutable execution raises a protocol `MCPError`, not "
               "`CallToolResult(is_error=true)`, while preserving safe authenticated failure "
               "evidence in error `data`, zero observed fixture mutation for the failing resource, "
               "and a subsequent valid mutation."
           )
-          changelog = replace_once(
+          insert_after(
               changelog,
-              evidence_anchor,
-              evidence_anchor
-              + "\n- The governed trusted-composition MCP compatibility and real STDIO checks now "
-                "prove the same protocol-error boundary for action-level executor failure: "
-                "`ActionExecutionFailureEvidence` remains structured in error `data`, the "
-                "controlled failing resource shows zero observed fixture mutation without "
-                "rewriting `external_side_effect_state=unknown`, and a subsequent valid mutation "
-                "still succeeds.",
+              authenticated_evidence,
+              "\n- Governed trusted-composition MCP compatibility and real STDIO checks prove "
+              "the same protocol-error boundary for action-level executor failure: safe "
+              "`ActionExecutionFailureEvidence` remains in error `data`, the controlled failing "
+              "resource shows zero observed fixture mutation without rewriting "
+              "`external_side_effect_state=unknown`, and a subsequent valid mutation succeeds.",
               "CHANGELOG evidence",
           )
-          changelog_path.write_text(changelog)
 
-          adr_path = Path(
-              "docs/adr/0007-route-mutable-mcp-tools-through-governed-runtime.md"
+          adr = Path("docs/adr/0007-route-mutable-mcp-tools-through-governed-runtime.md")
+          no_retry = (
+              "This does not create a universal no-retry guarantee. A host can still choose to "
+              "retry protocol errors in its own code. The boundary only prevents this uncertain "
+              "mutable outcome from being delivered through the normal model-visible Tool-result "
+              "error channel. No idempotency key, rollback, compensation, two-phase commit, or "
+              "distributed transaction is introduced."
           )
-          adr = adr_path.read_text()
-          adr_section = """### Uncertain post-executor failure at the MCP boundary
-
-Both governed mutable MCP servers apply special transport handling only after the application runtime has already classified an executor failure.
-
-The local trusted-composition server catches `GovernedActionExecutionError`, whose `ActionExecutionFailureEvidence` already records `execution_attempted=true` and `external_side_effect_state=unknown`. It raises a generic `MCPError(INTERNAL_ERROR)` and serializes only that safe action-level evidence under protocol error `data.execution_failure`.
-
-The host-authenticated server catches the more specific `AuthenticatedGovernedActionExecutionError` and maps it to the same protocol error class while preserving `AuthenticatedActionExecutionFailureEvidence` under `data.authenticated_execution_failure`. That composition keeps successful credential verification bound to the exact governed failure context.
-
-In both cases the application owns authorization and failure semantics; the MCP adapter only maps an already-governed post-executor state to transport semantics. Raw executor exception text is not copied into protocol data, and the authenticated path also keeps raw host credential material out of that data.
-
-This separates two transport meanings:
-
-```text
-model-correctable Tool error
-    !=
-uncertain mutable execution failure after executor invocation
-```
-
-The latter is rejected at the host/protocol boundary rather than returned as a normal `CallToolResult(is_error=true)`. Existing pre-executor paths are unchanged: caller deny and missing human approval continue returning structured governed results; the authenticated server also preserves rejected-authentication results, while missing host credential remains its existing host-configuration Tool error.
-
-This does not create a universal no-retry guarantee. A host can still choose to retry protocol errors in its own code. The boundary only prevents this uncertain mutable outcome from being delivered through the normal model-visible Tool-result error channel. Zero observed mutation in the controlled missing-resource fixture does not rewrite the application evidence from `unknown`. No idempotency key, rollback, compensation, two-phase commit, or distributed transaction is introduced.
-
-"""
-          adr = replace_between(
+          insert_after(
               adr,
-              "### Uncertain post-executor failure at the MCP boundary\n",
-              "## Local caller identity\n",
-              adr_section,
-              "ADR uncertain failure section",
+              no_retry,
+              "\n\nPhase 52 applies the same transport classification to the existing local "
+              "trusted-composition governed server. It catches only "
+              "`GovernedActionExecutionError`, maps it to `MCPError(INTERNAL_ERROR)`, and "
+              "serializes safe `ActionExecutionFailureEvidence` under "
+              "`data.execution_failure`. The application still owns authorization and failure "
+              "semantics; this adapter mapping adds no policy and does not infer that a zero "
+              "mutation observed in the controlled fixture changes the external side-effect "
+              "state from `unknown`.",
+              "ADR Phase 52 decision",
           )
-          adr = replace_once(
+          consequence = (
+              "- MCP protocol failure data preserves safe authenticated governed evidence "
+              "without raw credential or raw executor-error content."
+          )
+          insert_after(
               adr,
-              "- MCP protocol failure data preserves safe authenticated governed evidence without raw credential or raw executor-error content.",
-              "- MCP protocol failure data preserves safe governed failure evidence without raw executor-error content; the authenticated variant additionally excludes raw credential material.",
+              consequence,
+              "\n- the trusted-composition governed variant preserves safe action-level failure "
+              "evidence without raw executor-error content.",
               "ADR security consequence",
           )
-          phase51_evidence = (
+          phase51 = (
               "Phase 51 adds provider-free MCP v2.1.1 protocol-failure evidence for the "
               "authenticated local STDIO boundary: compatibility and real subprocess checks prove "
               "the uncertain post-executor path raises `MCPError`, carries safe structured failure "
@@ -135,59 +108,94 @@ This does not create a universal no-retry guarantee. A host can still choose to 
               "external side effect could not have partially or fully committed, nor that a host "
               "will never retry a protocol error."
           )
-          adr = replace_once(
+          insert_after(
               adr,
-              phase51_evidence,
-              phase51_evidence
-              + "\n\nPhase 52 extends the same provider-free MCP v2.1.1 protocol-failure "
-                "evidence to the existing trusted-composition governed STDIO boundary. Its "
-                "compatibility and real subprocess checks prove `GovernedActionExecutionError` is "
-                "transported as `MCPError` with safe `ActionExecutionFailureEvidence`, not as a "
-                "normal model-visible Tool error; the controlled zero-mutation observation remains "
-                "separate from the runtime's deliberately `unknown` external side-effect state.",
+              phase51,
+              "\n\nPhase 52 extends that provider-free MCP v2.1.1 protocol-failure evidence "
+              "to the trusted-composition governed STDIO boundary. Compatibility and real "
+              "subprocess checks prove `GovernedActionExecutionError` arrives as `MCPError` with "
+              "safe `ActionExecutionFailureEvidence`, not as a normal model-visible Tool error; "
+              "zero observed fixture mutation remains separate from the runtime's deliberately "
+              "`unknown` external side-effect state.",
               "ADR Phase 52 evidence",
           )
-          adr_path.write_text(adr)
 
-          security_path = Path("docs/security/GOVERNED_AGENT_ACTIONS.md")
-          security = security_path.read_text()
-          security_section = """### Uncertain mutable failure is host-visible, not model-correctable
-
-A post-executor failure needs different transport semantics from a normal model-correctable Tool error. Once either governed runtime has invoked a mutable executor, its typed failure evidence says execution was attempted but the external side-effect state is `unknown`. Treating that state as an ordinary MCP Tool result with `is_error=true` would put the failure into the channel a model can use for self-correction and retry.
-
-The trusted-composition governed MCP handler therefore maps only `GovernedActionExecutionError` to `MCPError(INTERNAL_ERROR)` with a generic message and safe `ActionExecutionFailureEvidence` under protocol error `data.execution_failure`.
-
-The authenticated governed MCP handler applies the same transport classification to `AuthenticatedGovernedActionExecutionError`, preserving the richer `AuthenticatedActionExecutionFailureEvidence` under `data.authenticated_execution_failure`. The raw executor exception text is absent from both protocol payloads, and the authenticated payload also excludes raw host credential material.
-
-```text
-executor invoked + exception + external side-effect state unknown
-    -> host-visible MCP protocol error
-    -> no normal model-visible Tool result
-```
-
-The exact isolated MCP 2.1.1 compatibility checks and real STDIO smokes prove both governed local servers deliver these post-executor failures as `MCPError`, not `CallToolResult(is_error=true)`. Each controlled missing-resource case is explicitly authorized so the executor is actually invoked before it raises. The separate state Tool observes zero fixture mutations for those controlled failures, and a later valid action still executes exactly once. Zero observed fixture mutation is not used to rewrite the runtime's `unknown` external side-effect evidence.
-
-Other paths keep their existing meanings. Explicit deny and missing human approval remain structured governed results because they stop before the mutable executor. The authenticated server likewise keeps rejected credentials as structured authentication results, while missing host credential remains its existing host-configuration Tool error.
-
-This boundary prevents model-directed retry through the normal Tool-result error channel for this specific uncertain failure class. It does **not** prove that every MCP host will avoid programmatic retry of protocol errors, and it does not provide idempotency, rollback, compensation, two-phase commit, or distributed transaction guarantees.
-
-This proves local fail-closed uncertain-execution transport behavior for both the trusted-composition and host-authenticated governed MCP v2 STDIO boundaries. The authenticated variant additionally proves local host-injected service authentication. Neither boundary proves remote MCP identity propagation, transport-bound authentication, OAuth/OIDC/JWT/mTLS, production secret management, or end-user identity.
-
-"""
-          security = replace_between(
-              security,
-              "### Uncertain mutable failure is host-visible, not model-correctable\n",
-              "## 11. What the current implementation does not claim\n",
-              security_section,
-              "security MCP uncertain failure section",
+          security = Path("docs/security/GOVERNED_AGENT_ACTIONS.md")
+          old_intro = (
+              "A post-executor failure needs different transport semantics from a normal "
+              "model-correctable Tool error. If an authenticated governed executor raises after "
+              "invocation, `AuthenticatedGovernedActionExecutionError` says the execution was "
+              "attempted but the external side-effect state is `unknown`. Treating that as an "
+              "ordinary MCP Tool result with `is_error=true` would put the failure into the "
+              "channel a model can use for self-correction and retry."
           )
-          security = replace_once(
-              security,
-              "27. **An authenticated post-executor failure with unknown side-effect state must not be returned through the normal model-visible MCP Tool-error result channel.**\n28. **MCP protocol failure evidence must not copy raw caller credentials or raw executor exception text.**",
-              "27. **A governed post-executor failure with unknown side-effect state must not be returned through the normal model-visible MCP Tool-error result channel.**\n28. **MCP protocol failure evidence must not copy raw caller credentials or raw executor exception text.**\n29. **Zero observed fixture mutation must not rewrite an uncertain post-executor side-effect state from `unknown`.**",
-              "security invariants",
+          new_intro = (
+              "A post-executor failure needs different transport semantics from a normal "
+              "model-correctable Tool error. If either governed executor raises after invocation, "
+              "its typed failure evidence says execution was attempted but the external "
+              "side-effect state is `unknown`. Treating that as an ordinary MCP Tool result with "
+              "`is_error=true` would put the failure into the channel a model can use for "
+              "self-correction and retry."
           )
-          security_path.write_text(security)
+          replace_once(security, old_intro, new_intro, "security uncertain failure intro")
+          insert_after(
+              security,
+              new_intro,
+              "\n\nThe trusted-composition governed MCP handler maps only "
+              "`GovernedActionExecutionError` to `MCPError(INTERNAL_ERROR)` with a generic "
+              "message and safe `ActionExecutionFailureEvidence` under "
+              "`data.execution_failure`. Raw executor exception text is not copied into that "
+              "protocol data.",
+              "security trusted-composition mapping",
+          )
+          authenticated_check = (
+              "The exact isolated MCP 2.1.1 compatibility check and real STDIO smoke prove the "
+              "client receives `MCPError`, not `CallToolResult(is_error=true)`, for the controlled "
+              "authorized missing-resource case. The separate state Tool observes zero fixture "
+              "mutations for that case, and a later valid action still executes exactly once. "
+              "Zero observed fixture mutation is not used to rewrite the runtime's `unknown` "
+              "external side-effect evidence."
+          )
+          insert_after(
+              security,
+              authenticated_check,
+              "\n\nThe trusted-composition governed MCP compatibility check and real STDIO "
+              "smoke prove the same protocol boundary with action-level failure evidence. Its "
+              "controlled missing-resource case is explicitly authorized so the executor is "
+              "invoked before it raises; the separately observed zero mutation likewise does not "
+              "rewrite `external_side_effect_state=unknown`, and a subsequent valid mutation "
+              "still succeeds.",
+              "security Phase 52 evidence",
+          )
+          old_proof = (
+              "This proves local host-injected service authentication and fail-closed "
+              "uncertain-execution transport behavior across a real MCP v2 STDIO subprocess. It "
+              "does not prove remote MCP identity propagation, transport-bound authentication, "
+              "OAuth/OIDC/JWT/mTLS, production secret management, or end-user identity."
+          )
+          new_proof = (
+              "Together these checks prove fail-closed uncertain-execution transport behavior "
+              "across both local governed MCP v2 STDIO boundaries. The authenticated variant "
+              "additionally proves local host-injected service authentication. Neither proves "
+              "remote MCP identity propagation, transport-bound authentication, "
+              "OAuth/OIDC/JWT/mTLS, production secret management, or end-user identity."
+          )
+          replace_once(security, old_proof, new_proof, "security proof scope")
+          old_invariants = (
+              "27. **An authenticated post-executor failure with unknown side-effect state must "
+              "not be returned through the normal model-visible MCP Tool-error result channel.**\n"
+              "28. **MCP protocol failure evidence must not copy raw caller credentials or raw "
+              "executor exception text.**"
+          )
+          new_invariants = (
+              "27. **A governed post-executor failure with unknown side-effect state must not be "
+              "returned through the normal model-visible MCP Tool-error result channel.**\n"
+              "28. **MCP protocol failure evidence must not copy raw caller credentials or raw "
+              "executor exception text.**\n"
+              "29. **Zero observed fixture mutation must not rewrite an uncertain post-executor "
+              "side-effect state from `unknown`.**"
+          )
+          replace_once(security, old_invariants, new_invariants, "security invariants")
           PY
       - name: Guard documentation scope
         shell: bash
