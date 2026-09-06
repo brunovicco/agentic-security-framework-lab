@@ -1,0 +1,87 @@
+name: phase43-doc-sync
+
+on:
+  push:
+    branches:
+      - fix/phase-43-source-aware-approval-isolation
+    paths:
+      - .github/workflows/phase43-doc-sync.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: fix/phase-43-source-aware-approval-isolation
+      - name: Document source-aware approval isolation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}: {old!r}")
+              file.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "CHANGELOG.md",
+              "- Trusted control-plane code can revoke one exact still-unclaimed approval by immutable `approval_id`; revocation is sticky, blocks before freshness/execution, and cannot retroactively cancel an approval already claimed by a runtime attempt.\n",
+              "- Trusted control-plane code can revoke one exact still-unclaimed approval by immutable `approval_id`; revocation is sticky, blocks before freshness/execution, and cannot retroactively cancel an approval already claimed by a runtime attempt.\n- The controlled approval provider now partitions claims by exact `(caller_id, identity_source, action, resource, environment)` scope, preventing one identity provenance from dequeuing approval authority issued for another provenance.\n",
+          )
+          replace_once(
+              "CHANGELOG.md",
+              "- Revocation regressions prove zero mutable side effects for revoked approval, sticky non-reuse on retry, and identical `revoked` semantics across direct runtime, LangGraph, CrewAI, LlamaIndex, and Agno.\n",
+              "- Revocation regressions prove zero mutable side effects for revoked approval, sticky non-reuse on retry, and identical `revoked` semantics across direct runtime, LangGraph, CrewAI, LlamaIndex, and Agno.\n- Source-confusion regressions prove an approval-gated request under the wrong identity source receives `missing` without consuming the correct-source approval, which remains available for the intended context and executes at most once.\n",
+          )
+
+          path = "docs/adr/0006-treat-human-approval-as-trusted-runtime-evidence.md"
+          replace_once(
+              path,
+              "The runtime defensively checks that claimed approval evidence matches the exact proposed action and trusted caller context. A provider returning approval for another scope therefore fails closed even if the provider itself is buggy.\n",
+              "The runtime defensively checks that claimed approval evidence matches the exact proposed action and trusted caller context. A provider returning approval for another scope therefore fails closed even if the provider itself is buggy.\n\nThe controlled in-memory provider also partitions approval queues by the full source-aware key `(caller_id, identity_source, action, resource, environment)`. This prevents a request under one trusted identity provenance from dequeuing or consuming approval evidence issued for the same caller id and action scope under another provenance. Runtime exact-context validation remains in place as defense in depth rather than being replaced by provider indexing.\n",
+          )
+          replace_once(
+              path,
+              "Each approval is a single-use capability with process-local lifecycle state `available`, `revoked`, or `claimed`. A matching claim removes that queued capability from future use. Multiple unique approvals may be supplied for the same scope when multiple independent executions were separately approved.\n",
+              "Each approval is a single-use capability with process-local lifecycle state `available`, `revoked`, or `claimed`. Queues are partitioned by exact caller id, identity source, action, resource, and environment. A matching source-aware claim removes that queued capability from future use. Multiple unique approvals may be supplied for the same exact source-aware scope when multiple independent executions were separately approved.\n",
+          )
+          replace_once(
+              path,
+              "- approvals are exact-scope and principal-bound;\n",
+              "- approvals are exact-scope, principal-bound, and isolated by trusted identity source before claim;\n",
+          )
+          replace_once(
+              path,
+              "revoked unclaimed approval = no execution\n",
+              "revoked unclaimed approval = no execution\n\nsame caller_id + different identity_source != same approval capability\n",
+          )
+          replace_once(path, "Refs #131, #145, #163, #165", "Refs #131, #145, #163, #165, #167")
+
+          path = "docs/security/GOVERNED_AGENT_ACTIONS.md"
+          replace_once(
+              path,
+              "The fixture rejects duplicate `approval_id` values and can hold multiple distinct approvals for the same exact scope when multiple executions were separately approved. This is process-local test evidence, not proof of durable or distributed transactional approval infrastructure.\n\n### Approval freshness\n",
+              "The fixture rejects duplicate `approval_id` values and can hold multiple distinct approvals for the same exact scope when multiple executions were separately approved. This is process-local test evidence, not proof of durable or distributed transactional approval infrastructure.\n\n### Approval identity-source isolation\n\nAuthorization already distinguishes trusted identity provenance through `(caller_id, identity_source, action, resource, environment)`. Approval lookup follows the same boundary: the controlled provider partitions queues by that exact five-field scope rather than by caller id and action scope alone.\n\nThis matters even though `GovernedActionRuntime` independently compares the complete claimed `ActionContext`. A four-field queue would still allow an approval-gated request under one source to dequeue an approval issued for another source, fail later as `invalid`, and consume the single-use capability before the intended caller could use it. Source-aware partitioning prevents that logical denial-of-service path before claim.\n\nThe runtime exact-context check remains as defense in depth. Provider partitioning prevents cross-source consumption; runtime validation prevents incorrectly returned evidence from becoming authority if a provider implementation is defective.\n\nThe adversarial regression configures both `trusted_composition` and `api_key` for the same caller/action/resource/environment as legitimately `require_human_approval`. The wrong-source attempt receives `missing` with zero side effects, while the original approval remains available and is validated exactly once under its intended source.\n\n```text\nsame caller_id != same approval capability when identity_source differs\n```\n\n### Approval freshness\n",
+          )
+          PY
+      - name: Commit only expected documentation files
+        run: |
+          git diff --check
+          git diff --exit-code -- . \
+            ':!CHANGELOG.md' \
+            ':!docs/adr/0006-treat-human-approval-as-trusted-runtime-evidence.md' \
+            ':!docs/security/GOVERNED_AGENT_ACTIONS.md'
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add CHANGELOG.md \
+            docs/adr/0006-treat-human-approval-as-trusted-runtime-evidence.md \
+            docs/security/GOVERNED_AGENT_ACTIONS.md
+          git commit -m "docs: document source-aware approval isolation"
+          git push origin HEAD:fix/phase-43-source-aware-approval-isolation
