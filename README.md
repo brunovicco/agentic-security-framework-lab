@@ -1,8 +1,11 @@
 # Agentic Security Framework Lab
 
-[English](README.md) | [Português (Brasil)](README.pt-br.md)
-
 [![quality](https://github.com/brunovicco/agentic-security-framework-lab/actions/workflows/quality.yml/badge.svg)](https://github.com/brunovicco/agentic-security-framework-lab/actions/workflows/quality.yml)
+[![release](https://img.shields.io/github/v/release/brunovicco/agentic-security-framework-lab)](https://github.com/brunovicco/agentic-security-framework-lab/releases)
+![python](https://img.shields.io/badge/python-3.13-blue.svg)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+*[Leia em português](README.pt-br.md)*
 
 A framework-neutral engineering lab for building, securing, evaluating, and comparing **agentic AI systems** under the same deterministic controls.
 
@@ -219,3 +222,7 @@ Current `main` includes later authorization, evidence, and MCP/framework hardeni
 This remains an **engineering lab**, not a claim of production certification.
 
 See [CHANGELOG.md](CHANGELOG.md) for release-level changes.
+
+## License
+
+[MIT](LICENSE)
